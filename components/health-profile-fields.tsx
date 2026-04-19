@@ -1,0 +1,124 @@
+"use client"
+
+import { AlertCircle } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Textarea } from "@/components/ui/textarea"
+import { Field, FieldLabel } from "@/components/ui/field"
+
+type HealthProfileFieldsProps = {
+  allergiesText: string
+  onAllergiesTextChange: (value: string) => void
+  noAllergies: boolean
+  onNoAllergiesChange: (value: boolean) => void
+  diseasesText: string
+  onDiseasesTextChange: (value: string) => void
+  noDiseases: boolean
+  onNoDiseasesChange: (value: boolean) => void
+  /** แยก id ของ checkbox/label ระหว่างหลายฟอร์มในหน้าเดียวกัน */
+  idPrefix: string
+}
+
+export function HealthProfileFields({
+  allergiesText,
+  onAllergiesTextChange,
+  noAllergies,
+  onNoAllergiesChange,
+  diseasesText,
+  onDiseasesTextChange,
+  noDiseases,
+  onNoDiseasesChange,
+  idPrefix,
+}: HealthProfileFieldsProps) {
+  const allergyCheckboxId = `${idPrefix}-no-allergies`
+  const diseaseCheckboxId = `${idPrefix}-no-diseases`
+  const allergyAreaId = `${idPrefix}-allergies-text`
+  const diseaseAreaId = `${idPrefix}-diseases-text`
+
+  return (
+    <>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+          <span className="font-medium text-foreground">ประวัติแพ้ยา</span>
+        </div>
+        <Field>
+          <FieldLabel htmlFor={allergyAreaId}>
+            ระบุรายการหรือรายละเอียด (ถ้ามี)
+          </FieldLabel>
+          <Textarea
+            id={allergyAreaId}
+            placeholder="เช่น แพ้พาราเซตามอล แพ้ยาปฏิชีวนะกลุ่มเพนิซิลลิน"
+            rows={4}
+            value={allergiesText}
+            disabled={noAllergies}
+            onChange={(e) => {
+              const v = e.target.value
+              onAllergiesTextChange(v)
+              if (v.trim()) onNoAllergiesChange(false)
+            }}
+            className="min-h-[100px] resize-y"
+          />
+        </Field>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id={allergyCheckboxId}
+            checked={noAllergies}
+            onCheckedChange={(checked) => {
+              const on = checked === true
+              onNoAllergiesChange(on)
+              if (on) onAllergiesTextChange("")
+            }}
+          />
+          <label
+            htmlFor={allergyCheckboxId}
+            className="text-sm leading-snug text-muted-foreground"
+          >
+            ไม่มีประวัติแพ้ยา
+          </label>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 shrink-0 text-warning" />
+          <span className="font-medium text-foreground">โรคประจำตัว</span>
+        </div>
+        <Field>
+          <FieldLabel htmlFor={diseaseAreaId}>
+            ระบุรายการหรือรายละเอียด (ถ้ามี)
+          </FieldLabel>
+          <Textarea
+            id={diseaseAreaId}
+            placeholder="เช่น เบาหวาน ความดันโลหิตสูง หอบหืด"
+            rows={4}
+            value={diseasesText}
+            disabled={noDiseases}
+            onChange={(e) => {
+              const v = e.target.value
+              onDiseasesTextChange(v)
+              if (v.trim()) onNoDiseasesChange(false)
+            }}
+            className="min-h-[100px] resize-y"
+          />
+        </Field>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id={diseaseCheckboxId}
+            checked={noDiseases}
+            onCheckedChange={(checked) => {
+              const on = checked === true
+              onNoDiseasesChange(on)
+              if (on) onDiseasesTextChange("")
+            }}
+          />
+          <label
+            htmlFor={diseaseCheckboxId}
+            className="text-sm leading-snug text-muted-foreground"
+          >
+            ไม่มีโรคประจำตัว
+          </label>
+        </div>
+      </div>
+    </>
+  )
+}

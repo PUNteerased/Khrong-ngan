@@ -1,0 +1,25 @@
+# v0 sandbox internal files
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.snowflake/
+.v0-trash/
+.vercel/
+next.user-config.*
+
+# Environment variables (อย่า commit ความลับ)
+.env
+.env.*
+!.env.example
+!.env*.example
+
+# Common ignores
+node_modules
+.next/
+.DS_Store
+.vercel
+dist/
+*.db
+*.db-journal
+.cursor/
+agent-tools/
