@@ -1,5 +1,6 @@
 "use client"
 
+import { useTranslations } from "next-intl"
 import { AlertCircle } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
@@ -14,7 +15,6 @@ type HealthProfileFieldsProps = {
   onDiseasesTextChange: (value: string) => void
   noDiseases: boolean
   onNoDiseasesChange: (value: boolean) => void
-  /** แยก id ของ checkbox/label ระหว่างหลายฟอร์มในหน้าเดียวกัน */
   idPrefix: string
 }
 
@@ -29,6 +29,7 @@ export function HealthProfileFields({
   onNoDiseasesChange,
   idPrefix,
 }: HealthProfileFieldsProps) {
+  const t = useTranslations("HealthProfile")
   const allergyCheckboxId = `${idPrefix}-no-allergies`
   const diseaseCheckboxId = `${idPrefix}-no-diseases`
   const allergyAreaId = `${idPrefix}-allergies-text`
@@ -39,15 +40,13 @@ export function HealthProfileFields({
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
-          <span className="font-medium text-foreground">ประวัติแพ้ยา</span>
+          <span className="font-medium text-foreground">{t("allergiesTitle")}</span>
         </div>
         <Field>
-          <FieldLabel htmlFor={allergyAreaId}>
-            ระบุรายการหรือรายละเอียด (ถ้ามี)
-          </FieldLabel>
+          <FieldLabel htmlFor={allergyAreaId}>{t("allergiesLabel")}</FieldLabel>
           <Textarea
             id={allergyAreaId}
-            placeholder="เช่น แพ้พาราเซตามอล แพ้ยาปฏิชีวนะกลุ่มเพนิซิลลิน"
+            placeholder={t("allergiesPh")}
             rows={4}
             value={allergiesText}
             disabled={noAllergies}
@@ -73,7 +72,7 @@ export function HealthProfileFields({
             htmlFor={allergyCheckboxId}
             className="text-sm leading-snug text-muted-foreground"
           >
-            ไม่มีประวัติแพ้ยา
+            {t("noAllergies")}
           </label>
         </div>
       </div>
@@ -81,15 +80,13 @@ export function HealthProfileFields({
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <AlertCircle className="h-4 w-4 shrink-0 text-warning" />
-          <span className="font-medium text-foreground">โรคประจำตัว</span>
+          <span className="font-medium text-foreground">{t("diseasesTitle")}</span>
         </div>
         <Field>
-          <FieldLabel htmlFor={diseaseAreaId}>
-            ระบุรายการหรือรายละเอียด (ถ้ามี)
-          </FieldLabel>
+          <FieldLabel htmlFor={diseaseAreaId}>{t("diseasesLabel")}</FieldLabel>
           <Textarea
             id={diseaseAreaId}
-            placeholder="เช่น เบาหวาน ความดันโลหิตสูง หอบหืด"
+            placeholder={t("diseasesPh")}
             rows={4}
             value={diseasesText}
             disabled={noDiseases}
@@ -115,7 +112,7 @@ export function HealthProfileFields({
             htmlFor={diseaseCheckboxId}
             className="text-sm leading-snug text-muted-foreground"
           >
-            ไม่มีโรคประจำตัว
+            {t("noDiseases")}
           </label>
         </div>
       </div>

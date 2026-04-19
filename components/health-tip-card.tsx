@@ -1,68 +1,46 @@
-import Link from "next/link"
-import { ChevronRight } from "lucide-react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { cn } from "@/lib/utils"
+"use client"
+
+import { Link } from "@/i18n/navigation"
+import { useTranslations } from "next-intl"
 import type { HealthArticle } from "@/data/health-articles"
+import { Card, CardContent } from "@/components/ui/card"
+import { ChevronRight } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 type HealthTipCardProps = {
   article: HealthArticle
-  /** การ์ดแนวนอนเลื่อนบน Home — กำหนดความกว้างคงที่ */
-  layout?: "default" | "carousel"
-  className?: string
+  layout?: "list" | "carousel"
 }
 
-export function HealthTipCard({
-  article,
-  layout = "default",
-  className,
-}: HealthTipCardProps) {
-  const isCarousel = layout === "carousel"
+export function HealthTipCard({ article, layout = "list" }: HealthTipCardProps) {
+  const t = useTranslations("HealthTipCard")
 
   return (
     <Link
       href={`/health-tips/${article.slug}`}
       className={cn(
-        "block",
-        isCarousel && "aspect-[4/3] w-[min(272px,82vw)] shrink-0",
-        className
+        "block h-full",
+        layout === "carousel" && "min-w-[260px] max-w-[280px]"
       )}
     >
       <Card
         className={cn(
-          "h-full w-full overflow-hidden transition-shadow hover:shadow-md",
-          isCarousel && "gap-0 py-0"
+          "h-full transition-colors hover:bg-muted/40",
+          layout === "carousel" && "border-border/80"
         )}
       >
-        <CardContent className="flex h-full min-h-0 items-stretch gap-0 p-0">
-          <div className="w-1 shrink-0 bg-primary/80" aria-hidden />
-          <div
-            className={cn(
-              "flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden",
-              isCarousel ? "p-3" : "p-4"
-            )}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <Badge variant="secondary" className="text-xs font-normal">
-                {article.category}
-              </Badge>
-              <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-            </div>
-            <p
-              className={cn(
-                "font-medium leading-snug text-foreground",
-                isCarousel && "line-clamp-3"
-              )}
-            >
-              {article.title}
-            </p>
-            <p className="line-clamp-2 text-sm text-muted-foreground">
-              {article.excerpt}
-            </p>
-            <span className="mt-auto text-xs font-medium text-primary">
-              อ่านเพิ่มเติม
-            </span>
-          </div>
+        <CardContent className="p-4 flex flex-col gap-2 h-full">
+          <p className="text-xs font-medium text-primary">{article.category}</p>
+          <h3 className="font-semibold text-foreground leading-snug line-clamp-2">
+            {article.title}
+          </h3>
+          <p className="text-sm text-muted-foreground line-clamp-2 flex-1">
+            {article.excerpt}
+          </p>
+          <span className="text-xs text-primary inline-flex items-center gap-1 mt-auto">
+            {t("readMore")}
+            <ChevronRight className="h-3 w-3" />
+          </span>
         </CardContent>
       </Card>
     </Link>

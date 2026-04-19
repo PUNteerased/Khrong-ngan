@@ -226,7 +226,3 @@ export const healthArticles: HealthArticle[] = [
     ],
   },
 ]
-
-export function getHealthArticleBySlug(slug: string): HealthArticle | undefined {
-  return healthArticles.find((a) => a.slug === slug)
-}
