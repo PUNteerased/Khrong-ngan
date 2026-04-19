@@ -15,7 +15,23 @@ import {
   Wifi,
   WifiOff,
   Play,
+  Pencil,
+  Trash2,
+  UserPlus,
+  Database,
+  Cloud,
 } from "lucide-react"
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+} from "recharts"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -30,17 +46,34 @@ import {
 } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
 import {
   fetchDrugs,
   fetchAdminStats,
   fetchAdminSessions,
-  fetchTopDrugs,
   restockDrug,
   adminLogin,
+  fetchAdminHealth,
+  fetchAdminOverview,
+  deleteDrug,
+  fetchAdminUsers,
   type DrugDto,
   type AdminStats,
   type AdminSessionRow,
+  type AdminHealth,
+  type AdminOverview,
+  type AdminUserRow,
   ApiError,
 } from "@/lib/api"
 import {
@@ -48,17 +81,19 @@ import {
   setStoredAdminToken,
 } from "@/lib/admin-token"
 import { normalizeUsername, USERNAME_PATTERN } from "@/lib/username"
+import { AdminDrugDialog } from "@/components/admin-drug-dialog"
+import { AdminSessionSheet } from "@/components/admin-session-sheet"
+import { AdminUserSheet } from "@/components/admin-user-sheet"
 
-function stockStatus(q: number): "normal" | "low" | "empty" {
+function stockStatus(q: number, threshold: number): "normal" | "low" | "empty" {
   if (q === 0) return "empty"
-  if (q <= 5) return "low"
+  if (q <= threshold) return "low"
   return "normal"
 }
 
 export default function AdminPage() {
   const locale = useLocale()
   const t = useTranslations("Admin")
-  const [isOnline] = useState(true)
   const [authReady, setAuthReady] = useState(false)
   const [unlocked, setUnlocked] = useState(false)
   const [adminUsername, setAdminUsername] = useState("")
@@ -67,27 +102,79 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [drugs, setDrugs] = useState<DrugDto[]>([])
   const [stats, setStats] = useState<AdminStats | null>(null)
+  const [overview, setOverview] = useState<AdminOverview | null>(null)
   const [sessions, setSessions] = useState<AdminSessionRow[]>([])
-  const [topDrugs, setTopDrugs] = useState<{ drug: DrugDto | null; count: number }[]>([])
+  const [sessionTotal, setSessionTotal] = useState(0)
+  const [health, setHealth] = useState<AdminHealth | null>(null)
+  const [mainTab, setMainTab] = useState("overview")
+  const [logQuery, setLogQuery] = useState("")
+  const [redFlagOnly, setRedFlagOnly] = useState(false)
+  const [userQuery, setUserQuery] = useState("")
+  const [userRows, setUserRows] = useState<AdminUserRow[]>([])
+  const [userTotal, setUserTotal] = useState(0)
+  const [sessionPick, setSessionPick] = useState<string | null>(null)
+  const [sessionOpen, setSessionOpen] = useState(false)
+  const [userPick, setUserPick] = useState<string | null>(null)
+  const [userOpen, setUserOpen] = useState(false)
+  const [drugDialogOpen, setDrugDialogOpen] = useState(false)
+  const [drugEdit, setDrugEdit] = useState<DrugDto | null>(null)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
 
   useEffect(() => {
     setUnlocked(!!getStoredAdminToken())
     setAuthReady(true)
   }, [])
 
+  const loadSessions = useCallback(async () => {
+    try {
+      const r = await fetchAdminSessions({
+        q: logQuery.trim() || undefined,
+        redFlagOnly,
+        limit: 50,
+      })
+      setSessions(r.items)
+      setSessionTotal(r.total)
+    } catch {
+      /* toast in loadAll */
+    }
+  }, [logQuery, redFlagOnly])
+
+  const loadUsers = useCallback(async () => {
+    try {
+      const r = await fetchAdminUsers({
+        query: userQuery.trim() || undefined,
+        limit: 40,
+      })
+      setUserRows(r.items)
+      setUserTotal(r.total)
+    } catch {
+      /* ignore */
+    }
+  }, [userQuery])
+
   const loadAll = useCallback(async () => {
     setLoading(true)
     try {
-      const [d, s, sess, top] = await Promise.all([
+      const [d, s, ov, h, sess, ur] = await Promise.all([
         fetchDrugs(),
         fetchAdminStats(),
-        fetchAdminSessions(),
-        fetchTopDrugs(),
+        fetchAdminOverview(),
+        fetchAdminHealth(),
+        fetchAdminSessions({
+          q: logQuery.trim() || undefined,
+          redFlagOnly,
+          limit: 50,
+        }),
+        fetchAdminUsers({ query: userQuery.trim() || undefined, limit: 40 }),
       ])
       setDrugs(d)
       setStats(s)
-      setSessions(sess)
-      setTopDrugs(top)
+      setOverview(ov)
+      setHealth(h)
+      setSessions(sess.items)
+      setSessionTotal(sess.total)
+      setUserRows(ur.items)
+      setUserTotal(ur.total)
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         setStoredAdminToken(null)
@@ -99,12 +186,28 @@ export default function AdminPage() {
     } finally {
       setLoading(false)
     }
-  }, [t])
+  }, [t, logQuery, redFlagOnly, userQuery])
 
   useEffect(() => {
     if (!authReady || !unlocked) return
     loadAll()
   }, [authReady, unlocked, loadAll])
+
+  useEffect(() => {
+    if (!unlocked) return
+    const tmr = setTimeout(() => {
+      void loadSessions()
+    }, 300)
+    return () => clearTimeout(tmr)
+  }, [unlocked, logQuery, redFlagOnly, loadSessions])
+
+  useEffect(() => {
+    if (!unlocked) return
+    const tmr = setTimeout(() => {
+      void loadUsers()
+    }, 300)
+    return () => clearTimeout(tmr)
+  }, [unlocked, userQuery, loadUsers])
 
   const handleAdminLogin = async (e: FormEvent) => {
     e.preventDefault()
@@ -126,6 +229,8 @@ export default function AdminPage() {
       setLoginLoading(false)
     }
   }
+
+  const threshold = stats?.lowStockThreshold ?? 5
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -165,13 +270,31 @@ export default function AdminPage() {
     }
   }
 
+  const confirmDelete = async () => {
+    if (!deleteId) return
+    try {
+      await deleteDrug(deleteId)
+      toast.success(t("drugDeleted"))
+      setDeleteId(null)
+      loadAll()
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : t("loadFail"))
+    }
+  }
+
   const statCards = stats
     ? [
         {
-          label: t("statUsers"),
-          value: String(stats.usersToday),
+          label: t("statActiveUsers"),
+          value: String(stats.activeUsersToday),
           icon: Users,
           color: "text-blue-500",
+        },
+        {
+          label: t("statChats"),
+          value: String(stats.chatsToday),
+          icon: LayoutDashboard,
+          color: "text-violet-500",
         },
         {
           label: t("statDispensed"),
@@ -180,19 +303,27 @@ export default function AdminPage() {
           color: "text-success",
         },
         {
-          label: t("statAlerts"),
-          value: String(stats.alerts),
+          label: t("statLowStock"),
+          value: String(stats.lowStockDrugCount),
           icon: AlertTriangle,
           color: "text-warning",
+        },
+        {
+          label: t("statRedFlags"),
+          value: String(stats.redFlagsToday),
+          icon: AlertTriangle,
+          color: "text-destructive",
+        },
+        {
+          label: t("statNewUsers"),
+          value: String(stats.newUsersToday),
+          icon: UserPlus,
+          color: "text-muted-foreground",
         },
       ]
     : []
 
-  const maxTop = Math.max(
-    1,
-    ...topDrugs.map((t) => t.count),
-    1
-  )
+  const kioskOnline = health?.database === true
 
   if (!authReady) {
     return (
@@ -249,10 +380,10 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-[calc(100vh-60px)] bg-background pb-8">
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-foreground">Admin Dashboard</h1>
-          <div className="flex items-center gap-2">
+      <div className="mx-auto w-full max-w-6xl py-6 space-y-6">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h1 className="text-xl font-bold text-foreground">{t("dashboardTitle")}</h1>
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant="ghost"
               size="sm"
@@ -261,7 +392,6 @@ export default function AdminPage() {
                 setUnlocked(false)
                 setStats(null)
                 setSessions([])
-                setTopDrugs([])
               }}
             >
               {t("logout")}
@@ -273,17 +403,17 @@ export default function AdminPage() {
             <Badge
               variant="outline"
               className={
-                isOnline
+                kioskOnline
                   ? "border-success text-success"
                   : "border-destructive text-destructive"
               }
             >
-              {isOnline ? (
+              {kioskOnline ? (
                 <Wifi className="h-3 w-3 mr-1" />
               ) : (
                 <WifiOff className="h-3 w-3 mr-1" />
               )}
-              {isOnline ? t("online") : t("offline")}
+              {kioskOnline ? t("online") : t("offline")}
             </Badge>
           </div>
         </div>
@@ -294,7 +424,7 @@ export default function AdminPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {statCards.map((stat) => (
                 <Card key={stat.label}>
                   <CardContent className="p-4">
@@ -310,8 +440,8 @@ export default function AdminPage() {
               ))}
             </div>
 
-            <Tabs defaultValue="overview">
-              <TabsList className="w-full grid grid-cols-4">
+            <Tabs value={mainTab} onValueChange={setMainTab}>
+              <TabsList className="grid h-auto w-full min-w-0 grid-cols-2 gap-1 sm:grid-cols-5">
                 <TabsTrigger value="overview" className="text-xs sm:text-sm">
                   <LayoutDashboard className="h-4 w-4 mr-1 hidden sm:inline" />
                   {t("tabOverview")}
@@ -324,6 +454,10 @@ export default function AdminPage() {
                   <FileText className="h-4 w-4 mr-1 hidden sm:inline" />
                   {t("tabLogs")}
                 </TabsTrigger>
+                <TabsTrigger value="users" className="text-xs sm:text-sm">
+                  <Users className="h-4 w-4 mr-1 hidden sm:inline" />
+                  {t("tabUsers")}
+                </TabsTrigger>
                 <TabsTrigger value="hardware" className="text-xs sm:text-sm">
                   <Cpu className="h-4 w-4 mr-1 hidden sm:inline" />
                   {t("tabHardware")}
@@ -333,52 +467,108 @@ export default function AdminPage() {
               <TabsContent value="overview" className="space-y-4 mt-4">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base">
-                      {t("topDrugsTitle")}
-                    </CardTitle>
+                    <CardTitle className="text-base">{t("chartChatsTitle")}</CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    {topDrugs.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        {t("topDrugsEmpty")}
-                      </p>
+                  <CardContent className="h-56">
+                    {overview?.dailyChats?.length ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={overview.dailyChats}>
+                          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                          <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                          <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+                          <Tooltip />
+                          <Line
+                            type="monotone"
+                            dataKey="count"
+                            stroke="hsl(var(--primary))"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
                     ) : (
-                      <div className="space-y-3">
-                        {topDrugs.map((row, i) => (
-                          <div
-                            key={row.drug?.id ?? i}
-                            className="flex items-center justify-between"
-                          >
-                            <span className="text-sm text-foreground">
-                              {row.drug?.name ?? "—"}
+                      <p className="text-sm text-muted-foreground">—</p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle className="text-base">{t("lowStockAlertTitle")}</CardTitle>
+                    <Button variant="outline" size="sm" onClick={() => setMainTab("inventory")}>
+                      {t("goInventory")}
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {(overview?.lowStockDrugs ?? []).length === 0 ? (
+                      <p className="text-sm text-muted-foreground">—</p>
+                    ) : (
+                      overview!.lowStockDrugs.map((d) => (
+                        <div
+                          key={d.id}
+                          className="flex justify-between text-sm border-b border-border pb-2"
+                        >
+                          <span>
+                            {d.name}{" "}
+                            <span className="font-mono text-muted-foreground">
+                              ({d.slotId})
                             </span>
-                            <div className="flex items-center gap-2">
-                              <div className="w-32 h-2 bg-muted rounded-full overflow-hidden">
-                                <div
-                                  className="h-full bg-primary rounded-full"
-                                  style={{
-                                    width: `${Math.min(100, (row.count / maxTop) * 100)}%`,
-                                  }}
-                                />
-                              </div>
-                              <span className="text-sm text-muted-foreground">
-                                {t("times", { count: row.count })}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                          </span>
+                          <Badge variant={d.quantity === 0 ? "destructive" : "secondary"}>
+                            {d.quantity}
+                          </Badge>
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">{t("topDrugsTitle")}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="h-52">
+                    {overview?.topDrugsAllTime?.length ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={overview.topDrugsAllTime.map((r) => ({
+                            name: r.drug?.name ?? "—",
+                            count: r.count,
+                          }))}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                          <XAxis dataKey="name" tick={{ fontSize: 9 }} interval={0} angle={-12} textAnchor="end" height={48} />
+                          <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+                          <Tooltip />
+                          <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{t("topDrugsEmpty")}</p>
                     )}
                   </CardContent>
                 </Card>
               </TabsContent>
 
-              <TabsContent value="inventory" className="mt-4">
+              <TabsContent value="inventory" className="mt-4 space-y-3">
+                <div className="flex justify-end gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setDrugEdit(null)
+                      setDrugDialogOpen(true)
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    {t("drugAdd")}
+                  </Button>
+                </div>
                 <Card>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base">
-                      {t("inventoryTitle")}
-                    </CardTitle>
+                    <CardTitle className="text-base">{t("inventoryTitle")}</CardTitle>
+                    <p className="text-xs text-muted-foreground font-normal">
+                      {t("statLowStock")}: ≤ {threshold}
+                    </p>
                   </CardHeader>
                   <CardContent className="p-0">
                     <div className="overflow-x-auto">
@@ -394,7 +584,7 @@ export default function AdminPage() {
                         </TableHeader>
                         <TableBody>
                           {drugs.map((item) => {
-                            const st = stockStatus(item.quantity)
+                            const st = stockStatus(item.quantity, threshold)
                             return (
                               <TableRow key={item.id}>
                                 <TableCell className="font-mono font-medium">
@@ -407,7 +597,7 @@ export default function AdminPage() {
                                 <TableCell className="text-center">
                                   {getStatusBadge(st)}
                                 </TableCell>
-                                <TableCell className="text-right">
+                                <TableCell className="text-right space-x-1">
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -415,6 +605,24 @@ export default function AdminPage() {
                                   >
                                     <Plus className="h-3 w-3 mr-1" />
                                     {t("restock")}
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setDrugEdit(item)
+                                      setDrugDialogOpen(true)
+                                    }}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-destructive"
+                                    onClick={() => setDeleteId(item.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
                                   </Button>
                                 </TableCell>
                               </TableRow>
@@ -427,7 +635,25 @@ export default function AdminPage() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="logs" className="mt-4">
+              <TabsContent value="logs" className="mt-4 space-y-3">
+                <div className="flex flex-wrap gap-3 items-center">
+                  <Input
+                    className="max-w-xs"
+                    placeholder={t("userSearchPh")}
+                    value={logQuery}
+                    onChange={(e) => setLogQuery(e.target.value)}
+                  />
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <Checkbox
+                      checked={redFlagOnly}
+                      onCheckedChange={(v) => setRedFlagOnly(Boolean(v))}
+                    />
+                    {t("redFlagFilter")}
+                  </label>
+                  <span className="text-xs text-muted-foreground">
+                    {t("totalLabel")}: {sessionTotal}
+                  </span>
+                </div>
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">{t("logsTitle")}</CardTitle>
@@ -442,7 +668,9 @@ export default function AdminPage() {
                             <TableHead>{t("colSummary")}</TableHead>
                             <TableHead>{t("colDrug")}</TableHead>
                             <TableHead className="text-center">{t("colQr")}</TableHead>
+                            <TableHead className="text-center">{t("colSeverity")}</TableHead>
                             <TableHead className="text-center">{t("colMachine")}</TableHead>
+                            <TableHead className="w-24" />
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -460,19 +688,110 @@ export default function AdminPage() {
                               <TableCell className="text-sm">{tx.drug}</TableCell>
                               <TableCell className="text-center">
                                 <Badge variant="secondary" className="text-xs">
-                                  {tx.qrStatus}
+                                  {tx.pickupStatus === "NONE"
+                                    ? t("pickup_NONE")
+                                    : tx.pickupStatus === "QR_ISSUED"
+                                      ? t("pickup_QR_ISSUED")
+                                      : tx.pickupStatus === "PICKED"
+                                        ? t("pickup_PICKED")
+                                        : t("pickup_EXPIRED")}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Badge
+                                  variant={
+                                    tx.severity === "ESCALATE_HOSPITAL"
+                                      ? "destructive"
+                                      : "outline"
+                                  }
+                                  className="text-xs"
+                                >
+                                  {tx.severity === "ESCALATE_HOSPITAL"
+                                    ? t("severity_ESCALATE")
+                                    : t("severity_ROUTINE")}
                                 </Badge>
                               </TableCell>
                               <TableCell className="text-center">
                                 <Badge variant="outline" className="text-xs">
-                                  {tx.machineStatus}
+                                  {tx.machineStatus === "DISPENSED"
+                                    ? t("machine_DISPENSED")
+                                    : t("machine_NONE")}
                                 </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs h-7"
+                                  onClick={() => {
+                                    setSessionPick(tx.id)
+                                    setSessionOpen(true)
+                                  }}
+                                >
+                                  {t("viewDetail")}
+                                </Button>
                               </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
                       </Table>
                     </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="users" className="mt-4 space-y-3">
+                <Input
+                  className="max-w-sm"
+                  placeholder={t("userSearchPh")}
+                  value={userQuery}
+                  onChange={(e) => setUserQuery(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t("totalLabel")}: {userTotal}
+                </p>
+                <Card>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t("colUser")}</TableHead>
+                          <TableHead>{t("phoneLabel")}</TableHead>
+                          <TableHead className="text-right" />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {userRows.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-muted-foreground">
+                              {t("noUsers")}
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          userRows.map((u) => (
+                            <TableRow key={u.id}>
+                              <TableCell className="font-medium">{u.fullName}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {u.phone ?? "—"}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={() => {
+                                    setUserPick(u.id)
+                                    setUserOpen(true)
+                                  }}
+                                >
+                                  {t("viewDetail")}
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -486,27 +805,60 @@ export default function AdminPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                        <Database
+                          className={`h-6 w-6 ${health?.database ? "text-success" : "text-destructive"}`}
+                        />
+                        <div>
+                          <p className="font-medium text-sm">{t("healthTitle")}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {health?.database ? t("dbOk") : t("dbBad")}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                        <Cloud
+                          className={`h-6 w-6 ${
+                            health?.dify === "ok"
+                              ? "text-success"
+                              : health?.dify === "missing_key"
+                                ? "text-muted-foreground"
+                                : "text-destructive"
+                          }`}
+                        />
+                        <div>
+                          <p className="font-medium text-sm">Dify</p>
+                          <p className="text-xs text-muted-foreground">
+                            {health?.dify === "ok"
+                              ? t("difyOk")
+                              : health?.dify === "missing_key"
+                                ? t("difyMissing")
+                                : t("difyBad")}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                       <div className="flex items-center gap-3">
-                        {isOnline ? (
+                        {kioskOnline ? (
                           <Wifi className="h-5 w-5 text-success" />
                         ) : (
                           <WifiOff className="h-5 w-5 text-destructive" />
                         )}
                         <div>
-                          <p className="font-medium text-foreground">
-                            {t("connTitle")}
-                          </p>
+                          <p className="font-medium text-foreground">{t("connTitle")}</p>
                           <p className="text-sm text-muted-foreground">
-                            {isOnline ? t("connOk") : t("connBad")}
+                            {kioskOnline ? t("connOk") : t("connBad")}
                           </p>
                         </div>
                       </div>
                       <Badge
-                        variant={isOnline ? "default" : "destructive"}
-                        className={isOnline ? "bg-success hover:bg-success/80" : ""}
+                        variant={kioskOnline ? "default" : "destructive"}
+                        className={kioskOnline ? "bg-success hover:bg-success/80" : ""}
                       >
-                        {isOnline ? "Online" : "Offline"}
+                        {kioskOnline ? "Online" : "Offline"}
                       </Badge>
                     </div>
 
@@ -531,6 +883,42 @@ export default function AdminPage() {
           </>
         )}
       </div>
+
+      <AdminDrugDialog
+        open={drugDialogOpen}
+        onOpenChange={setDrugDialogOpen}
+        drug={drugEdit}
+        onSaved={() => loadAll()}
+      />
+
+      <AdminSessionSheet
+        sessionId={sessionPick}
+        open={sessionOpen}
+        onOpenChange={setSessionOpen}
+        onUpdated={() => loadSessions()}
+      />
+
+      <AdminUserSheet
+        userId={userPick}
+        open={userOpen}
+        onOpenChange={setUserOpen}
+        onSaved={() => loadUsers()}
+      />
+
+      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("drugDelete")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("confirmDeleteDrug")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmDelete()}>
+              {t("drugDelete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

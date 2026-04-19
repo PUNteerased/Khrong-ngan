@@ -130,12 +130,12 @@ export default function SettingsPage() {
               </div>
               <div className="flex items-center gap-2 p-1 rounded-lg bg-muted">
                 <Button variant={locale === "th" ? "secondary" : "ghost"} size="sm" className="h-8 px-3" asChild>
-                  <Link href={pathname} locale="th" prefetch>
+                  <Link href={pathname} locale="th">
                     {t("langTh")}
                   </Link>
                 </Button>
                 <Button variant={locale === "en" ? "secondary" : "ghost"} size="sm" className="h-8 px-3" asChild>
-                  <Link href={pathname} locale="en" prefetch>
+                  <Link href={pathname} locale="en">
                     {t("langEn")}
                   </Link>
                 </Button>

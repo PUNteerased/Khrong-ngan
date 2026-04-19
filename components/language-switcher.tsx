@@ -11,7 +11,7 @@ export function LanguageSwitcher() {
 
   return (
     <Button variant="ghost" size="sm" className="h-8 px-2 text-xs font-semibold" asChild>
-      <Link href={pathname} locale={nextLocale} prefetch>
+      <Link href={pathname} locale={nextLocale}>
         {label}
       </Link>
     </Button>

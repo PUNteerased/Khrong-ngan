@@ -28,8 +28,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { useEffect, useState } from "react"
-import { getStoredToken } from "@/lib/auth-token"
-import { fetchMe } from "@/lib/api"
+import { getStoredToken, setStoredToken } from "@/lib/auth-token"
+import { fetchMe, ApiError } from "@/lib/api"
 
 interface AppSidebarProps {
   isOpen: boolean
@@ -110,8 +110,15 @@ export function AppSidebar({ isOpen, onClose }: AppSidebarProps) {
       .then((u) => {
         if (!cancelled) setIsAdminUser(u.isAdmin)
       })
-      .catch(() => {
+      .catch((err) => {
         if (!cancelled) setIsAdminUser(false)
+        if (
+          err instanceof ApiError &&
+          err.status === 401 &&
+          typeof window !== "undefined"
+        ) {
+          setStoredToken(null)
+        }
       })
     return () => {
       cancelled = true
