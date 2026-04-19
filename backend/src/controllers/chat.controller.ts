@@ -1,6 +1,33 @@
 import type { Request, Response } from "express"
+import type { Prisma } from "@prisma/client"
 import { prisma } from "../lib/prisma.js"
 import { sendDifyChatMessage } from "../services/dify.service.js"
+import { inferSeverityFromAnswer } from "../lib/consultationSeverity.js"
+
+function buildUserSnapshot(user: {
+  fullName: string
+  username: string
+  phone: string | null
+  age: number | null
+  weight: number | null
+  allergiesText: string
+  noAllergies: boolean
+  diseasesText: string
+  noDiseases: boolean
+}): Prisma.InputJsonValue {
+  return {
+    fullName: user.fullName,
+    username: user.username,
+    phone: user.phone,
+    age: user.age,
+    weight: user.weight,
+    allergiesText: user.allergiesText,
+    noAllergies: user.noAllergies,
+    diseasesText: user.diseasesText,
+    noDiseases: user.noDiseases,
+    capturedAt: new Date().toISOString(),
+  }
+}
 
 export async function postChat(req: Request, res: Response) {
   if (!req.auth) {
@@ -26,6 +53,8 @@ export async function postChat(req: Request, res: Response) {
     return
   }
 
+  const snapshot = buildUserSnapshot(user)
+
   let session = sessionId
     ? await prisma.chatSession.findFirst({
         where: { id: sessionId, userId: user.id },
@@ -34,7 +63,15 @@ export async function postChat(req: Request, res: Response) {
 
   if (!session) {
     session = await prisma.chatSession.create({
-      data: { userId: user.id },
+      data: {
+        userId: user.id,
+        userProfileSnapshot: snapshot,
+      },
+    })
+  } else if (!session.userProfileSnapshot) {
+    await prisma.chatSession.update({
+      where: { id: session.id },
+      data: { userProfileSnapshot: snapshot },
     })
   }
 
@@ -49,7 +86,6 @@ export async function postChat(req: Request, res: Response) {
   const weightStr =
     user.weight != null ? `${user.weight} กก.` : "ไม่ระบุน้ำหนัก"
 
-  // ส่งทั้งชื่อแบบ README เดิม และชื่อที่เทมเพลต Dify นิยมใช้ (เช่น allergies / diseases)
   const inputs: Record<string, string> = {
     allergy_context: allergyContext,
     disease_context: diseaseContext,
@@ -75,9 +111,17 @@ export async function postChat(req: Request, res: Response) {
       inputs,
     })
 
+    const { severity, reason } = inferSeverityFromAnswer(dify.answer)
+    const summarySlice = String(userMessage).trim().slice(0, 200)
+
     await prisma.chatSession.update({
       where: { id: session.id },
-      data: { difyConversationId: dify.conversation_id || session.difyConversationId },
+      data: {
+        difyConversationId: dify.conversation_id || session.difyConversationId,
+        summary: session.summary ?? summarySlice,
+        severity,
+        redFlagReason: reason,
+      },
     })
 
     await prisma.chatMessage.create({

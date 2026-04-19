@@ -8,6 +8,8 @@ import * as chatHistoryController from "../controllers/chatHistory.controller.js
 import * as adminController from "../controllers/admin.controller.js"
 import * as adminLogsController from "../controllers/adminLogs.controller.js"
 import * as adminLoginController from "../controllers/adminLogin.controller.js"
+import * as adminHealthController from "../controllers/adminHealth.controller.js"
+import * as adminUsersController from "../controllers/adminUsers.controller.js"
 import { authMiddleware } from "../middleware/auth.js"
 import { adminAuthMiddleware, adminOrKeyMiddleware } from "../middleware/adminAuth.js"
 
@@ -65,10 +67,39 @@ router.get(
 
 router.post("/api/admin/login", adminLoginLimiter, adminLoginController.adminLogin)
 
+router.get("/api/admin/health", adminAuthMiddleware, adminHealthController.getAdminHealth)
 router.get("/api/admin/stats", adminAuthMiddleware, adminController.getStats)
+router.get("/api/admin/overview", adminAuthMiddleware, adminController.getOverview)
 router.get("/api/admin/top-drugs", adminAuthMiddleware, adminController.topDrugs)
+
+router.get(
+  "/api/admin/sessions/:sessionId",
+  adminAuthMiddleware,
+  adminLogsController.getAdminSession
+)
+router.post(
+  "/api/admin/sessions/:sessionId/feedback",
+  adminAuthMiddleware,
+  adminLogsController.postSessionFeedback
+)
 router.get(
   "/api/admin/sessions",
   adminAuthMiddleware,
   adminLogsController.listChatSessions
+)
+
+router.get(
+  "/api/admin/users",
+  adminAuthMiddleware,
+  adminUsersController.listUsers
+)
+router.get(
+  "/api/admin/users/:id",
+  adminAuthMiddleware,
+  adminUsersController.getUser
+)
+router.patch(
+  "/api/admin/users/:id",
+  adminAuthMiddleware,
+  adminUsersController.patchUser
 )

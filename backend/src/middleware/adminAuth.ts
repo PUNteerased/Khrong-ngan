@@ -42,7 +42,11 @@ export function adminAuthMiddleware(
       res.status(403).json({ error: "โทเค็นไม่ใช่ของผู้ดูแล" })
       return
     }
-    req.adminAuth = { type: "admin", role: "admin" }
+    req.adminAuth = {
+      type: "admin",
+      role: "admin",
+      userId: decoded.userId,
+    }
     next()
   } catch {
     res.status(401).json({ error: "โทเค็นผู้ดูแลไม่ถูกต้องหรือหมดอายุ" })
@@ -63,7 +67,11 @@ export function adminOrKeyMiddleware(
     try {
       const decoded = jwt.verify(token, secret) as AdminJwtPayload
       if (decoded.type === "admin" && decoded.role === "admin") {
-        req.adminAuth = { type: "admin", role: "admin" }
+        req.adminAuth = {
+          type: "admin",
+          role: "admin",
+          userId: decoded.userId,
+        }
         next()
         return
       }

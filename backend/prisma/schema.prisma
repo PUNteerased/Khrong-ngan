@@ -24,19 +24,24 @@ model User {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   chatSessions   ChatSession[]
+  adminReviews   AdminSessionReview[] @relation("AdminReviewer")
+  auditLogsAsAdmin AdminAuditLog[]   @relation("AuditAdmin")
+  auditLogsAsTarget AdminAuditLog[]  @relation("AuditTarget")
 }
 
 model Drug {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   name        String
   description String
-  slotId      String   @unique
-  quantity    Int      @default(0)
+  slotId      String    @unique
+  quantity    Int       @default(0)
   category    String?
   dosageNotes String?
   warnings    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  expiresAt   DateTime?
+  priceCents  Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   sessions    ChatSession[] @relation("RecommendedDrug")
 }
 
@@ -47,18 +52,27 @@ enum PickupStatus {
   EXPIRED
 }
 
+enum ConsultationSeverity {
+  ROUTINE
+  ESCALATE_HOSPITAL
+}
+
 model ChatSession {
-  id                 String       @id @default(cuid())
-  userId             String
-  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  difyConversationId String?
-  summary            String?
-  pickupStatus       PickupStatus @default(NONE)
+  id                   String                 @id @default(cuid())
+  userId               String
+  user                 User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  difyConversationId   String?
+  summary              String?
+  pickupStatus         PickupStatus           @default(NONE)
   recommendedDrugId  String?
-  recommendedDrug    Drug?        @relation("RecommendedDrug", fields: [recommendedDrugId], references: [id])
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
-  messages           ChatMessage[]
+  recommendedDrug      Drug?                @relation("RecommendedDrug", fields: [recommendedDrugId], references: [id])
+  severity             ConsultationSeverity   @default(ROUTINE)
+  redFlagReason        String?
+  userProfileSnapshot  Json?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  messages             ChatMessage[]
+  adminReview          AdminSessionReview?
 }
 
 model ChatMessage {
@@ -68,4 +82,31 @@ model ChatMessage {
   role      String
   content   String
   createdAt DateTime    @default(now())
+}
+
+enum AdminFeedbackRating {
+  UP
+  DOWN
+}
+
+model AdminSessionReview {
+  id          String               @id @default(cuid())
+  sessionId   String               @unique
+  session     ChatSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  adminUserId String?
+  adminUser   User?                @relation("AdminReviewer", fields: [adminUserId], references: [id])
+  rating      AdminFeedbackRating
+  note        String?
+  createdAt   DateTime             @default(now())
+}
+
+model AdminAuditLog {
+  id            String   @id @default(cuid())
+  adminUserId   String?
+  adminUser     User?    @relation("AuditAdmin", fields: [adminUserId], references: [id])
+  action        String
+  targetUserId  String?
+  targetUser    User?    @relation("AuditTarget", fields: [targetUserId], references: [id])
+  payload       Json?
+  createdAt     DateTime @default(now())
 }
