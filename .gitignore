@@ -13,6 +13,9 @@ next.user-config.*
 !.env.example
 !.env*.example
 
+# Use npm + package-lock.json (Vercel picks pnpm if pnpm-lock.yaml exists)
+pnpm-lock.yaml
+
 # Common ignores
 node_modules
 .next/
