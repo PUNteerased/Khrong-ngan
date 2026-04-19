@@ -1,5 +1,4 @@
 import Image from "next/image"
-import logoya from "@img/logoya_bg.png"
 
 type AppLogoProps = {
   className?: string
@@ -11,7 +10,7 @@ type AppLogoProps = {
 export function AppLogo({ className, size = 40, priority }: AppLogoProps) {
   return (
     <Image
-      src={logoya}
+      src="/logoya_bg.png"
       alt="LaneYa"
       width={size}
       height={size}
