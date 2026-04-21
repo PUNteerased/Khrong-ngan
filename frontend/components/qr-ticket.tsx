@@ -1,13 +1,23 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import QRCode from "react-qr-code"
 import { useTranslations } from "next-intl"
-import { AlertTriangle, Download, Home, Pill } from "lucide-react"
+import {
+  AlertTriangle,
+  Download,
+  Home,
+  Pill,
+  RefreshCw,
+  Printer,
+  Sun,
+} from "lucide-react"
 import { Link } from "@/i18n/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import { AppLogo } from "@/components/app-logo"
+import { useIsMobile } from "@/hooks/use-mobile"
 import type { DrugDto } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
@@ -17,8 +27,11 @@ type Props = {
   ticketCode: string
   expiresAt: Date
   onClose?: () => void
+  onRefresh?: () => void
   className?: string
 }
+
+const TOTAL_TICKET_DURATION_SECONDS = 15 * 60 // 15 minutes
 
 function formatMMSS(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds))
@@ -51,20 +64,75 @@ function useCountdown(target: Date, onExpire?: () => void) {
   return remaining
 }
 
+// Hook to request max screen brightness on mobile
+function useAutoBrightness(isActive: boolean) {
+  const isMobile = useIsMobile()
+  const [brightnessRequested, setBrightnessRequested] = useState(false)
+
+  useEffect(() => {
+    if (!isActive || !isMobile) return
+
+    // Try to use the Screen Wake Lock API to keep screen on
+    let wakeLock: WakeLockSentinel | null = null
+
+    const requestWakeLock = async () => {
+      try {
+        if ("wakeLock" in navigator) {
+          wakeLock = await navigator.wakeLock.request("screen")
+          setBrightnessRequested(true)
+        }
+      } catch {
+        // Wake lock request failed
+      }
+    }
+
+    requestWakeLock()
+
+    // Re-request wake lock when page becomes visible again
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        requestWakeLock()
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      if (wakeLock) {
+        wakeLock.release().catch(() => {})
+      }
+    }
+  }, [isActive, isMobile])
+
+  return brightnessRequested
+}
+
 export function QRTicket({
   drug,
   quantity,
   ticketCode,
   expiresAt,
   onClose,
+  onRefresh,
   className,
 }: Props) {
   const t = useTranslations("QRTicket")
+  const isMobile = useIsMobile()
   const qrWrapperRef = useRef<HTMLDivElement>(null)
 
   const remaining = useCountdown(expiresAt, onClose)
   const lowTime = remaining > 0 && remaining <= 60
   const expired = remaining <= 0
+
+  // Calculate progress percentage (inverted - starts full, goes to empty)
+  const progressPercent = Math.max(
+    0,
+    Math.min(100, (remaining / TOTAL_TICKET_DURATION_SECONDS) * 100)
+  )
+
+  // Auto-brightness for mobile when QR is displayed
+  const brightnessActive = useAutoBrightness(!expired)
 
   const payload = useMemo(
     () =>
@@ -79,7 +147,7 @@ export function QRTicket({
     [ticketCode, drug.id, drug.slotId, quantity, expiresAt]
   )
 
-  const handleDownload = () => {
+  const handleDownload = useCallback(() => {
     const svg = qrWrapperRef.current?.querySelector("svg")
     if (!svg) return
     const serializer = new XMLSerializer()
@@ -93,7 +161,11 @@ export function QRTicket({
     a.click()
     a.remove()
     URL.revokeObjectURL(url)
-  }
+  }, [ticketCode])
+
+  const handlePrint = useCallback(() => {
+    window.print()
+  }, [])
 
   return (
     <div
@@ -102,6 +174,7 @@ export function QRTicket({
         className
       )}
     >
+      {/* Header */}
       <div className="flex items-center gap-3 rounded-t-2xl bg-gradient-to-r from-primary to-primary/80 px-5 py-4 text-primary-foreground">
         <div className="rounded-full bg-white/90 p-1">
           <AppLogo size={32} className="rounded-full" />
@@ -116,10 +189,19 @@ export function QRTicket({
       </div>
 
       <div className="flex flex-col items-center gap-4 px-5 py-6">
+        {/* Brightness indicator for mobile */}
+        {isMobile && brightnessActive && !expired && (
+          <div className="flex items-center gap-2 text-xs text-success">
+            <Sun className="h-4 w-4" />
+            <span>{t("brightnessActive")}</span>
+          </div>
+        )}
+
+        {/* QR Code */}
         <div
           ref={qrWrapperRef}
           className={cn(
-            "rounded-xl border-4 p-3 transition-colors",
+            "rounded-xl border-4 p-3 transition-colors print:border-2",
             expired
               ? "border-destructive/40 bg-destructive/5"
               : "border-primary/20 bg-white"
@@ -134,19 +216,51 @@ export function QRTicket({
           />
         </div>
 
-        <div
-          className={cn(
-            "flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-semibold tabular-nums",
-            expired
-              ? "bg-destructive/10 text-destructive"
-              : lowTime
-                ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                : "bg-primary/10 text-primary"
+        {/* Countdown Timer */}
+        <div className="w-full space-y-2">
+          <div
+            className={cn(
+              "flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold tabular-nums",
+              expired
+                ? "bg-destructive/10 text-destructive"
+                : lowTime
+                  ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 animate-pulse"
+                  : "bg-primary/10 text-primary"
+            )}
+          >
+            {expired ? (
+              t("expired")
+            ) : (
+              <>
+                <span className="text-2xl font-bold">
+                  {formatMMSS(remaining)}
+                </span>
+                <span className="text-xs opacity-80">{t("remaining")}</span>
+              </>
+            )}
+          </div>
+
+          {/* Progress Bar */}
+          {!expired && (
+            <Progress
+              value={progressPercent}
+              className={cn(
+                "h-2",
+                lowTime && "[&>div]:bg-amber-500"
+              )}
+            />
           )}
-        >
-          {expired ? t("expired") : t("expiresIn", { time: formatMMSS(remaining) })}
         </div>
 
+        {/* Refresh button when expired */}
+        {expired && onRefresh && (
+          <Button onClick={onRefresh} className="w-full">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            {t("requestNew")}
+          </Button>
+        )}
+
+        {/* Drug Info */}
         <div className="w-full space-y-3 rounded-xl bg-muted/50 p-4">
           <div className="flex items-start gap-3">
             <div className="rounded-lg bg-primary/10 p-2 text-primary">
@@ -179,13 +293,15 @@ export function QRTicket({
           </div>
         </div>
 
+        {/* Warning */}
         <div className="flex w-full items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-left text-xs text-amber-900 dark:text-amber-200">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p>{t("warning")}</p>
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 border-t border-border px-5 py-4 sm:flex-row">
+      {/* Action Buttons */}
+      <div className="flex flex-col gap-2 border-t border-border px-5 py-4 sm:flex-row print:hidden">
         <Button
           variant="outline"
           onClick={handleDownload}
@@ -195,6 +311,17 @@ export function QRTicket({
           <Download className="mr-1 h-4 w-4" />
           {t("download")}
         </Button>
+        {!isMobile && (
+          <Button
+            variant="outline"
+            onClick={handlePrint}
+            disabled={expired}
+            className="sm:flex-1"
+          >
+            <Printer className="mr-1 h-4 w-4" />
+            {t("print")}
+          </Button>
+        )}
         <Button asChild className="sm:flex-1" onClick={onClose}>
           <Link href="/">
             <Home className="mr-1 h-4 w-4" />

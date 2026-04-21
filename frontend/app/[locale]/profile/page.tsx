@@ -4,33 +4,16 @@ import { useState, useEffect } from "react"
 import { Link, useRouter } from "@/i18n/navigation"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
-import {
-  User,
-  Edit2,
-  Scale,
-  Settings,
-  ChevronRight,
-  LogOut,
-  Trash2,
-} from "lucide-react"
+import { Settings, ChevronRight, LogOut, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
-import { HealthProfileFields } from "@/components/health-profile-fields"
-import { ImageUploader } from "@/components/image-uploader"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Field, FieldLabel } from "@/components/ui/field"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Spinner } from "@/components/ui/spinner"
-import { Pill } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { ImageUploader } from "@/components/image-uploader"
+import {
+  MultiStepProfileForm,
+  type ProfileFormData,
+} from "@/components/multi-step-profile-form"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,30 +25,45 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { formatThaiMobileInput } from "@/lib/phone-format"
 import { fetchMe, patchMe, ApiError } from "@/lib/api"
 import { getStoredToken, setStoredToken } from "@/lib/auth-token"
+
+function ProfileSkeleton() {
+  return (
+    <div className="min-h-[calc(100vh-60px)] bg-background pb-8">
+      <div className="mx-auto w-full max-w-4xl px-2 py-6 sm:px-4 space-y-6">
+        <Card>
+          <CardHeader className="pb-3">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-64 mt-2" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex justify-center">
+              <Skeleton className="h-24 w-24 rounded-full" />
+            </div>
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-2 w-full" />
+            <div className="grid grid-cols-3 gap-2">
+              <Skeleton className="h-12 w-full rounded-lg" />
+              <Skeleton className="h-12 w-full rounded-lg" />
+              <Skeleton className="h-12 w-full rounded-lg" />
+            </div>
+            <Skeleton className="h-40 w-full" />
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
 
 export default function ProfilePage() {
   const router = useRouter()
   const t = useTranslations("Profile")
-  const tHealth = useTranslations("HealthProfile")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [fullName, setFullName] = useState("")
-  const [username, setUsername] = useState("")
-  const [phone, setPhone] = useState("")
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
-  const [ageStr, setAgeStr] = useState("")
-  const [weightStr, setWeightStr] = useState("")
-  const [heightStr, setHeightStr] = useState("")
-  const [gender, setGender] = useState<string>("")
-  const [allergiesText, setAllergiesText] = useState("")
-  const [noAllergies, setNoAllergies] = useState(false)
-  const [diseasesText, setDiseasesText] = useState("")
-  const [noDiseases, setNoDiseases] = useState(false)
-  const [currentMedications, setCurrentMedications] = useState("")
-  const [noMedications, setNoMedications] = useState(false)
+  const [username, setUsername] = useState("")
+  const [initialData, setInitialData] = useState<ProfileFormData | null>(null)
 
   useEffect(() => {
     if (!getStoredToken()) {
@@ -77,23 +75,23 @@ export default function ProfilePage() {
       try {
         const u = await fetchMe()
         if (cancelled) return
-        setFullName(u.fullName)
         setUsername(u.username)
-        setPhone(u.phone)
         setAvatarUrl(u.avatarUrl ?? null)
-        setAgeStr(u.age != null ? String(u.age) : "")
-        setWeightStr(u.weight != null ? String(u.weight) : "")
-        setHeightStr(u.height != null ? String(u.height) : "")
-        setGender(u.gender ?? "")
-        setAllergiesText(u.allergiesText)
-        setNoAllergies(u.noAllergies)
-        setDiseasesText(u.diseasesText)
-        setNoDiseases(u.noDiseases)
-        setCurrentMedications(u.currentMedications)
-        setNoMedications(
-          u.currentMedications.trim() === "" ||
-            u.currentMedications.trim() === "ไม่มี"
-        )
+        setInitialData({
+          fullName: u.fullName,
+          age: u.age ?? null,
+          weight: u.weight ?? null,
+          height: u.height ?? null,
+          gender: u.gender ?? null,
+          allergiesText: u.allergiesText,
+          noAllergies: u.noAllergies,
+          diseasesText: u.diseasesText,
+          noDiseases: u.noDiseases,
+          currentMedications: u.currentMedications,
+          noMedications:
+            u.currentMedications.trim() === "" ||
+            u.currentMedications.trim() === "ไม่มี",
+        })
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
           setStoredToken(null)
@@ -110,20 +108,20 @@ export default function ProfilePage() {
     }
   }, [router, t])
 
-  const handleSave = async () => {
+  const handleSave = async (data: ProfileFormData) => {
     setSaving(true)
     try {
       await patchMe({
-        fullName: fullName.trim(),
-        age: ageStr === "" ? null : Number(ageStr),
-        weight: weightStr === "" ? null : Number(weightStr),
-        height: heightStr === "" ? null : Number(heightStr),
-        gender: gender.trim() === "" ? null : gender,
-        allergiesText,
-        noAllergies,
-        diseasesText,
-        noDiseases,
-        currentMedications: noMedications ? "ไม่มี" : currentMedications,
+        fullName: data.fullName.trim(),
+        age: data.age,
+        weight: data.weight,
+        height: data.height,
+        gender: data.gender?.trim() === "" ? null : data.gender,
+        allergiesText: data.allergiesText,
+        noAllergies: data.noAllergies,
+        diseasesText: data.diseasesText,
+        noDiseases: data.noDiseases,
+        currentMedications: data.noMedications ? "ไม่มี" : data.currentMedications,
       })
       toast.success(t("saveOk"))
     } catch (err) {
@@ -153,11 +151,7 @@ export default function ProfilePage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex min-h-[calc(100vh-60px)] items-center justify-center">
-        <Spinner className="h-8 w-8" />
-      </div>
-    )
+    return <ProfileSkeleton />
   }
 
   if (!getStoredToken()) {
@@ -171,21 +165,27 @@ export default function ProfilePage() {
     )
   }
 
+  if (!initialData) {
+    return (
+      <div className="flex min-h-[calc(100vh-60px)] items-center justify-center">
+        <Spinner className="h-8 w-8" />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-[calc(100vh-60px)] bg-background pb-8">
       <div className="mx-auto w-full max-w-4xl px-2 py-6 sm:px-4 space-y-6">
+        {/* Avatar Card */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <User className="h-5 w-5" />
-              {t("title")}
-            </CardTitle>
+            <CardTitle className="text-lg">{t("title")}</CardTitle>
             <p className="text-sm text-muted-foreground font-normal">
               {t("subtitle")}
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-lg bg-muted/50 p-3">
+            <div className="flex flex-col items-center gap-2 rounded-lg bg-muted/50 p-4">
               <ImageUploader
                 folder="avatars"
                 shape="circle"
@@ -195,157 +195,19 @@ export default function ProfilePage() {
                 label={t("avatarLabel")}
                 size={96}
               />
+              <p className="text-sm text-muted-foreground">@{username}</p>
             </div>
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-              <div className="min-w-0 flex-1 space-y-2 pr-2">
-                <div className="flex items-center gap-2">
-                  <Edit2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <Input
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="h-8"
-                    placeholder={t("fullNamePh")}
-                  />
-                </div>
-                <p className="text-sm text-muted-foreground pl-6">@{username}</p>
-                {phone ? (
-                  <p className="text-sm text-muted-foreground pl-6 tabular-nums">
-                    {formatThaiMobileInput(phone)}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <Scale className="h-4 w-4" />
-                {t("bodyTitle")}
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">{t("ageLabel")}</p>
-                  <Input
-                    type="number"
-                    value={ageStr}
-                    onChange={(e) => setAgeStr(e.target.value)}
-                    placeholder="25"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">
-                    {t("weightLabel")}
-                  </p>
-                  <Input
-                    type="number"
-                    value={weightStr}
-                    onChange={(e) => setWeightStr(e.target.value)}
-                    placeholder="70"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">
-                    {t("heightLabel")}
-                  </p>
-                  <Input
-                    type="number"
-                    value={heightStr}
-                    onChange={(e) => setHeightStr(e.target.value)}
-                    placeholder="170"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">
-                    {tHealth("genderLabel")}
-                  </p>
-                  <Select
-                    value={gender || undefined}
-                    onValueChange={(v) => setGender(v)}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder={tHealth("genderPh")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="male">
-                        {tHealth("genderMale")}
-                      </SelectItem>
-                      <SelectItem value="female">
-                        {tHealth("genderFemale")}
-                      </SelectItem>
-                      <SelectItem value="other">
-                        {tHealth("genderOther")}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            <HealthProfileFields
-              idPrefix="profile"
-              allergiesText={allergiesText}
-              onAllergiesTextChange={setAllergiesText}
-              noAllergies={noAllergies}
-              onNoAllergiesChange={setNoAllergies}
-              diseasesText={diseasesText}
-              onDiseasesTextChange={setDiseasesText}
-              noDiseases={noDiseases}
-              onNoDiseasesChange={setNoDiseases}
-            />
-
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Pill className="h-4 w-4 shrink-0 text-primary" />
-                <span className="font-medium text-foreground">
-                  {tHealth("medicationsTitle")}
-                </span>
-              </div>
-              <Field>
-                <FieldLabel htmlFor="profile-medications-text">
-                  {tHealth("medicationsLabel")}
-                </FieldLabel>
-                <Textarea
-                  id="profile-medications-text"
-                  placeholder={tHealth("medicationsPh")}
-                  rows={4}
-                  value={currentMedications}
-                  disabled={noMedications}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    setCurrentMedications(v)
-                    if (v.trim()) setNoMedications(false)
-                  }}
-                  className="min-h-[100px] resize-y"
-                />
-              </Field>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="profile-no-medications"
-                  checked={noMedications}
-                  onCheckedChange={(checked) => {
-                    const on = checked === true
-                    setNoMedications(on)
-                    if (on) setCurrentMedications("")
-                  }}
-                />
-                <label
-                  htmlFor="profile-no-medications"
-                  className="text-sm leading-snug text-muted-foreground"
-                >
-                  {tHealth("noMedications")}
-                </label>
-              </div>
-            </div>
-
-            <Button className="w-full" onClick={handleSave} disabled={saving}>
-              {saving ? t("saving") : t("saveProfile")}
-            </Button>
           </CardContent>
         </Card>
 
+        {/* Multi-step Profile Form */}
+        <MultiStepProfileForm
+          initialData={initialData}
+          onSave={handleSave}
+          saving={saving}
+        />
+
+        {/* Account Actions */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">{t("accountTitle")}</CardTitle>
