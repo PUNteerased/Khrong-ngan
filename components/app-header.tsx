@@ -15,13 +15,13 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
   const t = useTranslations("Header")
 
   return (
-    <header className="sticky top-0 z-30 bg-primary text-primary-foreground shadow-md">
+    <header className="sticky top-0 z-30 bg-[#023c75] text-white shadow-md">
       <div className="flex items-center justify-between px-4 py-3">
         <Button
           variant="ghost"
           size="icon"
           onClick={onMenuClick}
-          className="text-primary-foreground hover:bg-primary/80"
+          className="text-white hover:bg-white/10"
         >
           <Menu className="h-6 w-6" />
           <span className="sr-only">{t("openMenu")}</span>
@@ -37,7 +37,7 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
           <Button
             variant="ghost"
             size="icon"
-            className="text-primary-foreground hover:bg-primary/80"
+            className="text-white hover:bg-white/10"
           >
             <Bell className="h-5 w-5" />
             <span className="sr-only">{t("notifications")}</span>

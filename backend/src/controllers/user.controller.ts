@@ -20,6 +20,7 @@ export async function getMe(req: Request, res: Response) {
     phone: user.phone ?? "",
     isAdmin: user.isAdmin,
     fullName: user.fullName,
+    avatarUrl: user.avatarUrl,
     age: user.age,
     weight: user.weight,
     allergiesText: user.allergiesText,
@@ -36,6 +37,7 @@ export async function patchMe(req: Request, res: Response) {
   }
   const {
     fullName,
+    avatarUrl,
     age,
     weight,
     allergiesText,
@@ -46,6 +48,8 @@ export async function patchMe(req: Request, res: Response) {
 
   const data: Prisma.UserUpdateInput = {}
   if (fullName !== undefined) data.fullName = String(fullName)
+  if (avatarUrl !== undefined)
+    data.avatarUrl = avatarUrl ? String(avatarUrl) : null
   if (age !== undefined) data.age = age === null || age === "" ? null : Number(age)
   if (weight !== undefined)
     data.weight = weight === null || weight === "" ? null : Number(weight)
@@ -65,6 +69,7 @@ export async function patchMe(req: Request, res: Response) {
     phone: user.phone ?? "",
     isAdmin: user.isAdmin,
     fullName: user.fullName,
+    avatarUrl: user.avatarUrl,
     age: user.age,
     weight: user.weight,
     allergiesText: user.allergiesText,

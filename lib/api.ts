@@ -78,6 +78,7 @@ export type UserProfile = {
   phone: string
   isAdmin: boolean
   fullName: string
+  avatarUrl: string | null
   age: number | null
   weight: number | null
   allergiesText: string
@@ -128,6 +129,7 @@ export async function patchMe(
     Pick<
       UserProfile,
       | "fullName"
+      | "avatarUrl"
       | "age"
       | "weight"
       | "allergiesText"
@@ -154,6 +156,7 @@ export type DrugDto = {
   category: string | null
   dosageNotes: string | null
   warnings: string | null
+  imageUrl: string | null
   expiresAt: string | null
   priceCents: number | null
   inCabinet: boolean
@@ -173,6 +176,7 @@ export async function createDrug(body: {
   category?: string | null
   dosageNotes?: string | null
   warnings?: string | null
+  imageUrl?: string | null
   expiresAt?: string | null
   priceCents?: number | null
 }) {
@@ -194,6 +198,7 @@ export async function patchDrug(
     category: string | null
     dosageNotes: string | null
     warnings: string | null
+    imageUrl: string | null
     expiresAt: string | null
     priceCents: number | null
   }>
@@ -466,6 +471,7 @@ export type ChatHistoryMessage = {
   id: string
   role: string
   content: string
+  imageUrl: string | null
   createdAt: string
 }
 
@@ -479,14 +485,22 @@ export async function fetchChatSessionMessages(sessionId: string) {
 
 // --- Chat ---
 
-export async function sendChatMessage(userMessage: string, sessionId?: string | null) {
+export async function sendChatMessage(
+  userMessage: string,
+  sessionId?: string | null,
+  imageUrl?: string | null
+) {
   return apiJson<{
     answer: string
     sessionId: string
     conversationId: string
   }>("/api/chat", {
     method: "POST",
-    body: JSON.stringify({ userMessage, sessionId: sessionId || undefined }),
+    body: JSON.stringify({
+      userMessage,
+      sessionId: sessionId || undefined,
+      imageUrl: imageUrl || undefined,
+    }),
   })
 }
 

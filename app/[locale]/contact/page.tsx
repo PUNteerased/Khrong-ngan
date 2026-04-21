@@ -51,7 +51,7 @@ export default function ContactPage() {
 
   return (
     <div className="min-h-[calc(100vh-60px)] bg-background pb-8">
-      <div className="max-w-lg mx-auto px-4 py-6 space-y-6">
+      <div className="mx-auto w-full max-w-4xl px-2 py-6 sm:px-4 space-y-6">
         <a href="tel:1669">
           <Card className="bg-destructive/10 border-destructive/30 hover:bg-destructive/20 transition-colors cursor-pointer">
             <CardContent className="p-4">

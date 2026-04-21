@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { HealthProfileFields } from "@/components/health-profile-fields"
+import { ImageUploader } from "@/components/image-uploader"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import {
@@ -42,6 +43,7 @@ export default function ProfilePage() {
   const [fullName, setFullName] = useState("")
   const [username, setUsername] = useState("")
   const [phone, setPhone] = useState("")
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [ageStr, setAgeStr] = useState("")
   const [weightStr, setWeightStr] = useState("")
   const [allergiesText, setAllergiesText] = useState("")
@@ -62,6 +64,7 @@ export default function ProfilePage() {
         setFullName(u.fullName)
         setUsername(u.username)
         setPhone(u.phone)
+        setAvatarUrl(u.avatarUrl ?? null)
         setAgeStr(u.age != null ? String(u.age) : "")
         setWeightStr(u.weight != null ? String(u.weight) : "")
         setAllergiesText(u.allergiesText)
@@ -105,6 +108,17 @@ export default function ProfilePage() {
     }
   }
 
+  const handleAvatarChange = async (url: string | null) => {
+    setAvatarUrl(url)
+    try {
+      await patchMe({ avatarUrl: url })
+      toast.success(t("avatarSaved"))
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : t("saveFail")
+      toast.error(msg)
+    }
+  }
+
   const handleLogout = () => {
     setStoredToken(null)
     toast.success(t("logoutOk"))
@@ -122,7 +136,7 @@ export default function ProfilePage() {
 
   if (!getStoredToken()) {
     return (
-      <div className="max-w-lg mx-auto px-4 py-12 text-center space-y-4">
+      <div className="mx-auto w-full max-w-2xl px-4 py-12 text-center space-y-4">
         <p className="text-muted-foreground">{t("needLogin")}</p>
         <Button asChild>
           <Link href="/login">{t("login")}</Link>
@@ -133,7 +147,7 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-[calc(100vh-60px)] bg-background pb-8">
-      <div className="max-w-lg mx-auto px-4 py-6 space-y-6">
+      <div className="mx-auto w-full max-w-4xl px-2 py-6 sm:px-4 space-y-6">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2">
@@ -145,6 +159,17 @@ export default function ProfilePage() {
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="rounded-lg bg-muted/50 p-3">
+              <ImageUploader
+                folder="avatars"
+                shape="circle"
+                value={avatarUrl}
+                onChange={(url) => void handleAvatarChange(url)}
+                disabled={saving}
+                label={t("avatarLabel")}
+                size={96}
+              />
+            </div>
             <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
               <div className="min-w-0 flex-1 space-y-2 pr-2">
                 <div className="flex items-center gap-2">

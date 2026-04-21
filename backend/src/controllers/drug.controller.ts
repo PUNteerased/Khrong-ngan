@@ -11,6 +11,7 @@ function serializeDrug(d: {
   category: string | null
   dosageNotes: string | null
   warnings: string | null
+  imageUrl: string | null
   expiresAt: Date | null
   priceCents: number | null
 }) {
@@ -23,6 +24,7 @@ function serializeDrug(d: {
     category: d.category,
     dosageNotes: d.dosageNotes,
     warnings: d.warnings,
+    imageUrl: d.imageUrl,
     expiresAt: d.expiresAt ? d.expiresAt.toISOString() : null,
     priceCents: d.priceCents,
     inCabinet: d.quantity > 0,
@@ -73,6 +75,7 @@ export async function createDrug(req: Request, res: Response) {
     category,
     dosageNotes,
     warnings,
+    imageUrl,
     expiresAt,
     priceCents,
   } = req.body as Record<string, unknown>
@@ -99,6 +102,8 @@ export async function createDrug(req: Request, res: Response) {
         category: category != null ? String(category) : null,
         dosageNotes: dosageNotes != null ? String(dosageNotes) : null,
         warnings: warnings != null ? String(warnings) : null,
+        imageUrl:
+          imageUrl != null && String(imageUrl).trim() ? String(imageUrl) : null,
         expiresAt: expires,
         priceCents: price,
       },
@@ -117,6 +122,7 @@ export async function patchDrug(req: Request, res: Response) {
     category,
     dosageNotes,
     warnings,
+    imageUrl,
     slotId,
     expiresAt,
     priceCents,
@@ -129,6 +135,8 @@ export async function patchDrug(req: Request, res: Response) {
   if (dosageNotes !== undefined)
     data.dosageNotes = dosageNotes ? String(dosageNotes) : null
   if (warnings !== undefined) data.warnings = warnings ? String(warnings) : null
+  if (imageUrl !== undefined)
+    data.imageUrl = imageUrl ? String(imageUrl) : null
   if (slotId !== undefined) data.slotId = String(slotId)
   if (expiresAt !== undefined) {
     if (expiresAt === null || expiresAt === "") data.expiresAt = null

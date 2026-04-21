@@ -6,6 +6,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -15,6 +16,7 @@ model User {
   passwordHash   String
   isAdmin        Boolean  @default(false)
   fullName       String
+  avatarUrl      String?
   age            Int?
   weight         Float?
   allergiesText  String   @default("")
@@ -38,6 +40,7 @@ model Drug {
   category    String?
   dosageNotes String?
   warnings    String?
+  imageUrl    String?
   expiresAt   DateTime?
   priceCents  Int?
   createdAt   DateTime  @default(now())
@@ -81,6 +84,7 @@ model ChatMessage {
   session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   role      String
   content   String
+  imageUrl  String?
   createdAt DateTime    @default(now())
 }
 

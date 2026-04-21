@@ -5,12 +5,19 @@ type AppLogoProps = {
   /** Pixel width/height (square). */
   size?: number
   priority?: boolean
+  /** Override source path for special cases. */
+  src?: string
 }
 
-export function AppLogo({ className, size = 40, priority }: AppLogoProps) {
+export function AppLogo({
+  className,
+  size = 40,
+  priority,
+  src = "/logoya_bg.png",
+}: AppLogoProps) {
   return (
     <Image
-      src="/logoya_bg.png"
+      src={src}
       alt="LaneYa"
       width={size}
       height={size}

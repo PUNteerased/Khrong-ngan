@@ -132,6 +132,7 @@ function publicUser(user: {
   phone: string | null
   isAdmin: boolean
   fullName: string
+  avatarUrl: string | null
   age: number | null
   weight: number | null
   allergiesText: string
@@ -145,6 +146,7 @@ function publicUser(user: {
     phone: user.phone ?? "",
     isAdmin: user.isAdmin,
     fullName: user.fullName,
+    avatarUrl: user.avatarUrl,
     age: user.age,
     weight: user.weight,
     allergiesText: user.allergiesText,

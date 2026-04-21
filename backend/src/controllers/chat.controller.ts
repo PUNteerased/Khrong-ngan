@@ -35,13 +35,16 @@ export async function postChat(req: Request, res: Response) {
     return
   }
 
-  const { userMessage, sessionId } = req.body as {
+  const { userMessage, sessionId, imageUrl } = req.body as {
     userMessage?: string
     sessionId?: string | null
+    imageUrl?: string | null
   }
 
-  if (!userMessage || !String(userMessage).trim()) {
-    res.status(400).json({ error: "กรุณาส่งข้อความ" })
+  const trimmedMessage = String(userMessage ?? "").trim()
+  const trimmedImage = imageUrl ? String(imageUrl).trim() : ""
+  if (!trimmedMessage && !trimmedImage) {
+    res.status(400).json({ error: "กรุณาส่งข้อความหรือแนบรูป" })
     return
   }
 
@@ -99,20 +102,24 @@ export async function postChat(req: Request, res: Response) {
     data: {
       sessionId: session.id,
       role: "user",
-      content: String(userMessage).trim(),
+      content: trimmedMessage,
+      imageUrl: trimmedImage || null,
     },
   })
 
   try {
+    const difyQuery = trimmedImage
+      ? `${trimmedMessage}${trimmedMessage ? "\n\n" : ""}[แนบรูปภาพ: ${trimmedImage}]`
+      : trimmedMessage
     const dify = await sendDifyChatMessage({
-      query: String(userMessage).trim(),
+      query: difyQuery,
       user: user.id,
       conversationId: session.difyConversationId,
       inputs,
     })
 
     const { severity, reason } = inferSeverityFromAnswer(dify.answer)
-    const summarySlice = String(userMessage).trim().slice(0, 200)
+    const summarySlice = (trimmedMessage || "[แนบรูปภาพ]").slice(0, 200)
 
     await prisma.chatSession.update({
       where: { id: session.id },

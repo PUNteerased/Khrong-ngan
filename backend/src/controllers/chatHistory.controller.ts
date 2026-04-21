@@ -56,6 +56,7 @@ export async function getSessionMessages(req: Request, res: Response) {
           id: true,
           role: true,
           content: true,
+          imageUrl: true,
           createdAt: true,
         },
       },
@@ -74,6 +75,7 @@ export async function getSessionMessages(req: Request, res: Response) {
       id: m.id,
       role: m.role,
       content: m.content,
+      imageUrl: m.imageUrl,
       createdAt: m.createdAt.toISOString(),
     })),
   })

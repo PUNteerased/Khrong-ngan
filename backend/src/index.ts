@@ -6,7 +6,11 @@ import { router } from "./routes/index.js"
 
 const app = express()
 const port = Number(process.env.PORT) || 4000
-const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:3000"
+const corsOriginRaw = process.env.CORS_ORIGIN || "http://localhost:3000"
+const allowedOrigins = corsOriginRaw
+  .split(",")
+  .map((v) => v.trim())
+  .filter(Boolean)
 
 app.use(
   helmet({
@@ -15,7 +19,18 @@ app.use(
 )
 app.use(
   cors({
-    origin: corsOrigin,
+    origin(origin, callback) {
+      // Allow non-browser tools/no-origin requests (health checks, curl, etc.)
+      if (!origin) {
+        callback(null, true)
+        return
+      }
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true)
+        return
+      }
+      callback(new Error(`Not allowed by CORS: ${origin}`))
+    },
     credentials: true,
   })
 )

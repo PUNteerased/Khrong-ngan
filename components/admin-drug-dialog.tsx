@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { ImageUploader } from "@/components/image-uploader"
 import type { DrugDto } from "@/lib/api"
 import { createDrug, patchDrug, ApiError } from "@/lib/api"
 import { toast } from "sonner"
@@ -34,6 +35,7 @@ export function AdminDrugDialog({ open, onOpenChange, drug, onSaved }: Props) {
   const [category, setCategory] = useState("")
   const [dosageNotes, setDosageNotes] = useState("")
   const [warnings, setWarnings] = useState("")
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [expiresAt, setExpiresAt] = useState("")
   const [priceCents, setPriceCents] = useState("")
   const [saving, setSaving] = useState(false)
@@ -48,6 +50,7 @@ export function AdminDrugDialog({ open, onOpenChange, drug, onSaved }: Props) {
       setCategory(drug.category ?? "")
       setDosageNotes(drug.dosageNotes ?? "")
       setWarnings(drug.warnings ?? "")
+      setImageUrl(drug.imageUrl ?? null)
       setExpiresAt(
         drug.expiresAt ? drug.expiresAt.slice(0, 10) : ""
       )
@@ -62,6 +65,7 @@ export function AdminDrugDialog({ open, onOpenChange, drug, onSaved }: Props) {
       setCategory("")
       setDosageNotes("")
       setWarnings("")
+      setImageUrl(null)
       setExpiresAt("")
       setPriceCents("")
     }
@@ -86,6 +90,7 @@ export function AdminDrugDialog({ open, onOpenChange, drug, onSaved }: Props) {
           category: category.trim() || null,
           dosageNotes: dosageNotes.trim() || null,
           warnings: warnings.trim() || null,
+          imageUrl: imageUrl ?? null,
           expiresAt: exp,
           priceCents: pc,
         })
@@ -98,6 +103,7 @@ export function AdminDrugDialog({ open, onOpenChange, drug, onSaved }: Props) {
           category: category.trim() || null,
           dosageNotes: dosageNotes.trim() || null,
           warnings: warnings.trim() || null,
+          imageUrl: imageUrl ?? null,
           expiresAt: exp,
           priceCents: pc,
         })
@@ -123,6 +129,17 @@ export function AdminDrugDialog({ open, onOpenChange, drug, onSaved }: Props) {
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-2">
+          <div className="space-y-1">
+            <Label>{t("drugImage")}</Label>
+            <ImageUploader
+              folder="drugs"
+              shape="square"
+              value={imageUrl}
+              onChange={setImageUrl}
+              disabled={saving}
+              label={t("drugImage")}
+            />
+          </div>
           <div className="space-y-1">
             <Label htmlFor="adm-d-name">{t("colName")}</Label>
             <Input

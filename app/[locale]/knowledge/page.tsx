@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Spinner } from "@/components/ui/spinner"
 import { fetchDrugs, type DrugDto } from "@/lib/api"
+import { DrugDetailModal } from "@/components/drug-detail-modal"
 
 type KnowledgeDataMsg = {
   d1n: string
@@ -68,6 +69,7 @@ function KnowledgeContent() {
   const [searchQuery, setSearchQuery] = useState("")
   const [drugs, setDrugs] = useState<DrugDto[]>([])
   const [drugsLoading, setDrugsLoading] = useState(false)
+  const [selectedDrug, setSelectedDrug] = useState<DrugDto | null>(null)
 
   useEffect(() => {
     if (tabParam) {
@@ -199,11 +201,32 @@ function KnowledgeContent() {
               .map((drug) => (
                 <Card
                   key={drug.id}
-                  className="cursor-pointer hover:shadow-md transition-shadow"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedDrug(drug)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault()
+                      setSelectedDrug(drug)
+                    }
+                  }}
+                  className="cursor-pointer hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-shadow"
                 >
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-1.5">
+                      {drug.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={drug.imageUrl}
+                          alt={drug.name}
+                          className="h-16 w-16 flex-shrink-0 rounded-lg border bg-muted object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-lg border bg-muted">
+                          <Pill className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="flex-1 space-y-1.5">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="font-semibold text-foreground">
                             {drug.name}
@@ -219,7 +242,7 @@ function KnowledgeContent() {
                             </Badge>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-muted-foreground line-clamp-2">
                           {drug.description}
                         </p>
                         {drug.category ? (
@@ -228,7 +251,6 @@ function KnowledgeContent() {
                           </Badge>
                         ) : null}
                       </div>
-                      <Pill className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     </div>
                   </CardContent>
                 </Card>
@@ -236,6 +258,14 @@ function KnowledgeContent() {
           )}
         </TabsContent>
       </Tabs>
+
+      <DrugDetailModal
+        drug={selectedDrug}
+        open={Boolean(selectedDrug)}
+        onOpenChange={(v) => {
+          if (!v) setSelectedDrug(null)
+        }}
+      />
     </div>
   )
 }

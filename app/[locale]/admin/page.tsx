@@ -380,7 +380,7 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-[calc(100vh-60px)] bg-background pb-8">
-      <div className="mx-auto w-full max-w-6xl py-6 space-y-6">
+      <div className="mx-auto w-full max-w-none py-6 space-y-6 xl:px-8">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h1 className="text-xl font-bold text-foreground">{t("dashboardTitle")}</h1>
           <div className="flex items-center gap-2 flex-wrap">
@@ -590,7 +590,21 @@ export default function AdminPage() {
                                 <TableCell className="font-mono font-medium">
                                   {item.slotId}
                                 </TableCell>
-                                <TableCell>{item.name}</TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    {item.imageUrl ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img
+                                        src={item.imageUrl}
+                                        alt={item.name}
+                                        className="h-8 w-8 rounded border bg-muted object-cover"
+                                      />
+                                    ) : (
+                                      <div className="h-8 w-8 rounded border bg-muted" />
+                                    )}
+                                    <span>{item.name}</span>
+                                  </div>
+                                </TableCell>
                                 <TableCell className="text-center">
                                   {item.quantity}
                                 </TableCell>

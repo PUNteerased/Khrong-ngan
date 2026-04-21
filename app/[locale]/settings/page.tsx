@@ -48,7 +48,7 @@ export default function SettingsPage() {
 
   if (!getStoredToken()) {
     return (
-      <div className="max-w-lg mx-auto px-4 py-12 text-center space-y-4">
+      <div className="mx-auto w-full max-w-2xl px-4 py-12 text-center space-y-4">
         <p className="text-muted-foreground">{t("loginPrompt")}</p>
         <Button asChild>
           <Link href="/login">{t("login")}</Link>
@@ -59,7 +59,7 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-[calc(100vh-60px)] bg-background pb-8">
-      <div className="max-w-lg mx-auto px-4 py-6 space-y-6">
+      <div className="mx-auto w-full max-w-4xl px-2 py-6 sm:px-4 space-y-6">
         <Link
           href="/profile"
           className="flex items-center justify-between p-4 rounded-xl border bg-card text-card-foreground shadow-sm hover:bg-muted/50 transition-colors"
