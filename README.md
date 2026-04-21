@@ -117,6 +117,28 @@ npm run dev:frontend
 - **API (Render):** ตั้ง `rootDir` = `backend` (ดู [render.yaml](render.yaml))
 - **Frontend (Vercel):** ตั้ง **Root Directory** = `frontend` แล้วตั้ง `NEXT_PUBLIC_API_URL` ชี้ไปที่ URL ของ API
 
+### `git push` แล้ว GitHub ขึ้นแดงว่า Vercel failed — แก้อย่างไร?
+
+การ push ไปที่ `main` **สำเร็จแล้ว** ถ้าเห็น commit บน GitHub แปลว่า `git push -u origin main` ไม่ใช่ปัญหา ไอคอนแดงมักมาจาก **GitHub Check ของ Vercel** ที่ build deploy ไม่ผ่าน
+
+หลังจัดเป็น monorepo โฟลเดอร์ Next.js อยู่ที่ `frontend/` ไม่ใช่ราก repo ดังนั้น Vercel ต้องชี้ **Root Directory** ไปที่แอปจริง
+
+1. เปิด [Vercel Dashboard](https://vercel.com/dashboard) → เลือกโปรเจกต์ **Khrong-ngan** (หรือชื่อที่ลิงก์กับ repo นี้)
+2. **Settings** → **General** → หัวข้อ **Root Directory** → กด **Edit**
+3. ใส่ `frontend` แล้ว **Save**
+4. แท็บ **Environment Variables**: ตรวจว่ามี `NEXT_PUBLIC_API_URL` (URL ของ API จริง ไม่มี slash ท้าย)
+5. ไปที่ **Deployments** → เลือก deployment ล่าสุด → **⋯** → **Redeploy** (หรือ push commit ใหม่)
+
+ดู log แบบละเอียด (ตามข้อความใน GitHub):
+
+```bash
+npx vercel inspect dpl_<deployment-id> --logs
+```
+
+(แทน `dpl_...` ด้วย id จากลิงก์ใน GitHub หรือจากหน้า Deployment)
+
+อ้างอิง: [Using Monorepos (Vercel)](https://vercel.com/docs/monorepos)
+
 ---
 
 ## LaneYa (English)
@@ -168,6 +190,22 @@ Place images under [`docs/screenshots/`](docs/screenshots/README.md), then uncom
 ![LaneYa AI Chat](docs/screenshots/ai-chat.png)
 ![Admin Dashboard](docs/screenshots/admin-dashboard.png)
 ```
+
+### Vercel: “All checks have failed” after `git push`
+
+Your push to `main` can still succeed while the **Vercel GitHub check** fails. After this monorepo change, the Next.js app lives in `frontend/`, not the repository root.
+
+1. Vercel Dashboard → your project → **Settings** → **General** → **Root Directory** → set to `frontend` → **Save**
+2. **Environment Variables**: set `NEXT_PUBLIC_API_URL` to your public API URL (no trailing slash)
+3. **Deployments** → **Redeploy** the latest deployment (or push a new commit)
+
+Logs:
+
+```bash
+npx vercel inspect dpl_<deployment-id> --logs
+```
+
+See [Vercel Monorepos](https://vercel.com/docs/monorepos).
 
 ### Local setup
 
