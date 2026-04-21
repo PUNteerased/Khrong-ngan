@@ -39,6 +39,22 @@
 
 > หมายเหตุ: ใน API/ฝั่ง client มักใช้ชื่อ `allergiesText` สำหรับข้อความแพ้ยา (ไม่ใช่คอลัมน์ชื่อ `allergies` แยกต่างหาก)
 
+### API หลัก (Backend)
+
+| Method | Path | คำอธิบาย |
+|--------|------|----------|
+| GET | `/health` | สถานะเซิร์ฟเวอร์ |
+| POST | `/api/auth/register` | ลงทะเบียน |
+| POST | `/api/auth/login` | เข้าสู่ระบบ (JWT) |
+| GET/PATCH | `/api/users/me` | โปรไฟล์ (Bearer user) |
+| GET | `/api/drugs` | รายการยาในตู้ |
+| POST/PATCH/DELETE … | `/api/drugs` | จัดการยา (JWT ผู้ดูแล หรือ `x-admin-key`) |
+| POST | `/api/chat` | แชทผ่าน Dify (Bearer user) |
+| GET | `/api/chat/sessions` | รายการแชทของฉัน |
+| GET | `/api/chat/sessions/:id/messages` | ข้อความใน session |
+| POST | `/api/admin/login` | JWT ผู้ดูแล |
+| GET | `/api/admin/stats` | สถิติ (Bearer admin) |
+
 ### รูปหน้าจอ (เติมไฟล์ภายหลัง)
 
 วางไฟล์รูปใน [`docs/screenshots/`](docs/screenshots/README.md) แล้วแก้ลิงก์ด้านล่างให้ชี้ไปที่ไฟล์จริง
