@@ -15,10 +15,14 @@ export async function register(req: Request, res: Response) {
       fullName,
       age,
       weight,
+      height,
+      gender,
       allergiesText,
       noAllergies,
+      allergyKeywords,
       diseasesText,
       noDiseases,
+      currentMedications,
     } = req.body as Record<string, unknown>
 
     if (!usernameRaw || !password || !fullName) {
@@ -73,10 +77,18 @@ export async function register(req: Request, res: Response) {
         fullName: String(fullName),
         age: age != null && age !== "" ? Number(age) : null,
         weight: weight != null && weight !== "" ? Number(weight) : null,
+        height: height != null && height !== "" ? Number(height) : null,
+        gender:
+          gender != null && String(gender).trim() !== ""
+            ? String(gender)
+            : null,
         allergiesText: allergiesText != null ? String(allergiesText) : "",
+        allergyKeywords: allergyKeywords != null ? String(allergyKeywords) : "",
         noAllergies: Boolean(noAllergies),
         diseasesText: diseasesText != null ? String(diseasesText) : "",
         noDiseases: Boolean(noDiseases),
+        currentMedications:
+          currentMedications != null ? String(currentMedications) : "",
       },
     })
 
@@ -135,10 +147,14 @@ function publicUser(user: {
   avatarUrl: string | null
   age: number | null
   weight: number | null
+  height: number | null
+  gender: string | null
   allergiesText: string
+  allergyKeywords: string
   noAllergies: boolean
   diseasesText: string
   noDiseases: boolean
+  currentMedications: string
 }) {
   return {
     id: user.id,
@@ -149,9 +165,13 @@ function publicUser(user: {
     avatarUrl: user.avatarUrl,
     age: user.age,
     weight: user.weight,
+    height: user.height,
+    gender: user.gender,
     allergiesText: user.allergiesText,
+    allergyKeywords: user.allergyKeywords,
     noAllergies: user.noAllergies,
     diseasesText: user.diseasesText,
     noDiseases: user.noDiseases,
+    currentMedications: user.currentMedications,
   }
 }

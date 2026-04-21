@@ -42,6 +42,9 @@ async function main() {
       slotId: "A1",
       quantity: 8,
       category: "ยาแก้ปวด",
+      dosageNotes: "ผู้ใหญ่: 1-2 เม็ด ทุก 4-6 ชั่วโมง เมื่อมีอาการ",
+      warnings: "ห้ามเกิน 4,000 มก./วัน | ห้ามใช้ในผู้ที่มีโรคตับรุนแรง",
+      ingredientsText: "paracetamol,acetaminophen,พาราเซตามอล",
     },
     {
       name: "ไอบูโพรเฟน 400mg",
@@ -49,6 +52,10 @@ async function main() {
       slotId: "A2",
       quantity: 5,
       category: "ยาแก้ปวด",
+      dosageNotes: "ผู้ใหญ่: 1 เม็ด ทุก 6-8 ชั่วโมง ทานหลังอาหารทันที",
+      warnings:
+        "ระวังในผู้ป่วยโรคกระเพาะ / NSAID allergy | ห้ามใช้ในไตรมาสที่ 3 ของการตั้งครรภ์",
+      ingredientsText: "ibuprofen,nsaid,ไอบูโพรเฟน",
     },
     {
       name: "ยาแก้แพ้ Loratadine",
@@ -56,6 +63,9 @@ async function main() {
       slotId: "B1",
       quantity: 2,
       category: "ยาแก้แพ้",
+      dosageNotes: "ผู้ใหญ่: 1 เม็ด วันละ 1 ครั้ง",
+      warnings: "ระวังในผู้ป่วยโรคตับ",
+      ingredientsText: "loratadine,ลอราทาดีน",
     },
     {
       name: "ยาธาตุน้ำขาว",
@@ -63,6 +73,9 @@ async function main() {
       slotId: "B2",
       quantity: 0,
       category: "ยาระบบทางเดินอาหาร",
+      dosageNotes: "ดูตามฉลาก",
+      warnings: "ห้ามใช้ต่อเนื่องเกิน 2 วัน หากอาการไม่ดีขึ้นควรพบแพทย์",
+      ingredientsText: "bismuth,kaolin,pectin",
     },
     {
       name: "ยาอมแก้เจ็บคอ",
@@ -70,6 +83,9 @@ async function main() {
       slotId: "C1",
       quantity: 10,
       category: "ยาแก้ไอ",
+      dosageNotes: "อมช้า ๆ ทุก 2-3 ชั่วโมง",
+      warnings: "ระวังในเด็กอายุต่ำกว่า 6 ปี",
+      ingredientsText: "benzocaine,menthol,eucalyptus",
     },
   ]
 
@@ -81,6 +97,9 @@ async function main() {
         description: d.description,
         quantity: d.quantity,
         category: d.category,
+        dosageNotes: d.dosageNotes,
+        warnings: d.warnings,
+        ingredientsText: d.ingredientsText,
       },
       create: d,
     })

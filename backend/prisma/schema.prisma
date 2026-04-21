@@ -23,11 +23,19 @@ model User {
   age            Int?
   /// Body weight (kg), optional.
   weight         Float?
+  /// Body height (cm), optional — used by AI for BMI-related dosing context.
+  height         Float?
+  /// Gender (e.g. "male", "female", "other") — optional. AI uses this for sex-specific dosing/red-flags.
+  gender         String?
   /// Free-text drug allergy history (Thai/English); use with `noAllergies` when the user declares none.
   allergiesText  String   @default("")
+  /// Normalized allergy keywords for strict safety matching, e.g. "penicillin,ibuprofen,amoxicillin".
+  allergyKeywords String  @default("")
   noAllergies    Boolean  @default(false)
   diseasesText   String   @default("")
   noDiseases     Boolean  @default(false)
+  /// Free-text list of drugs the user is currently taking (for drug-drug interaction screening).
+  currentMedications String @default("")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   chatSessions   ChatSession[]
@@ -46,6 +54,8 @@ model Drug {
   category    String?
   dosageNotes String?
   warnings    String?
+  /// Comma-separated active ingredients for hard safety checks, e.g. "paracetamol,caffeine".
+  ingredientsText String  @default("")
   /// Public URL for drug photo (e.g. Supabase `laneya-images` bucket).
   imageUrl    String?
   expiresAt   DateTime?

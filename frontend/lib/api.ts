@@ -81,10 +81,14 @@ export type UserProfile = {
   avatarUrl: string | null
   age: number | null
   weight: number | null
+  height: number | null
+  gender: string | null
   allergiesText: string
+  allergyKeywords?: string
   noAllergies: boolean
   diseasesText: string
   noDiseases: boolean
+  currentMedications: string
 }
 
 export async function registerUser(payload: {
@@ -94,10 +98,13 @@ export async function registerUser(payload: {
   fullName: string
   age?: number | null
   weight?: number | null
+  height?: number | null
+  gender?: string | null
   allergiesText?: string
   noAllergies?: boolean
   diseasesText?: string
   noDiseases?: boolean
+  currentMedications?: string
 }) {
   return apiJson<{ accessToken: string; user: UserProfile }>(
     "/api/auth/register",
@@ -132,10 +139,13 @@ export async function patchMe(
       | "avatarUrl"
       | "age"
       | "weight"
+      | "height"
+      | "gender"
       | "allergiesText"
       | "noAllergies"
       | "diseasesText"
       | "noDiseases"
+      | "currentMedications"
     >
   >
 ) {
@@ -156,10 +166,28 @@ export type DrugDto = {
   category: string | null
   dosageNotes: string | null
   warnings: string | null
+  ingredientsText: string
   imageUrl: string | null
   expiresAt: string | null
   priceCents: number | null
   inCabinet: boolean
+}
+
+export type DrugSafetyCheckDto = {
+  drugId: string
+  drugName: string
+  ingredientsText: string
+  isSafe: boolean
+  matchedAllergies: string[]
+  checkedAllergies: string[]
+  checkedIngredients: string[]
+}
+
+export async function fetchDrugSafetyCheck(id: string) {
+  return apiJson<DrugSafetyCheckDto>(
+    `/api/drugs/${encodeURIComponent(id)}/safety-check`,
+    { auth: true }
+  )
 }
 
 export async function fetchDrugs(search?: string) {
@@ -176,6 +204,7 @@ export async function createDrug(body: {
   category?: string | null
   dosageNotes?: string | null
   warnings?: string | null
+  ingredientsText?: string
   imageUrl?: string | null
   expiresAt?: string | null
   priceCents?: number | null
@@ -198,6 +227,7 @@ export async function patchDrug(
     category: string | null
     dosageNotes: string | null
     warnings: string | null
+    ingredientsText: string
     imageUrl: string | null
     expiresAt: string | null
     priceCents: number | null
@@ -485,16 +515,34 @@ export async function fetchChatSessionMessages(sessionId: string) {
 
 // --- Chat ---
 
+export type ChatResponse = {
+  answer: string
+  sessionId: string
+  conversationId: string | null
+  safetyCheck?: {
+    mentionedDrugIds: string[]
+    warnings: {
+      drugId: string
+      drugName: string
+      matchedAllergies: string[]
+      checkedIngredients: string[]
+    }[]
+    firstUnsafeDrugId: string | null
+  }
+  profile?: {
+    missingFields: string[]
+    missingCritical: string[]
+    askedInChat: boolean
+    autoSavedFields?: string[]
+  }
+}
+
 export async function sendChatMessage(
   userMessage: string,
   sessionId?: string | null,
   imageUrl?: string | null
 ) {
-  return apiJson<{
-    answer: string
-    sessionId: string
-    conversationId: string
-  }>("/api/chat", {
+  return apiJson<ChatResponse>("/api/chat", {
     method: "POST",
     body: JSON.stringify({
       userMessage,

@@ -18,10 +18,19 @@ import { Button } from "@/components/ui/button"
 import { AppLogo } from "@/components/app-logo"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { HealthProfileFields } from "@/components/health-profile-fields"
 import { Progress } from "@/components/ui/progress"
+import { Pill } from "lucide-react"
 import { registerUser, ApiError } from "@/lib/api"
 import { setStoredToken } from "@/lib/auth-token"
 import { formatThaiMobileInput, phoneDigitsOnly } from "@/lib/phone-format"
@@ -30,6 +39,7 @@ import { normalizeUsername, USERNAME_PATTERN } from "@/lib/username"
 export default function RegisterPage() {
   const router = useRouter()
   const t = useTranslations("Register")
+  const tHealth = useTranslations("HealthProfile")
   const [step, setStep] = useState(1)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -41,10 +51,14 @@ export default function RegisterPage() {
     confirmPassword: "",
     age: "",
     weight: "",
+    height: "",
+    gender: "",
     allergiesText: "",
     noAllergies: false,
     diseasesText: "",
     noDiseases: false,
+    currentMedications: "",
+    noMedications: false,
     consent: false,
   })
 
@@ -65,10 +79,15 @@ export default function RegisterPage() {
         fullName: formData.name.trim(),
         age: formData.age ? Number(formData.age) : null,
         weight: formData.weight ? Number(formData.weight) : null,
+        height: formData.height ? Number(formData.height) : null,
+        gender: formData.gender ? formData.gender : null,
         allergiesText: formData.allergiesText,
         noAllergies: formData.noAllergies,
         diseasesText: formData.diseasesText,
         noDiseases: formData.noDiseases,
+        currentMedications: formData.noMedications
+          ? "ไม่มี"
+          : formData.currentMedications,
       })
       setStoredToken(accessToken)
       toast.success(t("success"))
@@ -277,6 +296,41 @@ export default function RegisterPage() {
                       }
                     />
                   </Field>
+                  <Field>
+                    <FieldLabel>{t("height")}</FieldLabel>
+                    <Input
+                      type="number"
+                      placeholder="170"
+                      value={formData.height}
+                      onChange={(e) =>
+                        setFormData({ ...formData, height: e.target.value })
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>{tHealth("genderLabel")}</FieldLabel>
+                    <Select
+                      value={formData.gender || undefined}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, gender: v })
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={tHealth("genderPh")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="male">
+                          {tHealth("genderMale")}
+                        </SelectItem>
+                        <SelectItem value="female">
+                          {tHealth("genderFemale")}
+                        </SelectItem>
+                        <SelectItem value="other">
+                          {tHealth("genderOther")}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
                 </div>
 
                 <HealthProfileFields
@@ -298,6 +352,56 @@ export default function RegisterPage() {
                     setFormData((prev) => ({ ...prev, noDiseases }))
                   }
                 />
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Pill className="h-4 w-4 shrink-0 text-primary" />
+                    <span className="font-medium text-foreground">
+                      {tHealth("medicationsTitle")}
+                    </span>
+                  </div>
+                  <Field>
+                    <FieldLabel htmlFor="register-medications-text">
+                      {tHealth("medicationsLabel")}
+                    </FieldLabel>
+                    <Textarea
+                      id="register-medications-text"
+                      placeholder={tHealth("medicationsPh")}
+                      rows={4}
+                      value={formData.currentMedications}
+                      disabled={formData.noMedications}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setFormData((prev) => ({
+                          ...prev,
+                          currentMedications: v,
+                          noMedications: v.trim() ? false : prev.noMedications,
+                        }))
+                      }}
+                      className="min-h-[100px] resize-y"
+                    />
+                  </Field>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="register-no-medications"
+                      checked={formData.noMedications}
+                      onCheckedChange={(checked) => {
+                        const on = checked === true
+                        setFormData((prev) => ({
+                          ...prev,
+                          noMedications: on,
+                          currentMedications: on ? "" : prev.currentMedications,
+                        }))
+                      }}
+                    />
+                    <label
+                      htmlFor="register-no-medications"
+                      className="text-sm leading-snug text-muted-foreground"
+                    >
+                      {tHealth("noMedications")}
+                    </label>
+                  </div>
+                </div>
 
                 <div className="p-3 rounded-lg bg-muted/50 space-y-2">
                   <div className="flex items-start gap-2">

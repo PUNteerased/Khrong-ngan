@@ -35,6 +35,7 @@ export function AdminDrugDialog({ open, onOpenChange, drug, onSaved }: Props) {
   const [category, setCategory] = useState("")
   const [dosageNotes, setDosageNotes] = useState("")
   const [warnings, setWarnings] = useState("")
+  const [ingredientsText, setIngredientsText] = useState("")
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [expiresAt, setExpiresAt] = useState("")
   const [priceCents, setPriceCents] = useState("")
@@ -50,6 +51,7 @@ export function AdminDrugDialog({ open, onOpenChange, drug, onSaved }: Props) {
       setCategory(drug.category ?? "")
       setDosageNotes(drug.dosageNotes ?? "")
       setWarnings(drug.warnings ?? "")
+      setIngredientsText(drug.ingredientsText ?? "")
       setImageUrl(drug.imageUrl ?? null)
       setExpiresAt(
         drug.expiresAt ? drug.expiresAt.slice(0, 10) : ""
@@ -65,6 +67,7 @@ export function AdminDrugDialog({ open, onOpenChange, drug, onSaved }: Props) {
       setCategory("")
       setDosageNotes("")
       setWarnings("")
+      setIngredientsText("")
       setImageUrl(null)
       setExpiresAt("")
       setPriceCents("")
@@ -90,6 +93,7 @@ export function AdminDrugDialog({ open, onOpenChange, drug, onSaved }: Props) {
           category: category.trim() || null,
           dosageNotes: dosageNotes.trim() || null,
           warnings: warnings.trim() || null,
+          ingredientsText: ingredientsText.trim(),
           imageUrl: imageUrl ?? null,
           expiresAt: exp,
           priceCents: pc,
@@ -103,6 +107,7 @@ export function AdminDrugDialog({ open, onOpenChange, drug, onSaved }: Props) {
           category: category.trim() || null,
           dosageNotes: dosageNotes.trim() || null,
           warnings: warnings.trim() || null,
+          ingredientsText: ingredientsText.trim(),
           imageUrl: imageUrl ?? null,
           expiresAt: exp,
           priceCents: pc,
@@ -200,6 +205,19 @@ export function AdminDrugDialog({ open, onOpenChange, drug, onSaved }: Props) {
               value={warnings}
               onChange={(e) => setWarnings(e.target.value)}
             />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="adm-d-ing">{t("ingredients")}</Label>
+            <Textarea
+              id="adm-d-ing"
+              rows={2}
+              placeholder="paracetamol,acetaminophen"
+              value={ingredientsText}
+              onChange={(e) => setIngredientsText(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("ingredientsHint")}
+            </p>
           </div>
           <div className="space-y-1">
             <Label htmlFor="adm-d-exp">{t("expiresAt")}</Label>

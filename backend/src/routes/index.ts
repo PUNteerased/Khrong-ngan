@@ -48,6 +48,7 @@ router.patch("/api/users/me", authMiddleware, userController.patchMe)
 
 router.get("/api/drugs", drugController.listDrugs)
 router.get("/api/drugs/:id", drugController.getDrug)
+router.get("/api/drugs/:id/safety-check", authMiddleware, drugController.getDrugSafetyCheck)
 router.post("/api/drugs", adminOrKeyMiddleware, drugController.createDrug)
 router.patch("/api/drugs/:id", adminOrKeyMiddleware, drugController.patchDrug)
 router.patch("/api/drugs/:id/restock", adminOrKeyMiddleware, drugController.restockDrug)

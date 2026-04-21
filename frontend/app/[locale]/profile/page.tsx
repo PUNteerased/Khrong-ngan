@@ -19,7 +19,18 @@ import { Separator } from "@/components/ui/separator"
 import { HealthProfileFields } from "@/components/health-profile-fields"
 import { ImageUploader } from "@/components/image-uploader"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Field, FieldLabel } from "@/components/ui/field"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Spinner } from "@/components/ui/spinner"
+import { Pill } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,6 +49,7 @@ import { getStoredToken, setStoredToken } from "@/lib/auth-token"
 export default function ProfilePage() {
   const router = useRouter()
   const t = useTranslations("Profile")
+  const tHealth = useTranslations("HealthProfile")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [fullName, setFullName] = useState("")
@@ -46,10 +58,14 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [ageStr, setAgeStr] = useState("")
   const [weightStr, setWeightStr] = useState("")
+  const [heightStr, setHeightStr] = useState("")
+  const [gender, setGender] = useState<string>("")
   const [allergiesText, setAllergiesText] = useState("")
   const [noAllergies, setNoAllergies] = useState(false)
   const [diseasesText, setDiseasesText] = useState("")
   const [noDiseases, setNoDiseases] = useState(false)
+  const [currentMedications, setCurrentMedications] = useState("")
+  const [noMedications, setNoMedications] = useState(false)
 
   useEffect(() => {
     if (!getStoredToken()) {
@@ -67,10 +83,17 @@ export default function ProfilePage() {
         setAvatarUrl(u.avatarUrl ?? null)
         setAgeStr(u.age != null ? String(u.age) : "")
         setWeightStr(u.weight != null ? String(u.weight) : "")
+        setHeightStr(u.height != null ? String(u.height) : "")
+        setGender(u.gender ?? "")
         setAllergiesText(u.allergiesText)
         setNoAllergies(u.noAllergies)
         setDiseasesText(u.diseasesText)
         setNoDiseases(u.noDiseases)
+        setCurrentMedications(u.currentMedications)
+        setNoMedications(
+          u.currentMedications.trim() === "" ||
+            u.currentMedications.trim() === "ไม่มี"
+        )
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
           setStoredToken(null)
@@ -94,10 +117,13 @@ export default function ProfilePage() {
         fullName: fullName.trim(),
         age: ageStr === "" ? null : Number(ageStr),
         weight: weightStr === "" ? null : Number(weightStr),
+        height: heightStr === "" ? null : Number(heightStr),
+        gender: gender.trim() === "" ? null : gender,
         allergiesText,
         noAllergies,
         diseasesText,
         noDiseases,
+        currentMedications: noMedications ? "ไม่มี" : currentMedications,
       })
       toast.success(t("saveOk"))
     } catch (err) {
@@ -218,6 +244,41 @@ export default function ProfilePage() {
                     placeholder="70"
                   />
                 </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">
+                    {t("heightLabel")}
+                  </p>
+                  <Input
+                    type="number"
+                    value={heightStr}
+                    onChange={(e) => setHeightStr(e.target.value)}
+                    placeholder="170"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">
+                    {tHealth("genderLabel")}
+                  </p>
+                  <Select
+                    value={gender || undefined}
+                    onValueChange={(v) => setGender(v)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder={tHealth("genderPh")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="male">
+                        {tHealth("genderMale")}
+                      </SelectItem>
+                      <SelectItem value="female">
+                        {tHealth("genderFemale")}
+                      </SelectItem>
+                      <SelectItem value="other">
+                        {tHealth("genderOther")}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
@@ -234,6 +295,50 @@ export default function ProfilePage() {
               noDiseases={noDiseases}
               onNoDiseasesChange={setNoDiseases}
             />
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Pill className="h-4 w-4 shrink-0 text-primary" />
+                <span className="font-medium text-foreground">
+                  {tHealth("medicationsTitle")}
+                </span>
+              </div>
+              <Field>
+                <FieldLabel htmlFor="profile-medications-text">
+                  {tHealth("medicationsLabel")}
+                </FieldLabel>
+                <Textarea
+                  id="profile-medications-text"
+                  placeholder={tHealth("medicationsPh")}
+                  rows={4}
+                  value={currentMedications}
+                  disabled={noMedications}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setCurrentMedications(v)
+                    if (v.trim()) setNoMedications(false)
+                  }}
+                  className="min-h-[100px] resize-y"
+                />
+              </Field>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="profile-no-medications"
+                  checked={noMedications}
+                  onCheckedChange={(checked) => {
+                    const on = checked === true
+                    setNoMedications(on)
+                    if (on) setCurrentMedications("")
+                  }}
+                />
+                <label
+                  htmlFor="profile-no-medications"
+                  className="text-sm leading-snug text-muted-foreground"
+                >
+                  {tHealth("noMedications")}
+                </label>
+              </div>
+            </div>
 
             <Button className="w-full" onClick={handleSave} disabled={saving}>
               {saving ? t("saving") : t("saveProfile")}

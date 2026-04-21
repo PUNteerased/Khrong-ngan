@@ -1,6 +1,7 @@
 import type { Request, Response } from "express"
 import type { Prisma } from "@prisma/client"
 import { prisma } from "../lib/prisma.js"
+import { checkDrugSafety, parseAllergyKeywords } from "../lib/safetyCheck.js"
 
 function serializeDrug(d: {
   id: string
@@ -11,6 +12,7 @@ function serializeDrug(d: {
   category: string | null
   dosageNotes: string | null
   warnings: string | null
+  ingredientsText: string
   imageUrl: string | null
   expiresAt: Date | null
   priceCents: number | null
@@ -24,6 +26,7 @@ function serializeDrug(d: {
     category: d.category,
     dosageNotes: d.dosageNotes,
     warnings: d.warnings,
+    ingredientsText: d.ingredientsText,
     imageUrl: d.imageUrl,
     expiresAt: d.expiresAt ? d.expiresAt.toISOString() : null,
     priceCents: d.priceCents,
@@ -75,6 +78,7 @@ export async function createDrug(req: Request, res: Response) {
     category,
     dosageNotes,
     warnings,
+    ingredientsText,
     imageUrl,
     expiresAt,
     priceCents,
@@ -102,6 +106,8 @@ export async function createDrug(req: Request, res: Response) {
         category: category != null ? String(category) : null,
         dosageNotes: dosageNotes != null ? String(dosageNotes) : null,
         warnings: warnings != null ? String(warnings) : null,
+        ingredientsText:
+          ingredientsText != null ? String(ingredientsText) : "",
         imageUrl:
           imageUrl != null && String(imageUrl).trim() ? String(imageUrl) : null,
         expiresAt: expires,
@@ -122,6 +128,7 @@ export async function patchDrug(req: Request, res: Response) {
     category,
     dosageNotes,
     warnings,
+    ingredientsText,
     imageUrl,
     slotId,
     expiresAt,
@@ -135,6 +142,8 @@ export async function patchDrug(req: Request, res: Response) {
   if (dosageNotes !== undefined)
     data.dosageNotes = dosageNotes ? String(dosageNotes) : null
   if (warnings !== undefined) data.warnings = warnings ? String(warnings) : null
+  if (ingredientsText !== undefined)
+    data.ingredientsText = String(ingredientsText)
   if (imageUrl !== undefined)
     data.imageUrl = imageUrl ? String(imageUrl) : null
   if (slotId !== undefined) data.slotId = String(slotId)
@@ -192,4 +201,42 @@ export async function deleteDrug(req: Request, res: Response) {
   } catch {
     res.status(404).json({ error: "ไม่พบยา" })
   }
+}
+
+export async function getDrugSafetyCheck(req: Request, res: Response) {
+  if (!req.auth) {
+    res.status(401).json({ error: "Unauthorized" })
+    return
+  }
+  const drugId = String(req.params.id)
+  const [user, drug] = await Promise.all([
+    prisma.user.findUnique({ where: { id: req.auth.userId } }),
+    prisma.drug.findUnique({ where: { id: drugId } }),
+  ])
+
+  if (!user) {
+    res.status(404).json({ error: "ไม่พบผู้ใช้" })
+    return
+  }
+  if (!drug) {
+    res.status(404).json({ error: "ไม่พบยา" })
+    return
+  }
+
+  const userAllergyKeywords = parseAllergyKeywords({
+    noAllergies: user.noAllergies,
+    allergyKeywords: user.allergyKeywords,
+    allergiesText: user.allergiesText,
+  })
+  const result = checkDrugSafety({
+    userAllergyKeywords,
+    drugIngredientsText: drug.ingredientsText,
+  })
+
+  res.json({
+    drugId: drug.id,
+    drugName: drug.name,
+    ingredientsText: drug.ingredientsText,
+    ...result,
+  })
 }
