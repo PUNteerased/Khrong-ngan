@@ -16,9 +16,7 @@ export function AppShell({ children }: AppShellProps) {
     <div className="min-h-screen bg-background">
       <AppHeader onMenuClick={() => setSidebarOpen(true)} />
       <AppSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <main className="flex-1 min-w-0 w-full px-3 pb-6 sm:px-4 md:px-6 lg:px-8">
-        {children}
-      </main>
+      <main className="flex-1 min-w-0 w-full px-3 pb-6 sm:px-4 md:px-6 lg:px-8">{children}</main>
       <Toaster richColors position="top-center" />
     </div>
   )

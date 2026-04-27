@@ -31,7 +31,7 @@ import {
 import { HealthProfileFields } from "@/components/health-profile-fields"
 import { Progress } from "@/components/ui/progress"
 import { Pill } from "lucide-react"
-import { registerUser, ApiError } from "@/lib/api"
+import { registerUser, requestPhoneOtp, verifyPhoneOtp, ApiError } from "@/lib/api"
 import { setStoredToken } from "@/lib/auth-token"
 import { formatThaiMobileInput, phoneDigitsOnly } from "@/lib/phone-format"
 import { normalizeUsername, USERNAME_PATTERN } from "@/lib/username"
@@ -43,6 +43,12 @@ export default function RegisterPage() {
   const [step, setStep] = useState(1)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [sendingOtp, setSendingOtp] = useState(false)
+  const [verifyingOtp, setVerifyingOtp] = useState(false)
+  const [otpSent, setOtpSent] = useState(false)
+  const [otpCode, setOtpCode] = useState("")
+  const [otpVerified, setOtpVerified] = useState(false)
+  const [phoneVerifyToken, setPhoneVerifyToken] = useState("")
   const [formData, setFormData] = useState({
     name: "",
     username: "",
@@ -74,7 +80,8 @@ export default function RegisterPage() {
       const phoneDigits = phoneDigitsOnly(formData.phone)
       const { accessToken } = await registerUser({
         username: normalizeUsername(formData.username),
-        ...(phoneDigits.length > 0 ? { phone: phoneDigits } : {}),
+        phone: phoneDigits,
+        phoneVerifyToken,
         password: formData.password,
         fullName: formData.name.trim(),
         age: formData.age ? Number(formData.age) : null,
@@ -156,7 +163,7 @@ export default function RegisterPage() {
                   </Field>
 
                   <Field>
-                    <FieldLabel>{t("phoneOptional")}</FieldLabel>
+                    <FieldLabel>{t("phone")}</FieldLabel>
                     <div className="relative">
                       <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -175,6 +182,87 @@ export default function RegisterPage() {
                         }
                       />
                     </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={sendingOtp}
+                        onClick={async () => {
+                          const phoneDigits = phoneDigitsOnly(formData.phone)
+                          if (phoneDigits.length !== 10) {
+                            toast.error(t("phoneRule"))
+                            return
+                          }
+                          setSendingOtp(true)
+                          try {
+                            const res = await requestPhoneOtp(phoneDigits)
+                            setOtpSent(true)
+                            setOtpVerified(false)
+                            setPhoneVerifyToken("")
+                            toast.success(res.message)
+                            if (res.devCode) {
+                              toast.info(`${t("otpDevCode")}: ${res.devCode}`)
+                            }
+                          } catch (err) {
+                            const msg =
+                              err instanceof ApiError ? err.message : t("otpSendFail")
+                            toast.error(msg)
+                          } finally {
+                            setSendingOtp(false)
+                          }
+                        }}
+                      >
+                        {sendingOtp ? t("otpSending") : t("otpSend")}
+                      </Button>
+                      {otpVerified ? (
+                        <span className="text-xs text-success">{t("otpVerified")}</span>
+                      ) : otpSent ? (
+                        <span className="text-xs text-muted-foreground">
+                          {t("otpSentHint")}
+                        </span>
+                      ) : null}
+                    </div>
+                    {otpSent ? (
+                      <div className="mt-2 flex items-center gap-2">
+                        <Input
+                          inputMode="numeric"
+                          maxLength={6}
+                          placeholder={t("otpCodePh")}
+                          value={otpCode}
+                          onChange={(e) =>
+                            setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                          }
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={verifyingOtp}
+                          onClick={async () => {
+                            const phoneDigits = phoneDigitsOnly(formData.phone)
+                            if (phoneDigits.length !== 10 || otpCode.length !== 6) {
+                              toast.error(t("otpInvalid"))
+                              return
+                            }
+                            setVerifyingOtp(true)
+                            try {
+                              const res = await verifyPhoneOtp(phoneDigits, otpCode)
+                              setOtpVerified(true)
+                              setPhoneVerifyToken(res.verifyToken)
+                              toast.success(t("otpVerifyOk"))
+                            } catch (err) {
+                              const msg =
+                                err instanceof ApiError ? err.message : t("otpVerifyFail")
+                              toast.error(msg)
+                            } finally {
+                              setVerifyingOtp(false)
+                            }
+                          }}
+                        >
+                          {verifyingOtp ? t("otpVerifying") : t("otpVerify")}
+                        </Button>
+                      </div>
+                    ) : null}
                   </Field>
 
                   <Field>
@@ -236,11 +324,12 @@ export default function RegisterPage() {
                       toast.error(t("usernameRule"))
                       return
                     }
-                    if (
-                      phoneDigits.length > 0 &&
-                      phoneDigits.length !== 10
-                    ) {
+                    if (phoneDigits.length !== 10) {
                       toast.error(t("phoneRule"))
+                      return
+                    }
+                    if (!otpVerified || !phoneVerifyToken) {
+                      toast.error(t("otpRequire"))
                       return
                     }
                     if (formData.password !== formData.confirmPassword) {

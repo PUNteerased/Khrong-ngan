@@ -42,6 +42,8 @@ router.get("/health", (_req, res) => {
 
 router.post("/api/auth/register", authLimiter, authController.register)
 router.post("/api/auth/login", authLimiter, authController.login)
+router.post("/api/auth/otp/request", authLimiter, authController.requestPhoneOtp)
+router.post("/api/auth/otp/verify", authLimiter, authController.verifyPhoneOtp)
 
 router.get("/api/users/me", authMiddleware, userController.getMe)
 router.patch("/api/users/me", authMiddleware, userController.patchMe)

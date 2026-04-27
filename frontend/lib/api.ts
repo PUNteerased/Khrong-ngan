@@ -93,9 +93,10 @@ export type UserProfile = {
 
 export async function registerUser(payload: {
   username: string
-  phone?: string
+  phone: string
   password: string
   fullName: string
+  phoneVerifyToken: string
   age?: number | null
   weight?: number | null
   height?: number | null
@@ -111,6 +112,28 @@ export async function registerUser(payload: {
     {
       method: "POST",
       body: JSON.stringify(payload),
+      auth: false,
+    }
+  )
+}
+
+export async function requestPhoneOtp(phone: string) {
+  return apiJson<{ message: string; expiresInSec: number; devCode?: string }>(
+    "/api/auth/otp/request",
+    {
+      method: "POST",
+      body: JSON.stringify({ phone }),
+      auth: false,
+    }
+  )
+}
+
+export async function verifyPhoneOtp(phone: string, code: string) {
+  return apiJson<{ message: string; verifyToken: string }>(
+    "/api/auth/otp/verify",
+    {
+      method: "POST",
+      body: JSON.stringify({ phone, code }),
       auth: false,
     }
   )

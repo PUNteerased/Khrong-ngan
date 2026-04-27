@@ -1,22 +1,26 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Link, useRouter } from "@/i18n/navigation"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
+import { useForm, Controller } from "react-hook-form"
+import { z } from "zod"
+import { zodResolver } from "@hookform/resolvers/zod"
 import {
-  User,
-  Edit2,
-  Scale,
-  Settings,
   ChevronRight,
+  User,
+  ClipboardPlus,
+  Activity,
+  Shield,
+  Pill,
+  Settings,
   LogOut,
   Trash2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { HealthProfileFields } from "@/components/health-profile-fields"
 import { ImageUploader } from "@/components/image-uploader"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -29,8 +33,7 @@ import {
 } from "@/components/ui/select"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Spinner } from "@/components/ui/spinner"
-import { Pill } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,26 +49,64 @@ import { formatThaiMobileInput } from "@/lib/phone-format"
 import { fetchMe, patchMe, ApiError } from "@/lib/api"
 import { getStoredToken, setStoredToken } from "@/lib/auth-token"
 
+const ALLERGY_CHIPS = ["Paracetamol", "NSAIDs", "Penicillin"] as const
+
+const profileSchema = z.object({
+  fullName: z.string().trim().min(1, "fullNameRequired"),
+  age: z
+    .union([z.string(), z.number(), z.null()])
+    .transform((v) => (v === "" || v == null ? null : Number(v))),
+  weight: z
+    .union([z.string(), z.number(), z.null()])
+    .transform((v) => (v === "" || v == null ? null : Number(v))),
+  height: z
+    .union([z.string(), z.number(), z.null()])
+    .transform((v) => (v === "" || v == null ? null : Number(v))),
+  gender: z.union([z.literal("male"), z.literal("female"), z.literal("other"), z.literal("")]),
+  allergiesText: z.string(),
+  noAllergies: z.boolean(),
+  diseasesText: z.string(),
+  noDiseases: z.boolean(),
+  currentMedications: z.string(),
+  noMedications: z.boolean(),
+})
+
+type ProfileFormValues = z.input<typeof profileSchema>
+
+function splitCsv(v: string): string[] {
+  return v
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean)
+}
+
 export default function ProfilePage() {
   const router = useRouter()
   const t = useTranslations("Profile")
   const tHealth = useTranslations("HealthProfile")
+  const tNav = useTranslations("Nav")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [fullName, setFullName] = useState("")
   const [username, setUsername] = useState("")
   const [phone, setPhone] = useState("")
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
-  const [ageStr, setAgeStr] = useState("")
-  const [weightStr, setWeightStr] = useState("")
-  const [heightStr, setHeightStr] = useState("")
-  const [gender, setGender] = useState<string>("")
-  const [allergiesText, setAllergiesText] = useState("")
-  const [noAllergies, setNoAllergies] = useState(false)
-  const [diseasesText, setDiseasesText] = useState("")
-  const [noDiseases, setNoDiseases] = useState(false)
-  const [currentMedications, setCurrentMedications] = useState("")
-  const [noMedications, setNoMedications] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const form = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      fullName: "",
+      age: "",
+      weight: "",
+      height: "",
+      gender: "",
+      allergiesText: "",
+      noAllergies: false,
+      diseasesText: "",
+      noDiseases: false,
+      currentMedications: "",
+      noMedications: false,
+    },
+  })
 
   useEffect(() => {
     if (!getStoredToken()) {
@@ -77,23 +118,25 @@ export default function ProfilePage() {
       try {
         const u = await fetchMe()
         if (cancelled) return
-        setFullName(u.fullName)
         setUsername(u.username)
         setPhone(u.phone)
         setAvatarUrl(u.avatarUrl ?? null)
-        setAgeStr(u.age != null ? String(u.age) : "")
-        setWeightStr(u.weight != null ? String(u.weight) : "")
-        setHeightStr(u.height != null ? String(u.height) : "")
-        setGender(u.gender ?? "")
-        setAllergiesText(u.allergiesText)
-        setNoAllergies(u.noAllergies)
-        setDiseasesText(u.diseasesText)
-        setNoDiseases(u.noDiseases)
-        setCurrentMedications(u.currentMedications)
-        setNoMedications(
-          u.currentMedications.trim() === "" ||
-            u.currentMedications.trim() === "ไม่มี"
-        )
+        setIsAdmin(!!u.isAdmin)
+        form.reset({
+          fullName: u.fullName,
+          age: u.age != null ? String(u.age) : "",
+          weight: u.weight != null ? String(u.weight) : "",
+          height: u.height != null ? String(u.height) : "",
+          gender: (u.gender as ProfileFormValues["gender"]) ?? "",
+          allergiesText: u.allergiesText,
+          noAllergies: u.noAllergies,
+          diseasesText: u.diseasesText,
+          noDiseases: u.noDiseases,
+          currentMedications: u.currentMedications,
+          noMedications:
+            u.currentMedications.trim() === "" ||
+            u.currentMedications.trim() === "ไม่มี",
+        })
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
           setStoredToken(null)
@@ -108,22 +151,33 @@ export default function ProfilePage() {
     return () => {
       cancelled = true
     }
-  }, [router, t])
+  }, [form, router, t])
 
-  const handleSave = async () => {
+  const toggleAllergyChip = (chip: string) => {
+    const noAllergies = form.getValues("noAllergies")
+    if (noAllergies) form.setValue("noAllergies", false)
+    const current = splitCsv(form.getValues("allergiesText"))
+    const has = current.some((x) => x.toLowerCase() === chip.toLowerCase())
+    const next = has
+      ? current.filter((x) => x.toLowerCase() !== chip.toLowerCase())
+      : [...current, chip]
+    form.setValue("allergiesText", next.join(", "), { shouldDirty: true })
+  }
+
+  const handleSave = form.handleSubmit(async (values) => {
     setSaving(true)
     try {
       await patchMe({
-        fullName: fullName.trim(),
-        age: ageStr === "" ? null : Number(ageStr),
-        weight: weightStr === "" ? null : Number(weightStr),
-        height: heightStr === "" ? null : Number(heightStr),
-        gender: gender.trim() === "" ? null : gender,
-        allergiesText,
-        noAllergies,
-        diseasesText,
-        noDiseases,
-        currentMedications: noMedications ? "ไม่มี" : currentMedications,
+        fullName: values.fullName.trim(),
+        age: values.age == null ? null : Number(values.age),
+        weight: values.weight == null ? null : Number(values.weight),
+        height: values.height == null ? null : Number(values.height),
+        gender: values.gender.trim() === "" ? null : values.gender,
+        allergiesText: values.allergiesText,
+        noAllergies: values.noAllergies,
+        diseasesText: values.diseasesText,
+        noDiseases: values.noDiseases,
+        currentMedications: values.noMedications ? "ไม่มี" : values.currentMedications,
       })
       toast.success(t("saveOk"))
     } catch (err) {
@@ -132,7 +186,7 @@ export default function ProfilePage() {
     } finally {
       setSaving(false)
     }
-  }
+  })
 
   const handleAvatarChange = async (url: string | null) => {
     setAvatarUrl(url)
@@ -154,8 +208,11 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[calc(100vh-60px)] items-center justify-center">
-        <Spinner className="h-8 w-8" />
+      <div className="space-y-4 p-4">
+        <Skeleton className="h-28 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-10 w-40" />
       </div>
     )
   }
@@ -199,17 +256,11 @@ export default function ProfilePage() {
             <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
               <div className="min-w-0 flex-1 space-y-2 pr-2">
                 <div className="flex items-center gap-2">
-                  <Edit2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <Input
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="h-8"
-                    placeholder={t("fullNamePh")}
-                  />
+                  <ClipboardPlus className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <p className="text-sm font-medium">{username ? `@${username}` : "—"}</p>
                 </div>
-                <p className="text-sm text-muted-foreground pl-6">@{username}</p>
                 {phone ? (
-                  <p className="text-sm text-muted-foreground pl-6 tabular-nums">
+                  <p className="text-sm text-muted-foreground tabular-nums">
                     {formatThaiMobileInput(phone)}
                   </p>
                 ) : null}
@@ -217,132 +268,206 @@ export default function ProfilePage() {
             </div>
 
             <Separator />
+            <div className="rounded-lg border bg-background p-4 space-y-5">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <User className="h-4 w-4" />
+                  {t("stepPersonal")}
+                </div>
+                <Field>
+                  <FieldLabel>{t("fullNameLabel")}</FieldLabel>
+                  <Input
+                    {...form.register("fullName")}
+                    placeholder={t("fullNamePh")}
+                    className="h-10"
+                  />
+                </Field>
+              </div>
 
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <Scale className="h-4 w-4" />
-                {t("bodyTitle")}
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">{t("ageLabel")}</p>
-                  <Input
-                    type="number"
-                    value={ageStr}
-                    onChange={(e) => setAgeStr(e.target.value)}
-                    placeholder="25"
-                  />
+              <Separator />
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Activity className="h-4 w-4" />
+                  {t("stepPhysical")}
                 </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">
-                    {t("weightLabel")}
-                  </p>
-                  <Input
-                    type="number"
-                    value={weightStr}
-                    onChange={(e) => setWeightStr(e.target.value)}
-                    placeholder="70"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">
-                    {t("heightLabel")}
-                  </p>
-                  <Input
-                    type="number"
-                    value={heightStr}
-                    onChange={(e) => setHeightStr(e.target.value)}
-                    placeholder="170"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">
-                    {tHealth("genderLabel")}
-                  </p>
-                  <Select
-                    value={gender || undefined}
-                    onValueChange={(v) => setGender(v)}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder={tHealth("genderPh")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="male">
-                        {tHealth("genderMale")}
-                      </SelectItem>
-                      <SelectItem value="female">
-                        {tHealth("genderFemale")}
-                      </SelectItem>
-                      <SelectItem value="other">
-                        {tHealth("genderOther")}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field>
+                    <FieldLabel>{t("ageLabel")}</FieldLabel>
+                    <Input type="number" placeholder="25" {...form.register("age")} />
+                  </Field>
+                  <Field>
+                    <FieldLabel>{t("weightLabel")}</FieldLabel>
+                    <Input type="number" placeholder="70" {...form.register("weight")} />
+                  </Field>
+                  <Field>
+                    <FieldLabel>{t("heightLabel")}</FieldLabel>
+                    <Input type="number" placeholder="170" {...form.register("height")} />
+                  </Field>
+                  <Field>
+                    <FieldLabel>{tHealth("genderLabel")}</FieldLabel>
+                    <Controller
+                      control={form.control}
+                      name="gender"
+                      render={({ field }) => (
+                        <Select
+                          value={field.value || undefined}
+                          onValueChange={field.onChange}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder={tHealth("genderPh")} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="male">{tHealth("genderMale")}</SelectItem>
+                            <SelectItem value="female">{tHealth("genderFemale")}</SelectItem>
+                            <SelectItem value="other">{tHealth("genderOther")}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </Field>
                 </div>
               </div>
+
+              <Separator />
+
+              <div className="space-y-5">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Pill className="h-4 w-4" />
+                  {t("stepMedical")}
+                </div>
+
+                <div className="space-y-3">
+                  <Field>
+                    <FieldLabel>{tHealth("allergiesLabel")}</FieldLabel>
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      {ALLERGY_CHIPS.map((chip) => {
+                        const selected = splitCsv(form.watch("allergiesText")).some(
+                          (x) => x.toLowerCase() === chip.toLowerCase()
+                        )
+                        return (
+                          <button
+                            key={chip}
+                            type="button"
+                            onClick={() => toggleAllergyChip(chip)}
+                            className={`rounded-full border px-3 py-1 text-xs transition ${
+                              selected
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border bg-background text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {chip}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <Textarea
+                      rows={3}
+                      placeholder={tHealth("allergiesPh")}
+                      disabled={form.watch("noAllergies")}
+                      {...form.register("allergiesText")}
+                    />
+                  </Field>
+                  <Controller
+                    control={form.control}
+                    name="noAllergies"
+                    render={({ field }) => (
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="profile-no-allergies"
+                          checked={field.value}
+                          onCheckedChange={(checked) => {
+                            const on = checked === true
+                            field.onChange(on)
+                            if (on) form.setValue("allergiesText", "")
+                          }}
+                        />
+                        <label
+                          htmlFor="profile-no-allergies"
+                          className="text-sm text-muted-foreground"
+                        >
+                          {tHealth("noAllergies")}
+                        </label>
+                      </div>
+                    )}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <Field>
+                    <FieldLabel>{tHealth("diseasesLabel")}</FieldLabel>
+                    <Textarea
+                      rows={3}
+                      placeholder={tHealth("diseasesPh")}
+                      disabled={form.watch("noDiseases")}
+                      {...form.register("diseasesText")}
+                    />
+                  </Field>
+                  <Controller
+                    control={form.control}
+                    name="noDiseases"
+                    render={({ field }) => (
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="profile-no-diseases"
+                          checked={field.value}
+                          onCheckedChange={(checked) => {
+                            const on = checked === true
+                            field.onChange(on)
+                            if (on) form.setValue("diseasesText", "")
+                          }}
+                        />
+                        <label
+                          htmlFor="profile-no-diseases"
+                          className="text-sm text-muted-foreground"
+                        >
+                          {tHealth("noDiseases")}
+                        </label>
+                      </div>
+                    )}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <Field>
+                    <FieldLabel>{tHealth("medicationsLabel")}</FieldLabel>
+                    <Textarea
+                      rows={3}
+                      placeholder={tHealth("medicationsPh")}
+                      disabled={form.watch("noMedications")}
+                      {...form.register("currentMedications")}
+                    />
+                  </Field>
+                  <Controller
+                    control={form.control}
+                    name="noMedications"
+                    render={({ field }) => (
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="profile-no-medications"
+                          checked={field.value}
+                          onCheckedChange={(checked) => {
+                            const on = checked === true
+                            field.onChange(on)
+                            if (on) form.setValue("currentMedications", "")
+                          }}
+                        />
+                        <label
+                          htmlFor="profile-no-medications"
+                          className="text-sm text-muted-foreground"
+                        >
+                          {tHealth("noMedications")}
+                        </label>
+                      </div>
+                    )}
+                  />
+                </div>
+              </div>
+
+              <Button type="button" onClick={handleSave} disabled={saving}>
+                {saving ? t("saving") : t("saveProfile")}
+              </Button>
             </div>
-
-            <Separator />
-
-            <HealthProfileFields
-              idPrefix="profile"
-              allergiesText={allergiesText}
-              onAllergiesTextChange={setAllergiesText}
-              noAllergies={noAllergies}
-              onNoAllergiesChange={setNoAllergies}
-              diseasesText={diseasesText}
-              onDiseasesTextChange={setDiseasesText}
-              noDiseases={noDiseases}
-              onNoDiseasesChange={setNoDiseases}
-            />
-
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Pill className="h-4 w-4 shrink-0 text-primary" />
-                <span className="font-medium text-foreground">
-                  {tHealth("medicationsTitle")}
-                </span>
-              </div>
-              <Field>
-                <FieldLabel htmlFor="profile-medications-text">
-                  {tHealth("medicationsLabel")}
-                </FieldLabel>
-                <Textarea
-                  id="profile-medications-text"
-                  placeholder={tHealth("medicationsPh")}
-                  rows={4}
-                  value={currentMedications}
-                  disabled={noMedications}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    setCurrentMedications(v)
-                    if (v.trim()) setNoMedications(false)
-                  }}
-                  className="min-h-[100px] resize-y"
-                />
-              </Field>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="profile-no-medications"
-                  checked={noMedications}
-                  onCheckedChange={(checked) => {
-                    const on = checked === true
-                    setNoMedications(on)
-                    if (on) setCurrentMedications("")
-                  }}
-                />
-                <label
-                  htmlFor="profile-no-medications"
-                  className="text-sm leading-snug text-muted-foreground"
-                >
-                  {tHealth("noMedications")}
-                </label>
-              </div>
-            </div>
-
-            <Button className="w-full" onClick={handleSave} disabled={saving}>
-              {saving ? t("saving") : t("saveProfile")}
-            </Button>
           </CardContent>
         </Card>
 
@@ -351,6 +476,14 @@ export default function ProfilePage() {
             <CardTitle className="text-lg">{t("accountTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
+            {isAdmin ? (
+              <Button asChild variant="outline" className="w-full justify-start gap-3" size="lg">
+                <Link href="/admin">
+                  <Shield className="h-5 w-5" />
+                  {tNav("admin")}
+                </Link>
+              </Button>
+            ) : null}
             <Button
               variant="outline"
               className="w-full justify-start gap-3"

@@ -1,10 +1,131 @@
 import type { Request, Response } from "express"
 import { prisma } from "../lib/prisma.js"
+import jwt from "jsonwebtoken"
 import {
   isValidUsernameNormalized,
   normalizeUsername,
 } from "../lib/username.js"
 import { hashPassword, signToken, verifyPassword } from "../services/auth.service.js"
+
+type OtpRecord = {
+  code: string
+  expiresAt: number
+  attempts: number
+  lastSentAt: number
+}
+
+const OTP_TTL_MS = 5 * 60 * 1000
+const OTP_RESEND_COOLDOWN_MS = 45 * 1000
+const MAX_VERIFY_ATTEMPTS = 5
+const otpStore = new Map<string, OtpRecord>()
+
+function normalizePhone(phoneRaw: unknown): string | null {
+  if (phoneRaw == null) return null
+  const digits = String(phoneRaw).replace(/\D/g, "")
+  return digits.length > 0 ? digits : null
+}
+
+function createOtpCode(): string {
+  return String(Math.floor(100000 + Math.random() * 900000))
+}
+
+function signPhoneVerificationToken(phone: string): string {
+  const secret = process.env.JWT_SECRET
+  if (!secret) throw new Error("JWT_SECRET is not set")
+  return jwt.sign({ purpose: "phone_verify", phone }, secret, {
+    expiresIn: "10m",
+  })
+}
+
+function verifyPhoneVerificationToken(token: string, expectedPhone: string): boolean {
+  const secret = process.env.JWT_SECRET
+  if (!secret) throw new Error("JWT_SECRET is not set")
+  try {
+    const decoded = jwt.verify(token, secret) as {
+      purpose?: string
+      phone?: string
+    }
+    return decoded.purpose === "phone_verify" && decoded.phone === expectedPhone
+  } catch {
+    return false
+  }
+}
+
+export async function requestPhoneOtp(req: Request, res: Response) {
+  const phone = normalizePhone((req.body as { phone?: unknown })?.phone)
+  if (!phone || phone.length !== 10) {
+    res.status(400).json({ error: "เบอร์โทรต้องเป็นตัวเลข 10 หลัก" })
+    return
+  }
+
+  const existingUser = await prisma.user.findFirst({ where: { phone } })
+  if (existingUser) {
+    res.status(409).json({ error: "เบอร์นี้ลงทะเบียนแล้ว" })
+    return
+  }
+
+  const now = Date.now()
+  const current = otpStore.get(phone)
+  if (current && now - current.lastSentAt < OTP_RESEND_COOLDOWN_MS) {
+    res.status(429).json({ error: "ส่งรหัสถี่เกินไป กรุณารอสักครู่" })
+    return
+  }
+
+  const code = createOtpCode()
+  otpStore.set(phone, {
+    code,
+    expiresAt: now + OTP_TTL_MS,
+    attempts: 0,
+    lastSentAt: now,
+  })
+
+  const payload: { message: string; expiresInSec: number; devCode?: string } = {
+    message: "ส่งรหัส OTP แล้ว",
+    expiresInSec: Math.floor(OTP_TTL_MS / 1000),
+  }
+  if (process.env.NODE_ENV !== "production") {
+    payload.devCode = code
+  }
+  res.json(payload)
+}
+
+export async function verifyPhoneOtp(req: Request, res: Response) {
+  const { phone: phoneRaw, code } = req.body as { phone?: unknown; code?: unknown }
+  const phone = normalizePhone(phoneRaw)
+  const otpCode = String(code ?? "").trim()
+  if (!phone || phone.length !== 10 || otpCode.length !== 6) {
+    res.status(400).json({ error: "ข้อมูล OTP ไม่ถูกต้อง" })
+    return
+  }
+
+  const rec = otpStore.get(phone)
+  if (!rec) {
+    res.status(400).json({ error: "ไม่พบ OTP สำหรับเบอร์นี้ กรุณาขอรหัสใหม่" })
+    return
+  }
+  if (Date.now() > rec.expiresAt) {
+    otpStore.delete(phone)
+    res.status(400).json({ error: "OTP หมดอายุ กรุณาขอรหัสใหม่" })
+    return
+  }
+
+  rec.attempts += 1
+  if (rec.attempts > MAX_VERIFY_ATTEMPTS) {
+    otpStore.delete(phone)
+    res.status(429).json({ error: "ลองผิดหลายครั้งเกินไป กรุณาขอ OTP ใหม่" })
+    return
+  }
+
+  if (rec.code !== otpCode) {
+    otpStore.set(phone, rec)
+    res.status(400).json({ error: "OTP ไม่ถูกต้อง" })
+    return
+  }
+
+  otpStore.delete(phone)
+  const verifyToken = signPhoneVerificationToken(phone)
+  res.json({ message: "ยืนยันเบอร์สำเร็จ", verifyToken })
+}
 
 export async function register(req: Request, res: Response) {
   try {
@@ -23,6 +144,7 @@ export async function register(req: Request, res: Response) {
       diseasesText,
       noDiseases,
       currentMedications,
+      phoneVerifyToken,
     } = req.body as Record<string, unknown>
 
     if (!usernameRaw || !password || !fullName) {
@@ -45,8 +167,16 @@ export async function register(req: Request, res: Response) {
       phoneRaw != null && String(phoneRaw).trim() !== ""
         ? String(phoneRaw).replace(/\D/g, "")
         : null
-    if (phone !== null && phone.length !== 10) {
-      res.status(400).json({ error: "เบอร์โทรต้องเป็นตัวเลข 10 หลัก หรือเว้นว่าง" })
+    if (!phone || phone.length !== 10) {
+      res.status(400).json({ error: "กรุณากรอกเบอร์โทรศัพท์ 10 หลัก" })
+      return
+    }
+    if (!phoneVerifyToken || typeof phoneVerifyToken !== "string") {
+      res.status(400).json({ error: "กรุณายืนยัน OTP ก่อนสมัครสมาชิก" })
+      return
+    }
+    if (!verifyPhoneVerificationToken(phoneVerifyToken, phone)) {
+      res.status(400).json({ error: "OTP ไม่ถูกต้องหรือหมดอายุ กรุณายืนยันใหม่" })
       return
     }
 

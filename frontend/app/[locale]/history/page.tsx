@@ -6,7 +6,7 @@ import { useLocale, useTranslations } from "next-intl"
 import { ArrowLeft, MessageSquare, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Spinner } from "@/components/ui/spinner"
+import { Skeleton } from "@/components/ui/skeleton"
 import { fetchChatSessions, ApiError } from "@/lib/api"
 import type { ChatSessionListItem } from "@/lib/api"
 import { getStoredToken } from "@/lib/auth-token"
@@ -57,8 +57,11 @@ export default function HistoryPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[calc(100vh-60px)] items-center justify-center">
-        <Spinner className="h-8 w-8" />
+      <div className="space-y-3 p-4">
+        <Skeleton className="h-8 w-36" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
       </div>
     )
   }
