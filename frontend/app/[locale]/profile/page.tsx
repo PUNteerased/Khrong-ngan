@@ -164,7 +164,7 @@ export default function ProfilePage() {
           setStoredToken(null)
           router.push("/login")
         } else {
-          toast.error(t("loadFail"))
+          toast.error(err instanceof Error ? err.message : t("loadFail"))
         }
       } finally {
         if (!cancelled) setLoading(false)

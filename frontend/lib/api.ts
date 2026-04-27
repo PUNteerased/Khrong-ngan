@@ -5,6 +5,11 @@ export function getApiBase(): string {
   const configured = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "")
   if (configured) return configured
 
+  // Production fallback for this deployment when env is missing.
+  if (typeof window !== "undefined" && window.location.hostname === "khrong-ngan.vercel.app") {
+    return "https://khrong-ngan.onrender.com"
+  }
+
   // Local dev convenience fallback only.
   if (typeof window !== "undefined") {
     const host = window.location.hostname
