@@ -2,9 +2,19 @@ import { getStoredToken } from "./auth-token"
 import { getStoredAdminToken } from "./admin-token"
 
 export function getApiBase(): string {
-  return (
-    process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
-    "http://localhost:4000"
+  const configured = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "")
+  if (configured) return configured
+
+  // Local dev convenience fallback only.
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname
+    if (host === "localhost" || host === "127.0.0.1") {
+      return "http://localhost:4000"
+    }
+  }
+
+  throw new Error(
+    "NEXT_PUBLIC_API_URL is not configured for this environment"
   )
 }
 
