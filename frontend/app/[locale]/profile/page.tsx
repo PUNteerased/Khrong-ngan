@@ -154,10 +154,10 @@ export default function ProfilePage() {
           noAllergies: u.noAllergies,
           diseasesText: u.diseasesText,
           noDiseases: u.noDiseases,
-          currentMedications: u.currentMedications,
+          currentMedications: u.currentMedications ?? "",
           noMedications:
-            u.currentMedications.trim() === "" ||
-            u.currentMedications.trim() === "ไม่มี",
+            (u.currentMedications ?? "").trim() === "" ||
+            (u.currentMedications ?? "").trim() === "ไม่มี",
         })
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
@@ -203,13 +203,13 @@ export default function ProfilePage() {
       }
       await patchMe({
         fullName: values.fullName.trim(),
-        email: email.trim().toLowerCase(),
+        email: (email ?? "").trim().toLowerCase(),
         phone: phoneDigits,
         phoneVerifyToken: phoneChanged ? phoneVerifyToken : undefined,
         age: values.age == null ? null : Number(values.age),
         weight: values.weight == null ? null : Number(values.weight),
         height: values.height == null ? null : Number(values.height),
-        gender: values.gender.trim() === "" ? null : values.gender,
+        gender: String(values.gender ?? "").trim() === "" ? null : String(values.gender),
         allergiesText: values.allergiesText,
         noAllergies: values.noAllergies,
         diseasesText: values.diseasesText,
