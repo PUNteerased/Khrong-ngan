@@ -111,6 +111,20 @@ export default function ProfilePage() {
   const [pwdNext, setPwdNext] = useState("")
   const [pwdConfirm, setPwdConfirm] = useState("")
   const [changingPassword, setChangingPassword] = useState(false)
+  const [initialProfile, setInitialProfile] = useState<{
+    email: string
+    phone: string
+    fullName: string
+    age: string
+    weight: string
+    height: string
+    gender: string
+    allergiesText: string
+    noAllergies: boolean
+    diseasesText: string
+    noDiseases: boolean
+    currentMedications: string
+  } | null>(null)
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
@@ -144,17 +158,32 @@ export default function ProfilePage() {
         setPhoneInput(formatThaiMobileInput(u.phone ?? ""))
         setAvatarUrl(u.avatarUrl ?? null)
         setIsAdmin(!!u.isAdmin)
-        form.reset({
+        const initial = {
+          email: u.email ?? "",
+          phone: u.phone ?? "",
           fullName: u.fullName,
           age: u.age != null ? String(u.age) : "",
           weight: u.weight != null ? String(u.weight) : "",
           height: u.height != null ? String(u.height) : "",
-          gender: (u.gender as ProfileFormValues["gender"]) ?? "",
+          gender: (u.gender as string) ?? "",
           allergiesText: u.allergiesText,
           noAllergies: u.noAllergies,
           diseasesText: u.diseasesText,
           noDiseases: u.noDiseases,
           currentMedications: u.currentMedications ?? "",
+        }
+        setInitialProfile(initial)
+        form.reset({
+          fullName: initial.fullName,
+          age: initial.age,
+          weight: initial.weight,
+          height: initial.height,
+          gender: (initial.gender as ProfileFormValues["gender"]) ?? "",
+          allergiesText: initial.allergiesText,
+          noAllergies: initial.noAllergies,
+          diseasesText: initial.diseasesText,
+          noDiseases: initial.noDiseases,
+          currentMedications: initial.currentMedications,
           noMedications:
             (u.currentMedications ?? "").trim() === "" ||
             (u.currentMedications ?? "").trim() === "ไม่มี",
@@ -191,6 +220,57 @@ export default function ProfilePage() {
     try {
       const phoneDigits = phoneInput.replace(/\D/g, "")
       const phoneChanged = phoneDigits !== (phone || "")
+      const payload: Parameters<typeof patchMe>[0] = {}
+
+      const normalizedEmail = (email ?? "").trim().toLowerCase()
+      const normalizedGender =
+        String(values.gender ?? "").trim() === "" ? null : String(values.gender)
+      const normalizedCurrentMedications = values.noMedications
+        ? "ไม่มี"
+        : values.currentMedications
+
+      const hasInitial = Boolean(initialProfile)
+      if (!hasInitial) {
+        payload.fullName = values.fullName.trim()
+        payload.email = normalizedEmail
+        payload.phone = phoneDigits
+        payload.age = values.age == null ? null : Number(values.age)
+        payload.weight = values.weight == null ? null : Number(values.weight)
+        payload.height = values.height == null ? null : Number(values.height)
+        payload.gender = normalizedGender
+        payload.allergiesText = values.allergiesText
+        payload.noAllergies = values.noAllergies
+        payload.diseasesText = values.diseasesText
+        payload.noDiseases = values.noDiseases
+        payload.currentMedications = normalizedCurrentMedications
+      } else {
+        if (values.fullName.trim() !== initialProfile!.fullName) payload.fullName = values.fullName.trim()
+        if (normalizedEmail !== initialProfile!.email) payload.email = normalizedEmail
+        if (phoneDigits !== initialProfile!.phone) payload.phone = phoneDigits
+        if ((values.age == null ? "" : String(values.age)) !== initialProfile!.age) {
+          payload.age = values.age == null ? null : Number(values.age)
+        }
+        if ((values.weight == null ? "" : String(values.weight)) !== initialProfile!.weight) {
+          payload.weight = values.weight == null ? null : Number(values.weight)
+        }
+        if ((values.height == null ? "" : String(values.height)) !== initialProfile!.height) {
+          payload.height = values.height == null ? null : Number(values.height)
+        }
+        if ((normalizedGender ?? "") !== initialProfile!.gender) payload.gender = normalizedGender
+        if (values.allergiesText !== initialProfile!.allergiesText) payload.allergiesText = values.allergiesText
+        if (values.noAllergies !== initialProfile!.noAllergies) payload.noAllergies = values.noAllergies
+        if (values.diseasesText !== initialProfile!.diseasesText) payload.diseasesText = values.diseasesText
+        if (values.noDiseases !== initialProfile!.noDiseases) payload.noDiseases = values.noDiseases
+        if (normalizedCurrentMedications !== initialProfile!.currentMedications) {
+          payload.currentMedications = normalizedCurrentMedications
+        }
+      }
+
+      if (Object.keys(payload).length === 0) {
+        toast.success(t("saveOk"))
+        return
+      }
+
       if (phoneChanged) {
         if (phoneDigits.length !== 10) {
           toast.error("เบอร์โทรต้องเป็นตัวเลข 10 หลัก")
@@ -200,23 +280,24 @@ export default function ProfilePage() {
           toast.error("กรุณายืนยัน OTP เบอร์โทรก่อนบันทึก")
           return
         }
+        payload.phoneVerifyToken = phoneVerifyToken
       }
-      await patchMe({
-        fullName: values.fullName.trim(),
-        email: (email ?? "").trim().toLowerCase(),
+      await patchMe(payload)
+      toast.success(t("saveOk"))
+      setInitialProfile({
+        email: normalizedEmail,
         phone: phoneDigits,
-        phoneVerifyToken: phoneChanged ? phoneVerifyToken : undefined,
-        age: values.age == null ? null : Number(values.age),
-        weight: values.weight == null ? null : Number(values.weight),
-        height: values.height == null ? null : Number(values.height),
-        gender: String(values.gender ?? "").trim() === "" ? null : String(values.gender),
+        fullName: values.fullName.trim(),
+        age: values.age == null ? "" : String(values.age),
+        weight: values.weight == null ? "" : String(values.weight),
+        height: values.height == null ? "" : String(values.height),
+        gender: normalizedGender ?? "",
         allergiesText: values.allergiesText,
         noAllergies: values.noAllergies,
         diseasesText: values.diseasesText,
         noDiseases: values.noDiseases,
-        currentMedications: values.noMedications ? "ไม่มี" : values.currentMedications,
+        currentMedications: normalizedCurrentMedications,
       })
-      toast.success(t("saveOk"))
       if (phoneChanged) {
         setPhone(phoneDigits)
         setPhoneOtpSent(false)

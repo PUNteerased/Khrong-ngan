@@ -422,6 +422,7 @@ export async function fetchAdminStats() {
 export type AdminHealth = {
   database: boolean
   dify: "ok" | "missing_key" | "error"
+  cabinet?: boolean
   timestamp: string
 }
 
@@ -538,10 +539,13 @@ export type AdminUserRow = {
   fullName: string
   age: number | null
   weight: number | null
+  height?: number | null
+  gender?: string | null
   allergiesText: string
   noAllergies: boolean
   diseasesText: string
   noDiseases: boolean
+  currentMedications?: string
   isAdmin: boolean
   createdAt: string
   updatedAt: string
@@ -587,14 +591,18 @@ export async function fetchAdminUser(id: string) {
 export async function patchAdminUser(
   id: string,
   body: Partial<{
+    email: string | null
     phone: string | null
     fullName: string
     age: number | null
     weight: number | null
+    height: number | null
+    gender: string | null
     allergiesText: string
     noAllergies: boolean
     diseasesText: string
     noDiseases: boolean
+    currentMedications: string
   }>
 ) {
   return apiJson<AdminUserRow>(`/api/admin/users/${encodeURIComponent(id)}`, {

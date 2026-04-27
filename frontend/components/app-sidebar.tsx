@@ -13,6 +13,7 @@ import {
   LogIn,
   Phone,
   Settings,
+  Shield,
   Cookie,
   ChevronDown,
   X,
@@ -85,6 +86,7 @@ export function AppSidebar({ isOpen, onClose }: AppSidebarProps) {
   const utilityItems: Array<{ href: string; label: string; icon: LucideIcon }> =
     [
       { href: "/settings", label: t("settings"), icon: Settings },
+      { href: "/privacy", label: t("privacy"), icon: Shield },
       { href: "/cookies", label: t("cookies"), icon: Cookie },
       { href: "/contact", label: t("contact"), icon: Phone },
     ]

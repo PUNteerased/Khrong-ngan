@@ -10,10 +10,13 @@ const userPublicSelect = {
   fullName: true,
   age: true,
   weight: true,
+  height: true,
+  gender: true,
   allergiesText: true,
   noAllergies: true,
   diseasesText: true,
   noDiseases: true,
+  currentMedications: true,
   isAdmin: true,
   createdAt: true,
   updatedAt: true,
@@ -95,14 +98,18 @@ export async function patchUser(req: Request, res: Response) {
   const id = String(req.params.id)
   const body = req.body as Record<string, unknown>
   const allowed = [
+    "email",
     "phone",
     "fullName",
     "age",
     "weight",
+    "height",
+    "gender",
     "allergiesText",
     "noAllergies",
     "diseasesText",
     "noDiseases",
+    "currentMedications",
   ] as const
   const data: Record<string, unknown> = {}
   for (const key of allowed) {
@@ -113,13 +120,31 @@ export async function patchUser(req: Request, res: Response) {
       } else if (key === "weight") {
         const v = body[key]
         data.weight = v === null || v === "" ? null : Number(v)
+      } else if (key === "height") {
+        const v = body[key]
+        data.height = v === null || v === "" ? null : Number(v)
       } else if (key === "noAllergies" || key === "noDiseases") {
         data[key] = Boolean(body[key])
       } else if (key === "fullName") {
         data.fullName = String(body[key] ?? "").trim().slice(0, 200) || undefined
+      } else if (key === "gender") {
+        const v = String(body[key] ?? "").trim()
+        data.gender = v ? v.slice(0, 50) : null
+      } else if (key === "email") {
+        const v = String(body[key] ?? "").trim().toLowerCase()
+        if (!v) {
+          data.email = null
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+          res.status(400).json({ error: "รูปแบบอีเมลไม่ถูกต้อง" })
+          return
+        } else {
+          data.email = v
+        }
       } else if (key === "phone" || key === "allergiesText" || key === "diseasesText") {
         const v = body[key]
         data[key] = v == null || v === "" ? null : String(v).slice(0, 4000)
+      } else if (key === "currentMedications") {
+        data.currentMedications = String(body[key] ?? "").slice(0, 4000)
       }
     }
   }
@@ -149,7 +174,11 @@ export async function patchUser(req: Request, res: Response) {
       },
     })
     res.json(user)
-  } catch {
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      res.status(409).json({ error: "อีเมลนี้ถูกใช้งานแล้ว" })
+      return
+    }
     res.status(404).json({ error: "ไม่พบผู้ใช้" })
   }
 }

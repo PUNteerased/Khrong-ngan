@@ -51,13 +51,17 @@ export function AdminUserSheet({
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     fullName: "",
+    email: "",
     phone: "",
     age: "",
     weight: "",
+    height: "",
+    gender: "",
     allergiesText: "",
     noAllergies: false,
     diseasesText: "",
     noDiseases: false,
+    currentMedications: "",
   })
 
   useEffect(() => {
@@ -75,13 +79,17 @@ export function AdminUserSheet({
         setMed(d.medicationHistory)
         setForm({
           fullName: d.user.fullName,
+          email: d.user.email ?? "",
           phone: d.user.phone ?? "",
           age: d.user.age != null ? String(d.user.age) : "",
           weight: d.user.weight != null ? String(d.user.weight) : "",
+          height: d.user.height != null ? String(d.user.height) : "",
+          gender: d.user.gender ?? "",
           allergiesText: d.user.allergiesText,
           noAllergies: d.user.noAllergies,
           diseasesText: d.user.diseasesText,
           noDiseases: d.user.noDiseases,
+          currentMedications: d.user.currentMedications ?? "",
         })
       })
       .catch((e) => {
@@ -102,13 +110,17 @@ export function AdminUserSheet({
     try {
       const u = await patchAdminUser(userId, {
         fullName: form.fullName.trim(),
+        email: form.email.trim() || null,
         phone: form.phone.trim() || null,
         age: form.age.trim() === "" ? null : parseInt(form.age, 10),
         weight: form.weight.trim() === "" ? null : parseFloat(form.weight),
+        height: form.height.trim() === "" ? null : parseFloat(form.height),
+        gender: form.gender.trim() || null,
         allergiesText: form.allergiesText,
         noAllergies: form.noAllergies,
         diseasesText: form.diseasesText,
         noDiseases: form.noDiseases,
+        currentMedications: form.currentMedications,
       })
       setUser(u)
       toast.success(t("userSaved"))
@@ -147,6 +159,20 @@ export function AdminUserSheet({
                   onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
                 />
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>{t("usernameLoginId")}</Label>
+                  <Input value={user.username} disabled className="font-mono" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>อีเมล</Label>
+                  <Input
+                    value={form.email}
+                    onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                    placeholder="you@example.com"
+                  />
+                </div>
+              </div>
               <div className="space-y-1.5">
                 <Label htmlFor="adm-u-phone">{t("phoneLabel")}</Label>
                 <Input
@@ -170,6 +196,23 @@ export function AdminUserSheet({
                     id="adm-u-weight"
                     value={form.weight}
                     onChange={(e) => setForm((f) => ({ ...f, weight: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="adm-u-height">ส่วนสูง (ซม.)</Label>
+                  <Input
+                    id="adm-u-height"
+                    value={form.height}
+                    onChange={(e) => setForm((f) => ({ ...f, height: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="adm-u-gender">เพศ</Label>
+                  <Input
+                    id="adm-u-gender"
+                    value={form.gender}
+                    onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))}
+                    placeholder="male / female / other"
                   />
                 </div>
               </div>
@@ -197,6 +240,29 @@ export function AdminUserSheet({
                   }
                   className="bg-background"
                 />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="adm-u-meds">{t("medHistoryTitle")}</Label>
+                <Textarea
+                  id="adm-u-meds"
+                  rows={3}
+                  value={form.currentMedications}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, currentMedications: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground rounded-lg border bg-muted/20 p-3">
+                <div>
+                  <p className="font-medium text-foreground">สร้างเมื่อ</p>
+                  <p>{new Date(user.createdAt).toLocaleString(locale === "en" ? "en-GB" : "th-TH")}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">อัปเดตล่าสุด</p>
+                  <p>{new Date(user.updatedAt).toLocaleString(locale === "en" ? "en-GB" : "th-TH")}</p>
+                </div>
               </div>
 
               <div className="space-y-2 rounded-lg border bg-muted/30 p-3">

@@ -344,7 +344,7 @@ export default function AdminPage() {
       ]
     : []
 
-  const kioskOnline = health?.database === true
+  const kioskOnline = health?.cabinet === true
 
   if (!authReady) {
     return (

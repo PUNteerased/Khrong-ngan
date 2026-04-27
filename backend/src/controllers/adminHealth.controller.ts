@@ -34,9 +34,24 @@ export async function getAdminHealth(_req: Request, res: Response) {
     }
   }
 
+  let cabinet = false
+  const cabinetHealthUrl = process.env.CABINET_HEALTH_URL?.trim()
+  if (cabinetHealthUrl) {
+    try {
+      const r = await axios.get(cabinetHealthUrl, {
+        timeout: 5000,
+        validateStatus: (s) => s >= 200 && s < 500,
+      })
+      cabinet = r.status >= 200 && r.status < 300
+    } catch {
+      cabinet = false
+    }
+  }
+
   res.json({
     database,
     dify,
+    cabinet,
     timestamp: new Date().toISOString(),
   })
 }
