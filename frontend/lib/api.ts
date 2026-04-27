@@ -75,6 +75,7 @@ export async function apiJson<T>(
 export type UserProfile = {
   id: string
   username: string
+  email?: string
   phone: string
   isAdmin: boolean
   fullName: string
@@ -93,10 +94,11 @@ export type UserProfile = {
 
 export async function registerUser(payload: {
   username: string
-  phone: string
+  email: string
+  phone?: string | null
+  phoneVerifyToken?: string
   password: string
   fullName: string
-  phoneVerifyToken: string
   age?: number | null
   weight?: number | null
   height?: number | null
@@ -115,6 +117,52 @@ export async function registerUser(payload: {
       auth: false,
     }
   )
+}
+
+export async function requestEmailOtp(email: string) {
+  return apiJson<{ message: string; expiresInSec: number; devCode?: string }>(
+    "/api/auth/email-otp/request",
+    {
+      method: "POST",
+      body: JSON.stringify({ email }),
+      auth: false,
+    }
+  )
+}
+
+export async function verifyEmailOtp(email: string, code: string) {
+  return apiJson<{ message: string; verifyToken: string }>(
+    "/api/auth/email-otp/verify",
+    {
+      method: "POST",
+      body: JSON.stringify({ email, code }),
+      auth: false,
+    }
+  )
+}
+
+export async function requestPasswordReset(username: string, email: string) {
+  return apiJson<{ message: string; expiresInSec: number; devCode?: string }>(
+    "/api/auth/password-reset/request",
+    {
+      method: "POST",
+      body: JSON.stringify({ username, email }),
+      auth: false,
+    }
+  )
+}
+
+export async function confirmPasswordReset(
+  username: string,
+  email: string,
+  code: string,
+  newPassword: string
+) {
+  return apiJson<{ message: string }>("/api/auth/password-reset/confirm", {
+    method: "POST",
+    body: JSON.stringify({ username, email, code, newPassword }),
+    auth: false,
+  })
 }
 
 export async function requestPhoneOtp(phone: string) {
@@ -150,6 +198,17 @@ export async function loginUser(username: string, password: string) {
   )
 }
 
+export async function loginWithGoogle(idToken: string) {
+  return apiJson<{ accessToken: string; user: UserProfile }>(
+    "/api/auth/google",
+    {
+      method: "POST",
+      body: JSON.stringify({ idToken }),
+      auth: false,
+    }
+  )
+}
+
 export async function fetchMe() {
   return apiJson<UserProfile>("/api/users/me")
 }
@@ -160,6 +219,8 @@ export async function patchMe(
       UserProfile,
       | "fullName"
       | "avatarUrl"
+      | "email"
+      | "phone"
       | "age"
       | "weight"
       | "height"
@@ -170,11 +231,44 @@ export async function patchMe(
       | "noDiseases"
       | "currentMedications"
     >
-  >
+  > & { phoneVerifyToken?: string }
 ) {
   return apiJson<UserProfile>("/api/users/me", {
     method: "PATCH",
     body: JSON.stringify(body),
+  })
+}
+
+export async function requestMyPhoneOtp(phone: string) {
+  return apiJson<{ message: string; expiresInSec: number; devCode?: string }>(
+    "/api/users/me/phone-otp/request",
+    {
+      method: "POST",
+      body: JSON.stringify({ phone }),
+    }
+  )
+}
+
+export async function verifyMyPhoneOtp(phone: string, code: string) {
+  return apiJson<{ message: string; verifyToken: string }>(
+    "/api/users/me/phone-otp/verify",
+    {
+      method: "POST",
+      body: JSON.stringify({ phone, code }),
+    }
+  )
+}
+
+export async function changeMyPassword(currentPassword: string, newPassword: string) {
+  return apiJson<{ message: string }>("/api/users/me/change-password", {
+    method: "POST",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  })
+}
+
+export async function deleteMe() {
+  await apiJson<unknown>("/api/users/me", {
+    method: "DELETE",
   })
 }
 
@@ -424,6 +518,7 @@ export async function postAdminSessionFeedback(
 export type AdminUserRow = {
   id: string
   username: string
+  email?: string | null
   phone: string | null
   fullName: string
   age: number | null
@@ -490,6 +585,14 @@ export async function patchAdminUser(
   return apiJson<AdminUserRow>(`/api/admin/users/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: JSON.stringify(body),
+    auth: false,
+    adminAuth: true,
+  })
+}
+
+export async function deleteAdminUser(id: string) {
+  await apiJson<unknown>(`/api/admin/users/${encodeURIComponent(id)}`, {
+    method: "DELETE",
     auth: false,
     adminAuth: true,
   })

@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import {
   User,
   Phone,
+  Mail,
   Eye,
   EyeOff,
   Scale,
@@ -30,7 +31,13 @@ import {
 import { HealthProfileFields } from "@/components/health-profile-fields"
 import { Progress } from "@/components/ui/progress"
 import { Pill } from "lucide-react"
-import { registerUser, requestPhoneOtp, verifyPhoneOtp, ApiError } from "@/lib/api"
+import { GoogleLoginButton } from "@/components/google-login-button"
+import {
+  registerUser,
+  requestPhoneOtp,
+  verifyPhoneOtp,
+  ApiError,
+} from "@/lib/api"
 import { setStoredToken } from "@/lib/auth-token"
 import { formatThaiMobileInput, phoneDigitsOnly } from "@/lib/phone-format"
 import { normalizeUsername, USERNAME_PATTERN } from "@/lib/username"
@@ -42,15 +49,16 @@ export default function RegisterPage() {
   const [step, setStep] = useState(1)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [sendingOtp, setSendingOtp] = useState(false)
-  const [verifyingOtp, setVerifyingOtp] = useState(false)
-  const [otpSent, setOtpSent] = useState(false)
-  const [otpCode, setOtpCode] = useState("")
-  const [otpVerified, setOtpVerified] = useState(false)
+  const [sendingPhoneOtp, setSendingPhoneOtp] = useState(false)
+  const [verifyingPhoneOtp, setVerifyingPhoneOtp] = useState(false)
+  const [phoneOtpSent, setPhoneOtpSent] = useState(false)
+  const [phoneOtpCode, setPhoneOtpCode] = useState("")
+  const [phoneOtpVerified, setPhoneOtpVerified] = useState(false)
   const [phoneVerifyToken, setPhoneVerifyToken] = useState("")
   const [formData, setFormData] = useState({
     name: "",
     username: "",
+    email: "",
     phone: "",
     password: "",
     confirmPassword: "",
@@ -79,8 +87,9 @@ export default function RegisterPage() {
       const phoneDigits = phoneDigitsOnly(formData.phone)
       const { accessToken } = await registerUser({
         username: normalizeUsername(formData.username),
-        phone: phoneDigits,
-        phoneVerifyToken,
+        email: formData.email.trim().toLowerCase(),
+        phone: phoneDigits.length === 10 ? phoneDigits : null,
+        phoneVerifyToken: phoneDigits.length === 10 ? phoneVerifyToken : undefined,
         password: formData.password,
         fullName: formData.name.trim(),
         age: formData.age ? Number(formData.age) : null,
@@ -105,6 +114,13 @@ export default function RegisterPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleGoogleSuccess = (accessToken: string) => {
+    setStoredToken(accessToken)
+    toast.success(t("success"))
+    router.push("/")
+    router.refresh()
   }
 
   return (
@@ -161,6 +177,23 @@ export default function RegisterPage() {
                   </Field>
 
                   <Field>
+                    <FieldLabel>{t("email")}</FieldLabel>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        type="email"
+                        autoComplete="email"
+                        placeholder={t("emailPh")}
+                        className="pl-10"
+                        value={formData.email}
+                        onChange={(e) =>
+                          setFormData({ ...formData, email: e.target.value })
+                        }
+                      />
+                    </div>
+                  </Field>
+
+                  <Field>
                     <FieldLabel>{t("phone")}</FieldLabel>
                     <div className="relative">
                       <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -172,31 +205,36 @@ export default function RegisterPage() {
                         maxLength={12}
                         className="pl-10 tabular-nums"
                         value={formData.phone}
-                        onChange={(e) =>
+                        disabled={phoneOtpVerified}
+                        onChange={(e) => {
                           setFormData({
                             ...formData,
                             phone: formatThaiMobileInput(e.target.value),
                           })
-                        }
+                          setPhoneOtpSent(false)
+                          setPhoneOtpVerified(false)
+                          setPhoneVerifyToken("")
+                          setPhoneOtpCode("")
+                        }}
                       />
                     </div>
-                    <div className="mt-2 flex items-center gap-2">
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        disabled={sendingOtp}
+                        disabled={sendingPhoneOtp || phoneOtpVerified}
                         onClick={async () => {
                           const phoneDigits = phoneDigitsOnly(formData.phone)
                           if (phoneDigits.length !== 10) {
                             toast.error(t("phoneRule"))
                             return
                           }
-                          setSendingOtp(true)
+                          setSendingPhoneOtp(true)
                           try {
                             const res = await requestPhoneOtp(phoneDigits)
-                            setOtpSent(true)
-                            setOtpVerified(false)
+                            setPhoneOtpSent(true)
+                            setPhoneOtpVerified(false)
                             setPhoneVerifyToken("")
                             toast.success(res.message)
                             if (res.devCode) {
@@ -207,45 +245,50 @@ export default function RegisterPage() {
                               err instanceof ApiError ? err.message : t("otpSendFail")
                             toast.error(msg)
                           } finally {
-                            setSendingOtp(false)
+                            setSendingPhoneOtp(false)
                           }
                         }}
                       >
-                        {sendingOtp ? t("otpSending") : t("otpSend")}
+                        {sendingPhoneOtp ? t("otpSending") : t("otpSend")}
                       </Button>
-                      {otpVerified ? (
-                        <span className="text-xs text-success">{t("otpVerified")}</span>
-                      ) : otpSent ? (
+                      {phoneOtpVerified ? (
+                        <span className="text-xs text-green-600 dark:text-green-500">
+                          {t("otpVerified")}
+                        </span>
+                      ) : phoneOtpSent ? (
                         <span className="text-xs text-muted-foreground">
                           {t("otpSentHint")}
                         </span>
                       ) : null}
                     </div>
-                    {otpSent ? (
-                      <div className="mt-2 flex items-center gap-2">
+                    {phoneOtpSent ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
                         <Input
                           inputMode="numeric"
                           maxLength={6}
                           placeholder={t("otpCodePh")}
-                          value={otpCode}
+                          value={phoneOtpCode}
+                          disabled={phoneOtpVerified}
                           onChange={(e) =>
-                            setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                            setPhoneOtpCode(
+                              e.target.value.replace(/\D/g, "").slice(0, 6)
+                            )
                           }
                         />
                         <Button
                           type="button"
                           size="sm"
-                          disabled={verifyingOtp}
+                          disabled={verifyingPhoneOtp || phoneOtpVerified}
                           onClick={async () => {
                             const phoneDigits = phoneDigitsOnly(formData.phone)
-                            if (phoneDigits.length !== 10 || otpCode.length !== 6) {
+                            if (phoneDigits.length !== 10 || phoneOtpCode.length !== 6) {
                               toast.error(t("otpInvalid"))
                               return
                             }
-                            setVerifyingOtp(true)
+                            setVerifyingPhoneOtp(true)
                             try {
-                              const res = await verifyPhoneOtp(phoneDigits, otpCode)
-                              setOtpVerified(true)
+                              const res = await verifyPhoneOtp(phoneDigits, phoneOtpCode)
+                              setPhoneOtpVerified(true)
                               setPhoneVerifyToken(res.verifyToken)
                               toast.success(t("otpVerifyOk"))
                             } catch (err) {
@@ -253,11 +296,11 @@ export default function RegisterPage() {
                                 err instanceof ApiError ? err.message : t("otpVerifyFail")
                               toast.error(msg)
                             } finally {
-                              setVerifyingOtp(false)
+                              setVerifyingPhoneOtp(false)
                             }
                           }}
                         >
-                          {verifyingOtp ? t("otpVerifying") : t("otpVerify")}
+                          {verifyingPhoneOtp ? t("otpVerifying") : t("otpVerify")}
                         </Button>
                       </div>
                     ) : null}
@@ -314,6 +357,7 @@ export default function RegisterPage() {
                   onClick={() => {
                     const u = normalizeUsername(formData.username)
                     const phoneDigits = phoneDigitsOnly(formData.phone)
+                    const em = formData.email.trim().toLowerCase()
                     if (!formData.name.trim() || !u || !formData.password) {
                       toast.error(t("fillAll"))
                       return
@@ -322,11 +366,19 @@ export default function RegisterPage() {
                       toast.error(t("usernameRule"))
                       return
                     }
-                    if (phoneDigits.length !== 10) {
+                    if (u.toLowerCase().includes("admin")) {
+                      toast.error(t("usernameReserved"))
+                      return
+                    }
+                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+                      toast.error(t("emailInvalid"))
+                      return
+                    }
+                    if (phoneDigits.length > 0 && phoneDigits.length !== 10) {
                       toast.error(t("phoneRule"))
                       return
                     }
-                    if (!otpVerified || !phoneVerifyToken) {
+                    if (phoneDigits.length === 10 && (!phoneOtpVerified || !phoneVerifyToken)) {
                       toast.error(t("otpRequire"))
                       return
                     }
@@ -347,6 +399,16 @@ export default function RegisterPage() {
                     {t("signIn")}
                   </Link>
                 </p>
+
+                <div className="relative my-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-border" />
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="bg-card px-2 text-muted-foreground">{t("or")}</span>
+                  </div>
+                </div>
+                <GoogleLoginButton mode="signup" onSuccess={handleGoogleSuccess} />
               </CardContent>
             </Card>
           )}

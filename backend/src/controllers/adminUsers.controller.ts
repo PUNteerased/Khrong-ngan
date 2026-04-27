@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js"
 const userPublicSelect = {
   id: true,
   username: true,
+  email: true,
   phone: true,
   fullName: true,
   age: true,
@@ -28,6 +29,7 @@ export async function listUsers(req: Request, res: Response) {
     where.OR = [
       { username: { contains: query, mode: "insensitive" } },
       { fullName: { contains: query, mode: "insensitive" } },
+      { email: { contains: query, mode: "insensitive" } },
       { phone: { contains: query, mode: "insensitive" } },
     ]
   }
@@ -150,4 +152,42 @@ export async function patchUser(req: Request, res: Response) {
   } catch {
     res.status(404).json({ error: "ไม่พบผู้ใช้" })
   }
+}
+
+export async function deleteUser(req: Request, res: Response) {
+  const id = String(req.params.id)
+  const adminUserId = req.adminAuth?.userId ?? null
+  if (adminUserId && adminUserId === id) {
+    res.status(400).json({ error: "ไม่สามารถลบบัญชีผู้ดูแลที่กำลังใช้งานอยู่ได้" })
+    return
+  }
+
+  const target = await prisma.user.findUnique({
+    where: { id },
+    select: { id: true, username: true, isAdmin: true },
+  })
+  if (!target) {
+    res.status(404).json({ error: "ไม่พบผู้ใช้" })
+    return
+  }
+  if (target.isAdmin) {
+    res.status(403).json({ error: "ไม่อนุญาตให้ลบบัญชีผู้ดูแลผ่านเมนูนี้" })
+    return
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.adminAuditLog.create({
+      data: {
+        adminUserId: adminUserId ?? undefined,
+        action: "USER_DELETE",
+        payload: {
+          targetUserId: target.id,
+          targetUsername: target.username,
+        },
+      },
+    })
+    await tx.user.delete({ where: { id: target.id } })
+  })
+
+  res.json({ ok: true })
 }

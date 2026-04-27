@@ -96,6 +96,11 @@ export default function HistoryDetailPage() {
             )}
           </div>
         </div>
+        <Button asChild className="w-full">
+          <Link href={`/chat?sessionId=${encodeURIComponent(sessionId)}`}>
+            {t("continueChat")}
+          </Link>
+        </Button>
 
         <div className="space-y-3">
           {messages.map((m) => (

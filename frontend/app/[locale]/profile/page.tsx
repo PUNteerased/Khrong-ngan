@@ -46,7 +46,15 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { formatThaiMobileInput } from "@/lib/phone-format"
-import { fetchMe, patchMe, ApiError } from "@/lib/api"
+import {
+  fetchMe,
+  patchMe,
+  deleteMe,
+  requestMyPhoneOtp,
+  verifyMyPhoneOtp,
+  changeMyPassword,
+  ApiError,
+} from "@/lib/api"
 import { getStoredToken, setStoredToken } from "@/lib/auth-token"
 
 const ALLERGY_CHIPS = ["Paracetamol", "NSAIDs", "Penicillin"] as const
@@ -87,10 +95,22 @@ export default function ProfilePage() {
   const tNav = useTranslations("Nav")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [username, setUsername] = useState("")
+  const [email, setEmail] = useState("")
+  const [phoneInput, setPhoneInput] = useState("")
   const [phone, setPhone] = useState("")
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [sendingPhoneOtp, setSendingPhoneOtp] = useState(false)
+  const [verifyingPhoneOtp, setVerifyingPhoneOtp] = useState(false)
+  const [phoneOtpSent, setPhoneOtpSent] = useState(false)
+  const [phoneOtpCode, setPhoneOtpCode] = useState("")
+  const [phoneVerifyToken, setPhoneVerifyToken] = useState("")
+  const [pwdCurrent, setPwdCurrent] = useState("")
+  const [pwdNext, setPwdNext] = useState("")
+  const [pwdConfirm, setPwdConfirm] = useState("")
+  const [changingPassword, setChangingPassword] = useState(false)
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
@@ -119,7 +139,9 @@ export default function ProfilePage() {
         const u = await fetchMe()
         if (cancelled) return
         setUsername(u.username)
+        setEmail(u.email ?? "")
         setPhone(u.phone)
+        setPhoneInput(formatThaiMobileInput(u.phone ?? ""))
         setAvatarUrl(u.avatarUrl ?? null)
         setIsAdmin(!!u.isAdmin)
         form.reset({
@@ -167,8 +189,23 @@ export default function ProfilePage() {
   const handleSave = form.handleSubmit(async (values) => {
     setSaving(true)
     try {
+      const phoneDigits = phoneInput.replace(/\D/g, "")
+      const phoneChanged = phoneDigits !== (phone || "")
+      if (phoneChanged) {
+        if (phoneDigits.length !== 10) {
+          toast.error("เบอร์โทรต้องเป็นตัวเลข 10 หลัก")
+          return
+        }
+        if (!phoneVerifyToken) {
+          toast.error("กรุณายืนยัน OTP เบอร์โทรก่อนบันทึก")
+          return
+        }
+      }
       await patchMe({
         fullName: values.fullName.trim(),
+        email: email.trim().toLowerCase(),
+        phone: phoneDigits,
+        phoneVerifyToken: phoneChanged ? phoneVerifyToken : undefined,
         age: values.age == null ? null : Number(values.age),
         weight: values.weight == null ? null : Number(values.weight),
         height: values.height == null ? null : Number(values.height),
@@ -180,6 +217,12 @@ export default function ProfilePage() {
         currentMedications: values.noMedications ? "ไม่มี" : values.currentMedications,
       })
       toast.success(t("saveOk"))
+      if (phoneChanged) {
+        setPhone(phoneDigits)
+        setPhoneOtpSent(false)
+        setPhoneOtpCode("")
+        setPhoneVerifyToken("")
+      }
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : t("saveFail")
       toast.error(msg)
@@ -199,11 +242,92 @@ export default function ProfilePage() {
     }
   }
 
+  const sendPhoneOtp = async () => {
+    const phoneDigits = phoneInput.replace(/\D/g, "")
+    if (phoneDigits.length !== 10) {
+      toast.error("เบอร์โทรต้องเป็นตัวเลข 10 หลัก")
+      return
+    }
+    setSendingPhoneOtp(true)
+    try {
+      const res = await requestMyPhoneOtp(phoneDigits)
+      setPhoneOtpSent(true)
+      setPhoneVerifyToken("")
+      toast.success(res.message)
+      if (res.devCode) toast.info(`โค้ดทดสอบ: ${res.devCode}`)
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "ส่ง OTP ไม่สำเร็จ")
+    } finally {
+      setSendingPhoneOtp(false)
+    }
+  }
+
+  const verifyPhone = async () => {
+    const phoneDigits = phoneInput.replace(/\D/g, "")
+    if (phoneDigits.length !== 10 || phoneOtpCode.length !== 6) {
+      toast.error("กรุณากรอก OTP 6 หลักให้ถูกต้อง")
+      return
+    }
+    setVerifyingPhoneOtp(true)
+    try {
+      const res = await verifyMyPhoneOtp(phoneDigits, phoneOtpCode)
+      setPhoneVerifyToken(res.verifyToken)
+      toast.success("ยืนยัน OTP สำเร็จ")
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "ยืนยัน OTP ไม่สำเร็จ")
+    } finally {
+      setVerifyingPhoneOtp(false)
+    }
+  }
+
+  const handleChangePassword = async () => {
+    if (!pwdCurrent || !pwdNext) {
+      toast.error("กรุณากรอกรหัสผ่านให้ครบ")
+      return
+    }
+    if (pwdNext.length < 6) {
+      toast.error("รหัสผ่านใหม่ต้องยาวอย่างน้อย 6 ตัวอักษร")
+      return
+    }
+    if (pwdNext !== pwdConfirm) {
+      toast.error("รหัสผ่านใหม่ไม่ตรงกัน")
+      return
+    }
+    setChangingPassword(true)
+    try {
+      const res = await changeMyPassword(pwdCurrent, pwdNext)
+      toast.success(res.message)
+      setPwdCurrent("")
+      setPwdNext("")
+      setPwdConfirm("")
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "เปลี่ยนรหัสผ่านไม่สำเร็จ")
+    } finally {
+      setChangingPassword(false)
+    }
+  }
+
   const handleLogout = () => {
     setStoredToken(null)
     toast.success(t("logoutOk"))
     router.push("/login")
     router.refresh()
+  }
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true)
+    try {
+      await deleteMe()
+      setStoredToken(null)
+      toast.success(t("deleteOk"))
+      router.push("/login")
+      router.refresh()
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : t("deleteFail")
+      toast.error(msg)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   if (loading) {
@@ -264,6 +388,11 @@ export default function ProfilePage() {
                     {formatThaiMobileInput(phone)}
                   </p>
                 ) : null}
+                {email ? (
+                  <p className="text-sm text-muted-foreground">
+                    {email}
+                  </p>
+                ) : null}
               </div>
             </div>
 
@@ -281,6 +410,65 @@ export default function ProfilePage() {
                     placeholder={t("fullNamePh")}
                     className="h-10"
                   />
+                </Field>
+                <Field>
+                  <FieldLabel>อีเมล</FieldLabel>
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>เบอร์โทร (ต้องยืนยัน OTP เมื่อแก้ไข)</FieldLabel>
+                  <Input
+                    type="tel"
+                    value={phoneInput}
+                    onChange={(e) => {
+                      setPhoneInput(formatThaiMobileInput(e.target.value))
+                      setPhoneOtpSent(false)
+                      setPhoneOtpCode("")
+                      setPhoneVerifyToken("")
+                    }}
+                    placeholder="081-234-5678"
+                    className="tabular-nums"
+                  />
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void sendPhoneOtp()}
+                      disabled={sendingPhoneOtp}
+                    >
+                      {sendingPhoneOtp ? "กำลังส่ง OTP…" : "ส่ง OTP"}
+                    </Button>
+                    {phoneVerifyToken ? (
+                      <span className="text-xs text-green-600">ยืนยัน OTP แล้ว</span>
+                    ) : null}
+                  </div>
+                  {phoneOtpSent ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Input
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="กรอกรหัส OTP 6 หลัก"
+                        value={phoneOtpCode}
+                        onChange={(e) =>
+                          setPhoneOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                        }
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => void verifyPhone()}
+                        disabled={verifyingPhoneOtp}
+                      >
+                        {verifyingPhoneOtp ? "กำลังยืนยัน…" : "ยืนยัน OTP"}
+                      </Button>
+                    </div>
+                  ) : null}
                 </Field>
               </div>
 
@@ -476,6 +664,35 @@ export default function ProfilePage() {
             <CardTitle className="text-lg">{t("accountTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
+            <div className="rounded-lg border bg-background p-4 space-y-3">
+              <p className="text-sm font-medium">เปลี่ยนรหัสผ่าน</p>
+              <Input
+                type="password"
+                placeholder="รหัสผ่านปัจจุบัน"
+                value={pwdCurrent}
+                onChange={(e) => setPwdCurrent(e.target.value)}
+              />
+              <Input
+                type="password"
+                placeholder="รหัสผ่านใหม่"
+                value={pwdNext}
+                onChange={(e) => setPwdNext(e.target.value)}
+              />
+              <Input
+                type="password"
+                placeholder="ยืนยันรหัสผ่านใหม่"
+                value={pwdConfirm}
+                onChange={(e) => setPwdConfirm(e.target.value)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleChangePassword()}
+                disabled={changingPassword}
+              >
+                {changingPassword ? "กำลังเปลี่ยนรหัสผ่าน…" : "เปลี่ยนรหัสผ่าน"}
+              </Button>
+            </div>
             {isAdmin ? (
               <Button asChild variant="outline" className="w-full justify-start gap-3" size="lg">
                 <Link href="/admin">
@@ -515,7 +732,11 @@ export default function ProfilePage() {
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>{t("deleteCancel")}</AlertDialogCancel>
-                  <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={() => void handleDeleteAccount()}
+                    disabled={deleting}
+                  >
                     {t("deleteConfirm")}
                   </AlertDialogAction>
                 </AlertDialogFooter>

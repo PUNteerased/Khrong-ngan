@@ -13,6 +13,8 @@ datasource db {
 model User {
   id             String   @id @default(cuid())
   username       String   @unique
+  /// Verified at registration (optional for legacy / Google-only accounts).
+  email          String?  @unique
   phone          String?
   passwordHash   String
   isAdmin        Boolean  @default(false)

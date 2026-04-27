@@ -68,6 +68,7 @@ import {
   fetchAdminOverview,
   deleteDrug,
   fetchAdminUsers,
+  deleteAdminUser,
   type DrugDto,
   type AdminStats,
   type AdminSessionRow,
@@ -119,6 +120,10 @@ export default function AdminPage() {
   const [drugDialogOpen, setDrugDialogOpen] = useState(false)
   const [drugEdit, setDrugEdit] = useState<DrugDto | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleteUserPick, setDeleteUserPick] = useState<{
+    id: string
+    name: string
+  } | null>(null)
 
   useEffect(() => {
     setUnlocked(!!getStoredAdminToken())
@@ -277,6 +282,22 @@ export default function AdminPage() {
       toast.success(t("drugDeleted"))
       setDeleteId(null)
       loadAll()
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : t("loadFail"))
+    }
+  }
+
+  const confirmDeleteUser = async () => {
+    if (!deleteUserPick) return
+    try {
+      await deleteAdminUser(deleteUserPick.id)
+      toast.success(t("userDeleted"))
+      setDeleteUserPick(null)
+      if (userPick === deleteUserPick.id) {
+        setUserOpen(false)
+        setUserPick(null)
+      }
+      loadUsers()
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : t("loadFail"))
     }
@@ -789,17 +810,34 @@ export default function AdminPage() {
                                 {u.phone ?? "—"}
                               </TableCell>
                               <TableCell className="text-right">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-7 text-xs"
-                                  onClick={() => {
-                                    setUserPick(u.id)
-                                    setUserOpen(true)
-                                  }}
-                                >
-                                  {t("viewDetail")}
-                                </Button>
+                                <div className="inline-flex items-center gap-1">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs"
+                                    onClick={() => {
+                                      setUserPick(u.id)
+                                      setUserOpen(true)
+                                    }}
+                                  >
+                                    {t("viewDetail")}
+                                  </Button>
+                                  {!u.isAdmin ? (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 text-destructive"
+                                      onClick={() =>
+                                        setDeleteUserPick({
+                                          id: u.id,
+                                          name: u.fullName || u.username || "—",
+                                        })
+                                      }
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  ) : null}
+                                </div>
                               </TableCell>
                             </TableRow>
                           ))
@@ -929,6 +967,26 @@ export default function AdminPage() {
             <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={() => void confirmDelete()}>
               {t("drugDelete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!deleteUserPick}
+        onOpenChange={() => setDeleteUserPick(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("deleteUser")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("confirmDeleteUser", { name: deleteUserPick?.name ?? "—" })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmDeleteUser()}>
+              {t("deleteUser")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -12,7 +12,6 @@ import {
   Pill,
   QrCode,
   Send,
-  Stethoscope,
   UserCircle2,
 } from "lucide-react"
 import { Link, useRouter } from "@/i18n/navigation"
@@ -457,18 +456,6 @@ function ChatPageInner() {
     setPendingImage(null)
   }
 
-  const contextSummary = useMemo(() => {
-    if (!userCtx) return null
-    const allergies = userCtx.noAllergies
-      ? t("ctxAllergyNone")
-      : userCtx.allergiesText?.trim() || t("ctxAllergyUnknown")
-    return {
-      age: userCtx.age != null ? String(userCtx.age) : "—",
-      weight: userCtx.weight != null ? String(userCtx.weight) : "—",
-      allergies,
-    }
-  }, [userCtx, t])
-
   const formatTime = (date: Date) =>
     date.toLocaleTimeString(locale === "en" ? "en-GB" : "th-TH", {
       hour: "2-digit",
@@ -528,18 +515,6 @@ function ChatPageInner() {
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p className="leading-snug">{t("disclaimer")}</p>
         </div>
-        {contextSummary ? (
-          <div className="flex items-center gap-2 overflow-x-auto rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs text-foreground">
-            <Stethoscope className="h-3.5 w-3.5 shrink-0 text-primary" />
-            <span className="whitespace-nowrap">
-              {t("contextBadge", {
-                age: contextSummary.age,
-                weight: contextSummary.weight,
-                allergies: contextSummary.allergies,
-              })}
-            </span>
-          </div>
-        ) : null}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">

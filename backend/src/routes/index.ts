@@ -42,11 +42,28 @@ router.get("/health", (_req, res) => {
 
 router.post("/api/auth/register", authLimiter, authController.register)
 router.post("/api/auth/login", authLimiter, authController.login)
+router.post("/api/auth/google", authLimiter, authController.loginWithGoogle)
+router.post("/api/auth/email-otp/request", authLimiter, authController.requestEmailOtp)
+router.post("/api/auth/email-otp/verify", authLimiter, authController.verifyEmailOtp)
+router.post(
+  "/api/auth/password-reset/request",
+  authLimiter,
+  authController.requestPasswordReset
+)
+router.post(
+  "/api/auth/password-reset/confirm",
+  authLimiter,
+  authController.confirmPasswordReset
+)
 router.post("/api/auth/otp/request", authLimiter, authController.requestPhoneOtp)
 router.post("/api/auth/otp/verify", authLimiter, authController.verifyPhoneOtp)
 
 router.get("/api/users/me", authMiddleware, userController.getMe)
 router.patch("/api/users/me", authMiddleware, userController.patchMe)
+router.delete("/api/users/me", authMiddleware, userController.deleteMe)
+router.post("/api/users/me/phone-otp/request", authMiddleware, userController.requestPhoneChangeOtp)
+router.post("/api/users/me/phone-otp/verify", authMiddleware, userController.verifyPhoneChangeOtp)
+router.post("/api/users/me/change-password", authMiddleware, userController.changeMyPassword)
 
 router.get("/api/drugs", drugController.listDrugs)
 router.get("/api/drugs/:id", drugController.getDrug)
@@ -105,4 +122,9 @@ router.patch(
   "/api/admin/users/:id",
   adminAuthMiddleware,
   adminUsersController.patchUser
+)
+router.delete(
+  "/api/admin/users/:id",
+  adminAuthMiddleware,
+  adminUsersController.deleteUser
 )

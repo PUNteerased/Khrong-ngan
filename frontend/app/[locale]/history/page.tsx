@@ -91,7 +91,7 @@ export default function HistoryPage() {
           <ul className="space-y-2">
             {sessions.map((s) => (
               <li key={s.id}>
-                <Link href={`/history/${s.id}`}>
+                <Link href={`/chat?sessionId=${encodeURIComponent(s.id)}`}>
                   <Card className="transition-colors hover:bg-muted/50">
                     <CardHeader className="py-3 px-4">
                       <div className="flex items-start justify-between gap-2">

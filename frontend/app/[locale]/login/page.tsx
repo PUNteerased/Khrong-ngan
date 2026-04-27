@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
+import { GoogleLoginButton } from "@/components/google-login-button"
 import { loginUser, ApiError } from "@/lib/api"
 import { setStoredToken } from "@/lib/auth-token"
 import { normalizeUsername } from "@/lib/username"
@@ -41,6 +42,13 @@ export default function LoginPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleGoogleSuccess = (accessToken: string) => {
+    setStoredToken(accessToken)
+    toast.success(t("success"))
+    router.push("/")
+    router.refresh()
   }
 
   return (
@@ -131,11 +139,14 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <Link href="/register">
-              <Button variant="outline" className="w-full" size="lg">
+            <GoogleLoginButton mode="signin" onSuccess={handleGoogleSuccess} />
+
+            <p className="mt-3 text-center text-sm text-muted-foreground">
+              {t("noAccount")}{" "}
+              <Link href="/register" className="text-primary hover:underline">
                 {t("registerCta")}
-              </Button>
-            </Link>
+              </Link>
+            </p>
           </CardContent>
         </Card>
       </div>
