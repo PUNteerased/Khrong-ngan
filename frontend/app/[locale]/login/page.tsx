@@ -6,7 +6,6 @@ import { useTranslations } from "next-intl"
 import { UserRound, Eye, EyeOff } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { AppLogo } from "@/components/app-logo"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
@@ -49,7 +48,6 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
           <div className="flex flex-col items-center justify-center gap-3">
-            <AppLogo size={72} className="rounded-lg" priority />
             <span className="text-4xl font-bold text-primary">LaneYa</span>
           </div>
           <p className="text-muted-foreground">{t("subtitle")}</p>

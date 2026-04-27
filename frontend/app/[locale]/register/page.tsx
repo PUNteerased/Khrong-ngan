@@ -15,7 +15,6 @@ import {
   Check,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { AppLogo } from "@/components/app-logo"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -112,7 +111,6 @@ export default function RegisterPage() {
     <div className="min-h-[calc(100vh-60px)] px-4 py-6 bg-background">
       <div className="w-full max-w-md mx-auto space-y-6">
         <div className="flex flex-col items-center gap-2 pb-2">
-          <AppLogo size={56} className="rounded-lg" priority />
           <span className="text-2xl font-bold text-primary">LaneYa</span>
         </div>
         <div className="space-y-2">
