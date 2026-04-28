@@ -132,6 +132,18 @@ async function fetchCsvTabRows(
   return parseCsv(String(data))
 }
 
+async function fetchCsvSheetRows(
+  basePubHtmlUrl: string,
+  sheetName: string
+): Promise<ParsedCsvRow[]> {
+  const csvUrl = basePubHtmlUrl.replace(
+    /\/pubhtml.*$/,
+    `/pub?output=csv&sheet=${encodeURIComponent(sheetName)}`
+  )
+  const { data } = await axios.get<string>(csvUrl, { timeout: 20000 })
+  return parseCsv(String(data))
+}
+
 async function fetchGoogleApiRows(
   spreadsheetId: string,
   apiKey: string,
@@ -330,31 +342,61 @@ async function loadSheetData(): Promise<{
   }
 
   const tabs = await getPublishedTabs(sheetUrl)
-  if (!tabs.has("disease") || !tabs.has("symptom") || !tabs.has("drug")) {
-    throw new Error("Published Google Sheet ต้องมีแท็บ Disease/Symptom/Drug")
+  // Published HTML often doesn't contain per-tab anchors anymore.
+  // Prefer fetching CSV by sheet name, fall back to gid-based when available.
+  const diseaseRows = tabs.has("disease")
+    ? await fetchCsvTabRows(sheetUrl, tabs.get("disease") || "")
+    : await fetchCsvSheetRows(sheetUrl, "Disease")
+  const symptomRows = tabs.has("symptom")
+    ? await fetchCsvTabRows(sheetUrl, tabs.get("symptom") || "")
+    : await fetchCsvSheetRows(sheetUrl, "Symptom")
+  const drugRows = tabs.has("drug")
+    ? await fetchCsvTabRows(sheetUrl, tabs.get("drug") || "")
+    : await fetchCsvSheetRows(sheetUrl, "Drug")
+  if (diseaseRows.length === 0 || symptomRows.length === 0 || drugRows.length === 0) {
+    throw new Error("Published Google Sheet ต้องมีแท็บ Disease/Symptom/Drug และต้องมี header แถวแรก")
   }
-  const diseaseRows = await fetchCsvTabRows(sheetUrl, tabs.get("disease") || "")
-  const symptomRows = await fetchCsvTabRows(sheetUrl, tabs.get("symptom") || "")
-  const drugRows = await fetchCsvTabRows(sheetUrl, tabs.get("drug") || "")
   let mappingRows: ParsedCsvRow[] = []
+
+  // 1) unified mappings tab
   if (tabs.has("mappings")) {
     mappingRows = await fetchCsvTabRows(sheetUrl, tabs.get("mappings") || "")
-  } else if (
-    tabs.has("map_disease_symptom") &&
-    tabs.has("map_disease_drug") &&
-    tabs.has("map_symptom_drug")
-  ) {
-    const [dsRows, ddRows, sdRows] = await Promise.all([
-      fetchCsvTabRows(sheetUrl, tabs.get("map_disease_symptom") || ""),
-      fetchCsvTabRows(sheetUrl, tabs.get("map_disease_drug") || ""),
-      fetchCsvTabRows(sheetUrl, tabs.get("map_symptom_drug") || ""),
-    ])
-    mappingRows = [
-      ...dsRows.map((r) => ({ ...r, map_type: "disease_symptom" })),
-      ...ddRows.map((r) => ({ ...r, map_type: "disease_drug" })),
-      ...sdRows.map((r) => ({ ...r, map_type: "symptom_drug" })),
-    ]
   } else {
+    mappingRows = await fetchCsvSheetRows(sheetUrl, "mappings").catch(() => [])
+  }
+
+  // 2) separate mapping tabs (only if unified not available)
+  if (mappingRows.length === 0) {
+    if (
+      tabs.has("map_disease_symptom") &&
+      tabs.has("map_disease_drug") &&
+      tabs.has("map_symptom_drug")
+    ) {
+      const [dsRows, ddRows, sdRows] = await Promise.all([
+        fetchCsvTabRows(sheetUrl, tabs.get("map_disease_symptom") || ""),
+        fetchCsvTabRows(sheetUrl, tabs.get("map_disease_drug") || ""),
+        fetchCsvTabRows(sheetUrl, tabs.get("map_symptom_drug") || ""),
+      ])
+      mappingRows = [
+        ...dsRows.map((r) => ({ ...r, map_type: "disease_symptom" })),
+        ...ddRows.map((r) => ({ ...r, map_type: "disease_drug" })),
+        ...sdRows.map((r) => ({ ...r, map_type: "symptom_drug" })),
+      ]
+    } else {
+      const [dsRows, ddRows, sdRows] = await Promise.all([
+        fetchCsvSheetRows(sheetUrl, "Map_Disease_Symptom").catch(() => []),
+        fetchCsvSheetRows(sheetUrl, "Map_Disease_Drug").catch(() => []),
+        fetchCsvSheetRows(sheetUrl, "Map_Symptom_Drug").catch(() => []),
+      ])
+      mappingRows = [
+        ...dsRows.map((r) => ({ ...r, map_type: "disease_symptom" })),
+        ...ddRows.map((r) => ({ ...r, map_type: "disease_drug" })),
+        ...sdRows.map((r) => ({ ...r, map_type: "symptom_drug" })),
+      ]
+    }
+  }
+
+  if (mappingRows.length === 0) {
     throw new Error("ไม่พบแท็บ mappings หรือ mapping แยก 3 แท็บ")
   }
   return {
