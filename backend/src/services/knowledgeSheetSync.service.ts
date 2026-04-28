@@ -108,6 +108,24 @@ function normalizeSlug(v: string): string {
     .replace(/[^a-z0-9ก-๙-_]/g, "")
 }
 
+function normalizeRefKey(v: string): string {
+  return String(v ?? "").trim().toLowerCase()
+}
+
+function hasAnyValue(row: ParsedCsvRow): boolean {
+  return Object.values(row).some((v) => String(v).trim())
+}
+
+function isValidUnifiedMappingsShape(rows: ParsedCsvRow[]): boolean {
+  const first = rows.find(hasAnyValue)
+  if (!first) return false
+  const keys = Object.keys(first)
+  const hasMapType = keys.includes("map_type") || keys.includes("type")
+  const hasLeft = keys.includes("left_ref") || keys.includes("left_slug") || keys.includes("disease_slug") || keys.includes("symptom_slug")
+  const hasRight = keys.includes("right_ref") || keys.includes("right_slug") || keys.includes("drug_ref") || keys.includes("symptom_slug")
+  return hasMapType && hasLeft && hasRight
+}
+
 async function getPublishedTabs(sheetUrl: string): Promise<Map<string, string>> {
   const { data } = await axios.get<string>(sheetUrl, { timeout: 15000 })
   const html = String(data)
@@ -364,6 +382,10 @@ async function loadSheetData(): Promise<{
   } else {
     mappingRows = await fetchCsvSheetRows(sheetUrl, "mappings").catch(() => [])
   }
+  // Ignore mappings tab if it doesn't follow the expected structure (common mistake: copy Disease rows here).
+  if (mappingRows.length > 0 && !isValidUnifiedMappingsShape(mappingRows)) {
+    mappingRows = []
+  }
 
   // 2) separate mapping tabs (only if unified not available)
   if (mappingRows.length === 0) {
@@ -438,16 +460,18 @@ export async function syncKnowledgeFromSheet(options?: {
 
   const diseaseBySlug = new Map(existingDiseases.map((d) => [d.slug, d]))
   const symptomBySlug = new Map(existingSymptoms.map((s) => [s.slug, s]))
-  const drugByRef = new Map<string, { id: string; slug: string | null; slotId: string }>()
+  const drugByRefCI = new Map<string, { id: string; slug: string | null; slotId: string }>()
+  const drugById = new Map<string, { id: string; slug: string | null; slotId: string }>()
   for (const d of existingDrugs) {
-    drugByRef.set(d.id, d)
-    drugByRef.set(d.slotId, d)
-    if (d.slug) drugByRef.set(d.slug, d)
+    drugById.set(d.id, d)
+    drugByRefCI.set(normalizeRefKey(d.slotId), d)
+    if (d.slug) drugByRefCI.set(normalizeRefKey(d.slug), d)
   }
 
   const incomingDiseaseSlugs = new Set<string>()
   const incomingSymptomSlugs = new Set<string>()
   const incomingDrugIds = new Set<string>()
+  const drugRefsInSheet = new Set<string>()
 
   const mappingDiseaseSymptom: { diseaseId: string; symptomId: string; score: number; note: string }[] =
     []
@@ -491,13 +515,15 @@ export async function syncKnowledgeFromSheet(options?: {
   }
 
   for (const [idx, row] of drugRows.entries()) {
-    const ref = row.drug_ref || row.slotid || row.slot_id || ""
+    const refRaw = row.drug_ref || row.slotid || row.slot_id || ""
+    const ref = String(refRaw).trim()
     if (!ref) {
       drugStats.skipped += 1
       pushErr(errors, "Drug", idx + 2, "missing required field: drug_ref", row)
       continue
     }
-    const found = drugByRef.get(ref)
+    drugRefsInSheet.add(normalizeRefKey(ref))
+    const found = drugById.get(ref) || drugByRefCI.get(normalizeRefKey(ref))
     if (!found) {
       drugStats.skipped += 1
       pushErr(errors, "Drug", idx + 2, `drug_ref not found in DB: ${ref}`, row)
@@ -518,13 +544,14 @@ export async function syncKnowledgeFromSheet(options?: {
       row.left_ref || row.left_slug || row.disease_slug || row.symptom_slug || ""
     )
     const right = (row.right_ref || row.right_slug || row.drug_ref || row.symptom_slug || "").trim()
+    const rightKey = normalizeRefKey(right)
     const scoreRaw = row.score || row.relevance_score || ""
     const score = scoreRaw ? toInt(scoreRaw, 0) : 0
     const note = row.note || ""
     const level = row.recommendation_level || "SUGGESTED"
 
     if (!mapType || !left || !right) {
-      if (Object.values(row).some((v) => String(v).trim())) {
+      if (hasAnyValue(row)) {
         pushErr(
           errors,
           "mappings",
@@ -564,7 +591,18 @@ export async function syncKnowledgeFromSheet(options?: {
       })
     } else if (mapType === "disease_drug") {
       const disease = diseaseBySlug.get(left)
-      const drug = drugByRef.get(normalizeSlug(right)) || drugByRef.get(right)
+      if (!drugRefsInSheet.has(rightKey)) {
+        ddStats.skipped += 1
+        pushErr(
+          errors,
+          "mappings",
+          idx + 2,
+          `drug_ref not found in Drug tab: ${right} (add it to Drug sheet first)`,
+          row
+        )
+        continue
+      }
+      const drug = drugById.get(right) || drugByRefCI.get(rightKey)
       if (!disease || !drug) {
         ddStats.skipped += 1
         pushErr(
@@ -585,7 +623,18 @@ export async function syncKnowledgeFromSheet(options?: {
       })
     } else if (mapType === "symptom_drug") {
       const symptom = symptomBySlug.get(left)
-      const drug = drugByRef.get(normalizeSlug(right)) || drugByRef.get(right)
+      if (!drugRefsInSheet.has(rightKey)) {
+        sdStats.skipped += 1
+        pushErr(
+          errors,
+          "mappings",
+          idx + 2,
+          `drug_ref not found in Drug tab: ${right} (add it to Drug sheet first)`,
+          row
+        )
+        continue
+      }
+      const drug = drugById.get(right) || drugByRefCI.get(rightKey)
       if (!symptom || !drug) {
         sdStats.skipped += 1
         pushErr(
@@ -677,11 +726,11 @@ export async function syncKnowledgeFromSheet(options?: {
         })
       }
       for (const row of drugRows) {
-        const ref = row.drug_ref || row.slotid || row.slot_id || ""
+        const ref = String(row.drug_ref || row.slotid || row.slot_id || "").trim()
         if (!ref) continue
-        const found = await tx.drug.findFirst({
-          where: { OR: [{ id: ref }, { slotId: ref }] },
-        })
+        const found =
+          (await tx.drug.findUnique({ where: { id: ref } }).catch(() => null)) ||
+          (await tx.drug.findFirst({ where: { slotId: ref } }))
         if (!found) continue
         await tx.drug.update({
           where: { id: found.id },
