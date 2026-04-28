@@ -67,7 +67,7 @@ function KnowledgeContent() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
         <div className="sticky top-[61px] bg-background z-20 px-4 pt-3 border-b border-border">
-          <TabsList className="w-full grid grid-cols-3">
+          <TabsList className="w-full grid grid-cols-3 gap-2">
             <TabsTrigger value="disease" className="gap-2">
               <Stethoscope className="h-4 w-4 hidden sm:inline" />
               {t("tabDisease")}

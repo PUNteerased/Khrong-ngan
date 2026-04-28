@@ -212,7 +212,7 @@ export const thMessages = {
     searchPh: "ค้นหาโรค, อาการ, หรือชื่อยา...",
     tabDisease: "โรค",
     tabSymptom: "อาการ",
-    tabDrug: "ยาในตู้",
+    tabDrug: "ยา",
     inCabinet: "มีในตู้จ่ายยา ({slot})",
     generalDrug: "ข้อมูลยาทั่วไป",
     slotLabel: "ตำแหน่งในตู้: {slot}",

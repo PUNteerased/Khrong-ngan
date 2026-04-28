@@ -126,6 +126,62 @@ function isValidUnifiedMappingsShape(rows: ParsedCsvRow[]): boolean {
   return hasMapType && hasLeft && hasRight
 }
 
+function hasKeyCI(row: ParsedCsvRow, key: string): boolean {
+  const target = key.trim().toLowerCase()
+  return Object.keys(row).some((k) => k.trim().toLowerCase() === target)
+}
+
+function detectSheetType(rows: ParsedCsvRow[]): "empty" | "drug" | "disease" | "symptom" | "mapping" | "unknown" {
+  const first = rows.find(hasAnyValue)
+  if (!first) return "empty"
+  if (hasKeyCI(first, "drug_ref")) return "drug"
+  if (hasKeyCI(first, "observation_guide") || hasKeyCI(first, "danger_level")) return "symptom"
+  if (hasKeyCI(first, "severity_level") || hasKeyCI(first, "self_care_advice")) return "disease"
+  if (isValidUnifiedMappingsShape(rows)) return "mapping"
+  if (hasKeyCI(first, "slug") && hasKeyCI(first, "name_th")) return "disease"
+  return "unknown"
+}
+
+function firstRowKeysPreview(rows: ParsedCsvRow[]): string {
+  const first = rows.find(hasAnyValue)
+  if (!first) return "(no rows)"
+  return Object.keys(first)
+    .slice(0, 12)
+    .map((k) => k.trim())
+    .join(",")
+}
+
+async function fetchPublishedSheetWithFallback(
+  sheetUrl: string,
+  preferredName: string,
+  gid?: string
+): Promise<ParsedCsvRow[]> {
+  // 1) gid (if available)
+  if (gid) {
+    const rows = await fetchCsvTabRows(sheetUrl, gid)
+    if (rows.length) return rows
+  }
+  // 2) exact name
+  let rows = await fetchCsvSheetRows(sheetUrl, preferredName).catch(() => [])
+  if (rows.length) return rows
+  // 3) case/trim variants (handles accidental spaces/case)
+  const variants = Array.from(
+    new Set([
+      preferredName,
+      preferredName.trim(),
+      preferredName.toLowerCase(),
+      preferredName.toUpperCase(),
+      `${preferredName.trim()} `,
+      ` ${preferredName.trim()}`,
+    ])
+  )
+  for (const v of variants) {
+    rows = await fetchCsvSheetRows(sheetUrl, v).catch(() => [])
+    if (rows.length) return rows
+  }
+  return []
+}
+
 async function getPublishedTabs(sheetUrl: string): Promise<Map<string, string>> {
   const { data } = await axios.get<string>(sheetUrl, { timeout: 15000 })
   const html = String(data)
@@ -159,6 +215,19 @@ async function fetchCsvSheetRows(
     `/pub?output=csv&sheet=${encodeURIComponent(sheetName)}`
   )
   const { data } = await axios.get<string>(csvUrl, { timeout: 20000 })
+  return parseCsv(String(data))
+}
+
+async function fetchGvizSheetRows(
+  spreadsheetId: string,
+  sheetName: string
+): Promise<ParsedCsvRow[]> {
+  // Works for "Anyone with the link can view" sheets without publishing.
+  // Also avoids pubhtml/pub CSV caching quirks where `sheet=` is ignored.
+  const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(
+    spreadsheetId
+  )}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`
+  const { data } = await axios.get<string>(url, { timeout: 20000 })
   return parseCsv(String(data))
 }
 
@@ -246,6 +315,17 @@ async function loadSheetData(): Promise<{
   const apiKey = process.env.GOOGLE_SHEETS_API_KEY?.trim()
   const spreadsheetId = process.env.GOOGLE_SHEETS_ID?.trim()
 
+  const tabDisease = process.env.KNOWLEDGE_SHEET_TAB_DISEASE?.trim() || "Disease"
+  const tabSymptom = process.env.KNOWLEDGE_SHEET_TAB_SYMPTOM?.trim() || "Symptom"
+  const tabDrug = process.env.KNOWLEDGE_SHEET_TAB_DRUG?.trim() || "Drug"
+  const tabMappingsUnified = process.env.KNOWLEDGE_SHEET_TAB_MAPPINGS?.trim() || "mappings"
+  const tabMapDiseaseSymptom =
+    process.env.KNOWLEDGE_SHEET_TAB_MAP_DISEASE_SYMPTOM?.trim() || "Map_Disease_Symptom"
+  const tabMapDiseaseDrug =
+    process.env.KNOWLEDGE_SHEET_TAB_MAP_DISEASE_DRUG?.trim() || "Map_Disease_Drug"
+  const tabMapSymptomDrug =
+    process.env.KNOWLEDGE_SHEET_TAB_MAP_SYMPTOM_DRUG?.trim() || "Map_Symptom_Drug"
+
   if (spreadsheetId && (serviceAccountJson || (serviceAccountEmail && serviceAccountPrivateKey))) {
     let clientEmail = serviceAccountEmail || ""
     let privateKey = serviceAccountPrivateKey || ""
@@ -269,19 +349,19 @@ async function loadSheetData(): Promise<{
       spreadsheetId,
       clientEmail,
       normalizedKey,
-      "Disease"
+      tabDisease
     )
     const symptomRows = await fetchGoogleServiceAccountRows(
       spreadsheetId,
       clientEmail,
       normalizedKey,
-      "Symptom"
+      tabSymptom
     )
     const drugRows = await fetchGoogleServiceAccountRows(
       spreadsheetId,
       clientEmail,
       normalizedKey,
-      "Drug"
+      tabDrug
     )
     let mappingRows: ParsedCsvRow[] = []
     try {
@@ -289,7 +369,7 @@ async function loadSheetData(): Promise<{
         spreadsheetId,
         clientEmail,
         normalizedKey,
-        "mappings"
+        tabMappingsUnified
       )
     } catch {
       const [dsRows, ddRows, sdRows] = await Promise.all([
@@ -297,19 +377,19 @@ async function loadSheetData(): Promise<{
           spreadsheetId,
           clientEmail,
           normalizedKey,
-          "Map_Disease_Symptom"
+          tabMapDiseaseSymptom
         ),
         fetchGoogleServiceAccountRows(
           spreadsheetId,
           clientEmail,
           normalizedKey,
-          "Map_Disease_Drug"
+          tabMapDiseaseDrug
         ),
         fetchGoogleServiceAccountRows(
           spreadsheetId,
           clientEmail,
           normalizedKey,
-          "Map_Symptom_Drug"
+          tabMapSymptomDrug
         ),
       ])
       mappingRows = [
@@ -321,7 +401,7 @@ async function loadSheetData(): Promise<{
     return {
       source: "google_sheets_api",
       sheetUrl,
-      tabs: ["Disease", "Symptom", "Drug", "mappings"],
+      tabs: [tabDisease, tabSymptom, tabDrug, tabMappingsUnified],
       diseaseRows,
       symptomRows,
       drugRows,
@@ -330,17 +410,17 @@ async function loadSheetData(): Promise<{
   }
 
   if (apiKey && spreadsheetId) {
-    const diseaseRows = await fetchGoogleApiRows(spreadsheetId, apiKey, "Disease")
-    const symptomRows = await fetchGoogleApiRows(spreadsheetId, apiKey, "Symptom")
-    const drugRows = await fetchGoogleApiRows(spreadsheetId, apiKey, "Drug")
+    const diseaseRows = await fetchGoogleApiRows(spreadsheetId, apiKey, tabDisease)
+    const symptomRows = await fetchGoogleApiRows(spreadsheetId, apiKey, tabSymptom)
+    const drugRows = await fetchGoogleApiRows(spreadsheetId, apiKey, tabDrug)
     let mappingRows: ParsedCsvRow[] = []
     try {
-      mappingRows = await fetchGoogleApiRows(spreadsheetId, apiKey, "mappings")
+      mappingRows = await fetchGoogleApiRows(spreadsheetId, apiKey, tabMappingsUnified)
     } catch {
       const [dsRows, ddRows, sdRows] = await Promise.all([
-        fetchGoogleApiRows(spreadsheetId, apiKey, "Map_Disease_Symptom"),
-        fetchGoogleApiRows(spreadsheetId, apiKey, "Map_Disease_Drug"),
-        fetchGoogleApiRows(spreadsheetId, apiKey, "Map_Symptom_Drug"),
+        fetchGoogleApiRows(spreadsheetId, apiKey, tabMapDiseaseSymptom),
+        fetchGoogleApiRows(spreadsheetId, apiKey, tabMapDiseaseDrug),
+        fetchGoogleApiRows(spreadsheetId, apiKey, tabMapSymptomDrug),
       ])
       mappingRows = [
         ...dsRows.map((r) => ({ ...r, map_type: "disease_symptom" })),
@@ -351,7 +431,7 @@ async function loadSheetData(): Promise<{
     return {
       source: "google_sheets_api",
       sheetUrl,
-      tabs: ["Disease", "Symptom", "Drug", "mappings"],
+      tabs: [tabDisease, tabSymptom, tabDrug, tabMappingsUnified],
       diseaseRows,
       symptomRows,
       drugRows,
@@ -359,28 +439,98 @@ async function loadSheetData(): Promise<{
     }
   }
 
+  // If sheet is publicly viewable ("anyone with link"), we can fetch via gviz without API key.
+  // This avoids pubhtml -> pub CSV issues where `sheet=` can be ignored.
+  if (spreadsheetId) {
+    const diseaseRows = await fetchGvizSheetRows(spreadsheetId, tabDisease).catch(() => [])
+    const symptomRows = await fetchGvizSheetRows(spreadsheetId, tabSymptom).catch(() => [])
+    const drugRows = await fetchGvizSheetRows(spreadsheetId, tabDrug).catch(() => [])
+    let mappingRows: ParsedCsvRow[] = []
+    mappingRows = await fetchGvizSheetRows(spreadsheetId, tabMappingsUnified).catch(() => [])
+    if (mappingRows.length > 0 && !isValidUnifiedMappingsShape(mappingRows)) mappingRows = []
+    if (mappingRows.length === 0) {
+      const [dsRows, ddRows, sdRows] = await Promise.all([
+        fetchGvizSheetRows(spreadsheetId, tabMapDiseaseSymptom).catch(() => []),
+        fetchGvizSheetRows(spreadsheetId, tabMapDiseaseDrug).catch(() => []),
+        fetchGvizSheetRows(spreadsheetId, tabMapSymptomDrug).catch(() => []),
+      ])
+      mappingRows = [
+        ...dsRows.map((r) => ({ ...r, map_type: "disease_symptom" })),
+        ...ddRows.map((r) => ({ ...r, map_type: "disease_drug" })),
+        ...sdRows.map((r) => ({ ...r, map_type: "symptom_drug" })),
+      ]
+    }
+
+    const diseaseType = detectSheetType(diseaseRows)
+    const symptomType = detectSheetType(symptomRows)
+    const drugType = detectSheetType(drugRows)
+    if (diseaseType === "disease" && symptomType === "symptom" && drugType === "drug") {
+      if (mappingRows.length === 0) throw new Error("ไม่พบแท็บ mappings หรือ mapping แยก 3 แท็บ")
+      return {
+        source: "published_csv",
+        sheetUrl,
+        tabs: [tabDisease, tabSymptom, tabDrug, tabMappingsUnified],
+        diseaseRows,
+        symptomRows,
+        drugRows,
+        mappingRows,
+      }
+    }
+    // else fallthrough to published pubhtml flow for backward compatibility,
+    // but keep the richer error messages there.
+  }
+
   const tabs = await getPublishedTabs(sheetUrl)
   // Published HTML often doesn't contain per-tab anchors anymore.
   // Prefer fetching CSV by sheet name, fall back to gid-based when available.
-  const diseaseRows = tabs.has("disease")
-    ? await fetchCsvTabRows(sheetUrl, tabs.get("disease") || "")
-    : await fetchCsvSheetRows(sheetUrl, "Disease")
-  const symptomRows = tabs.has("symptom")
-    ? await fetchCsvTabRows(sheetUrl, tabs.get("symptom") || "")
-    : await fetchCsvSheetRows(sheetUrl, "Symptom")
-  const drugRows = tabs.has("drug")
-    ? await fetchCsvTabRows(sheetUrl, tabs.get("drug") || "")
-    : await fetchCsvSheetRows(sheetUrl, "Drug")
-  if (diseaseRows.length === 0 || symptomRows.length === 0 || drugRows.length === 0) {
-    throw new Error("Published Google Sheet ต้องมีแท็บ Disease/Symptom/Drug และต้องมี header แถวแรก")
+  const diseaseRows = await fetchPublishedSheetWithFallback(
+    sheetUrl,
+    tabDisease,
+    tabs.get(tabDisease.toLowerCase())
+  )
+  const symptomRows = await fetchPublishedSheetWithFallback(
+    sheetUrl,
+    tabSymptom,
+    tabs.get(tabSymptom.toLowerCase())
+  )
+  const drugRows = await fetchPublishedSheetWithFallback(
+    sheetUrl,
+    tabDrug,
+    tabs.get(tabDrug.toLowerCase())
+  )
+
+  const diseaseType = detectSheetType(diseaseRows)
+  const symptomType = detectSheetType(symptomRows)
+  const drugType = detectSheetType(drugRows)
+
+  if (diseaseType !== "disease") {
+    throw new Error(
+      `Published Google Sheet: แท็บ ${tabDisease} ไม่ถูกต้อง (keys=${firstRowKeysPreview(diseaseRows)})`
+    )
+  }
+  if (symptomType !== "symptom") {
+    throw new Error(
+      `Published Google Sheet: แท็บ ${tabSymptom} ไม่ถูกต้อง (keys=${firstRowKeysPreview(symptomRows)})`
+    )
+  }
+  if (drugType !== "drug") {
+    const hint =
+      drugType === "disease"
+        ? `ตอน export sheet=${tabDrug} ได้ข้อมูลแบบ Disease — มักเกิดจากชื่อแท็บมีช่องว่าง/ตัวอักษรซ่อน หรือ export หาแท็บไม่เจอแล้ว fallback ไปแท็บแรก`
+        : `ต้องมี header drug_ref`
+    throw new Error(
+      `Published Google Sheet: แท็บ ${tabDrug} ไม่ถูกต้อง (type=${drugType}, keys=${firstRowKeysPreview(
+        drugRows
+      )}) — ${hint}`
+    )
   }
   let mappingRows: ParsedCsvRow[] = []
 
   // 1) unified mappings tab
-  if (tabs.has("mappings")) {
-    mappingRows = await fetchCsvTabRows(sheetUrl, tabs.get("mappings") || "")
+  if (tabs.has(tabMappingsUnified.toLowerCase())) {
+    mappingRows = await fetchCsvTabRows(sheetUrl, tabs.get(tabMappingsUnified.toLowerCase()) || "")
   } else {
-    mappingRows = await fetchCsvSheetRows(sheetUrl, "mappings").catch(() => [])
+    mappingRows = await fetchCsvSheetRows(sheetUrl, tabMappingsUnified).catch(() => [])
   }
   // Ignore mappings tab if it doesn't follow the expected structure (common mistake: copy Disease rows here).
   if (mappingRows.length > 0 && !isValidUnifiedMappingsShape(mappingRows)) {
@@ -390,14 +540,14 @@ async function loadSheetData(): Promise<{
   // 2) separate mapping tabs (only if unified not available)
   if (mappingRows.length === 0) {
     if (
-      tabs.has("map_disease_symptom") &&
-      tabs.has("map_disease_drug") &&
-      tabs.has("map_symptom_drug")
+      tabs.has(tabMapDiseaseSymptom.toLowerCase()) &&
+      tabs.has(tabMapDiseaseDrug.toLowerCase()) &&
+      tabs.has(tabMapSymptomDrug.toLowerCase())
     ) {
       const [dsRows, ddRows, sdRows] = await Promise.all([
-        fetchCsvTabRows(sheetUrl, tabs.get("map_disease_symptom") || ""),
-        fetchCsvTabRows(sheetUrl, tabs.get("map_disease_drug") || ""),
-        fetchCsvTabRows(sheetUrl, tabs.get("map_symptom_drug") || ""),
+        fetchCsvTabRows(sheetUrl, tabs.get(tabMapDiseaseSymptom.toLowerCase()) || ""),
+        fetchCsvTabRows(sheetUrl, tabs.get(tabMapDiseaseDrug.toLowerCase()) || ""),
+        fetchCsvTabRows(sheetUrl, tabs.get(tabMapSymptomDrug.toLowerCase()) || ""),
       ])
       mappingRows = [
         ...dsRows.map((r) => ({ ...r, map_type: "disease_symptom" })),
@@ -406,9 +556,9 @@ async function loadSheetData(): Promise<{
       ]
     } else {
       const [dsRows, ddRows, sdRows] = await Promise.all([
-        fetchCsvSheetRows(sheetUrl, "Map_Disease_Symptom").catch(() => []),
-        fetchCsvSheetRows(sheetUrl, "Map_Disease_Drug").catch(() => []),
-        fetchCsvSheetRows(sheetUrl, "Map_Symptom_Drug").catch(() => []),
+        fetchCsvSheetRows(sheetUrl, tabMapDiseaseSymptom).catch(() => []),
+        fetchCsvSheetRows(sheetUrl, tabMapDiseaseDrug).catch(() => []),
+        fetchCsvSheetRows(sheetUrl, tabMapSymptomDrug).catch(() => []),
       ])
       mappingRows = [
         ...dsRows.map((r) => ({ ...r, map_type: "disease_symptom" })),
@@ -440,6 +590,10 @@ export async function syncKnowledgeFromSheet(options?: {
     String(process.env.SYNC_DELETE_MODE || "soft").trim().toLowerCase() === "hard"
       ? "hard"
       : "soft"
+  const createMissingDrugs =
+    ["1", "true", "yes", "y"].includes(
+      String(process.env.KNOWLEDGE_SYNC_CREATE_MISSING_DRUGS || "").trim().toLowerCase()
+    )
   const errors: SyncRowError[] = []
   const diseaseStats = counters()
   const symptomStats = counters()
@@ -473,20 +627,9 @@ export async function syncKnowledgeFromSheet(options?: {
   const incomingDrugIds = new Set<string>()
   const drugRefsInSheet = new Set<string>()
 
-  const mappingDiseaseSymptom: { diseaseId: string; symptomId: string; score: number; note: string }[] =
-    []
-  const mappingDiseaseDrug: {
-    diseaseId: string
-    drugId: string
-    level: string
-    note: string
-  }[] = []
-  const mappingSymptomDrug: {
-    symptomId: string
-    drugId: string
-    level: string
-    note: string
-  }[] = []
+  const mappingDiseaseSymptom: { diseaseSlug: string; symptomSlug: string; score: number; note: string }[] = []
+  const mappingDiseaseDrug: { diseaseSlug: string; drugRef: string; level: string; note: string }[] = []
+  const mappingSymptomDrug: { symptomSlug: string; drugRef: string; level: string; note: string }[] = []
 
   for (const [idx, row] of diseaseRows.entries()) {
     const slug = normalizeSlug(row.slug || row.name_th || row.name || "")
@@ -525,12 +668,23 @@ export async function syncKnowledgeFromSheet(options?: {
     drugRefsInSheet.add(normalizeRefKey(ref))
     const found = drugById.get(ref) || drugByRefCI.get(normalizeRefKey(ref))
     if (!found) {
-      drugStats.skipped += 1
-      pushErr(errors, "Drug", idx + 2, `drug_ref not found in DB: ${ref}`, row)
-      continue
+      if (createMissingDrugs) {
+        drugStats.inserted += 1
+      } else {
+        drugStats.skipped += 1
+        pushErr(
+          errors,
+          "Drug",
+          idx + 2,
+          `drug_ref not found in DB: ${ref} (ตั้ง KNOWLEDGE_SYNC_CREATE_MISSING_DRUGS=1 เพื่อให้ระบบสร้างยาใหม่อัตโนมัติ)`,
+          row
+        )
+        continue
+      }
+    } else {
+      incomingDrugIds.add(found.id)
+      drugStats.updated += 1
     }
-    incomingDrugIds.add(found.id)
-    drugStats.updated += 1
     const kp = row.knowledge_priority?.trim()
     if (kp && !isNumericString(kp)) {
       drugStats.skipped += 1
@@ -569,28 +723,34 @@ export async function syncKnowledgeFromSheet(options?: {
     }
 
     if (mapType === "disease_symptom") {
-      const disease = diseaseBySlug.get(left)
-      const symptom = symptomBySlug.get(normalizeSlug(right))
-      if (!disease || !symptom) {
+      const symptomSlug = normalizeSlug(right)
+      const diseaseOk = incomingDiseaseSlugs.has(left) || diseaseBySlug.has(left)
+      const symptomOk = incomingSymptomSlugs.has(symptomSlug) || symptomBySlug.has(symptomSlug)
+      if (!diseaseOk || !symptomOk) {
         dsStats.skipped += 1
         pushErr(
           errors,
           "mappings",
           idx + 2,
-          `mapping target not found (disease=${left}, symptom=${right})`,
+          `mapping target not found (disease=${left} in Disease tab? ${diseaseOk}, symptom=${symptomSlug} in Symptom tab? ${symptomOk})`,
           row
         )
         continue
       }
       dsStats.inserted += 1
       mappingDiseaseSymptom.push({
-        diseaseId: disease.id,
-        symptomId: symptom.id,
+        diseaseSlug: left,
+        symptomSlug,
         score,
         note,
       })
     } else if (mapType === "disease_drug") {
-      const disease = diseaseBySlug.get(left)
+      const diseaseOk = incomingDiseaseSlugs.has(left) || diseaseBySlug.has(left)
+      if (!diseaseOk) {
+        ddStats.skipped += 1
+        pushErr(errors, "mappings", idx + 2, `disease_slug not found in Disease tab: ${left}`, row)
+        continue
+      }
       if (!drugRefsInSheet.has(rightKey)) {
         ddStats.skipped += 1
         pushErr(
@@ -598,31 +758,24 @@ export async function syncKnowledgeFromSheet(options?: {
           "mappings",
           idx + 2,
           `drug_ref not found in Drug tab: ${right} (add it to Drug sheet first)`,
-          row
-        )
-        continue
-      }
-      const drug = drugById.get(right) || drugByRefCI.get(rightKey)
-      if (!disease || !drug) {
-        ddStats.skipped += 1
-        pushErr(
-          errors,
-          "mappings",
-          idx + 2,
-          `mapping target not found (disease=${left}, drug=${right})`,
           row
         )
         continue
       }
       ddStats.inserted += 1
       mappingDiseaseDrug.push({
-        diseaseId: disease.id,
-        drugId: drug.id,
+        diseaseSlug: left,
+        drugRef: right,
         level,
         note,
       })
     } else if (mapType === "symptom_drug") {
-      const symptom = symptomBySlug.get(left)
+      const symptomOk = incomingSymptomSlugs.has(left) || symptomBySlug.has(left)
+      if (!symptomOk) {
+        sdStats.skipped += 1
+        pushErr(errors, "mappings", idx + 2, `symptom_slug not found in Symptom tab: ${left}`, row)
+        continue
+      }
       if (!drugRefsInSheet.has(rightKey)) {
         sdStats.skipped += 1
         pushErr(
@@ -634,22 +787,10 @@ export async function syncKnowledgeFromSheet(options?: {
         )
         continue
       }
-      const drug = drugById.get(right) || drugByRefCI.get(rightKey)
-      if (!symptom || !drug) {
-        sdStats.skipped += 1
-        pushErr(
-          errors,
-          "mappings",
-          idx + 2,
-          `mapping target not found (symptom=${left}, drug=${right})`,
-          row
-        )
-        continue
-      }
       sdStats.inserted += 1
       mappingSymptomDrug.push({
-        symptomId: symptom.id,
-        drugId: drug.id,
+        symptomSlug: left,
+        drugRef: right,
         level,
         note,
       })
@@ -728,24 +869,50 @@ export async function syncKnowledgeFromSheet(options?: {
       for (const row of drugRows) {
         const ref = String(row.drug_ref || row.slotid || row.slot_id || "").trim()
         if (!ref) continue
-        const found =
-          (await tx.drug.findUnique({ where: { id: ref } }).catch(() => null)) ||
-          (await tx.drug.findFirst({ where: { slotId: ref } }))
-        if (!found) continue
-        await tx.drug.update({
-          where: { id: found.id },
-          data: {
-            slug: row.slug ? normalizeSlug(row.slug) : found.slug,
-            genericName: row.generic_name || null,
-            brandName: row.brand_name || null,
-            indication: row.indication || null,
-            contraindications: row.contraindications || null,
-            doseByAgeWeight: row.dose_by_age_weight || null,
-            keywords: row.keywords || "",
-            isPublished: row.published ? toBool(row.published) : true,
-            knowledgePriority: toInt(row.knowledge_priority, 0),
-          },
-        })
+        const byId = await tx.drug.findUnique({ where: { id: ref } }).catch(() => null)
+        const bySlot = await tx.drug.findFirst({ where: { slotId: ref } })
+        const bySlug = row.slug
+          ? await tx.drug.findFirst({ where: { slug: normalizeSlug(row.slug) } })
+          : null
+        const found = byId || bySlot || bySlug
+        const desiredSlug = row.slug ? normalizeSlug(row.slug) : null
+        const name =
+          row.brand_name || row.generic_name || desiredSlug || ref
+        const description = row.indication || ""
+        if (!found) {
+          if (!createMissingDrugs) continue
+          await tx.drug.create({
+            data: {
+              slotId: ref,
+              name,
+              description,
+              slug: desiredSlug,
+              genericName: row.generic_name || null,
+              brandName: row.brand_name || null,
+              indication: row.indication || null,
+              contraindications: row.contraindications || null,
+              doseByAgeWeight: row.dose_by_age_weight || null,
+              keywords: row.keywords || "",
+              isPublished: row.published ? toBool(row.published) : true,
+              knowledgePriority: toInt(row.knowledge_priority, 0),
+            },
+          })
+        } else {
+          await tx.drug.update({
+            where: { id: found.id },
+            data: {
+              slug: desiredSlug ?? found.slug,
+              genericName: row.generic_name || null,
+              brandName: row.brand_name || null,
+              indication: row.indication || null,
+              contraindications: row.contraindications || null,
+              doseByAgeWeight: row.dose_by_age_weight || null,
+              keywords: row.keywords || "",
+              isPublished: row.published ? toBool(row.published) : true,
+              knowledgePriority: toInt(row.knowledge_priority, 0),
+            },
+          })
+        }
       }
 
       if (deleteMode === "soft") {
@@ -789,34 +956,73 @@ export async function syncKnowledgeFromSheet(options?: {
       await tx.diseaseDrugMap.deleteMany({})
       await tx.symptomDrugMap.deleteMany({})
 
+      const diseaseSlugs = Array.from(
+        new Set(mappingDiseaseSymptom.map((m) => m.diseaseSlug).concat(mappingDiseaseDrug.map((m) => m.diseaseSlug)))
+      )
+      const symptomSlugs = Array.from(
+        new Set(mappingDiseaseSymptom.map((m) => m.symptomSlug).concat(mappingSymptomDrug.map((m) => m.symptomSlug)))
+      )
+      const drugRefs = Array.from(
+        new Set(mappingDiseaseDrug.map((m) => normalizeRefKey(m.drugRef)).concat(mappingSymptomDrug.map((m) => normalizeRefKey(m.drugRef))))
+      )
+
+      const [dRows, sRows, drRows] = await Promise.all([
+        tx.knowledgeDisease.findMany({ where: { slug: { in: diseaseSlugs } }, select: { id: true, slug: true } }),
+        tx.knowledgeSymptom.findMany({ where: { slug: { in: symptomSlugs } }, select: { id: true, slug: true } }),
+        tx.drug.findMany({
+          where: {
+            OR: [
+              { slotId: { in: drugRefs.map((r) => r) } },
+              { slug: { in: drugRefs.map((r) => r) } },
+              { id: { in: drugRefs.map((r) => r) } },
+            ],
+          },
+          select: { id: true, slotId: true, slug: true },
+        }),
+      ])
+      const diseaseIdBySlug = new Map(dRows.map((r) => [r.slug, r.id]))
+      const symptomIdBySlug = new Map(sRows.map((r) => [r.slug, r.id]))
+      const drugIdByRef = new Map<string, string>()
+      for (const r of drRows) {
+        drugIdByRef.set(normalizeRefKey(r.slotId), r.id)
+        if (r.slug) drugIdByRef.set(normalizeRefKey(r.slug), r.id)
+        drugIdByRef.set(normalizeRefKey(r.id), r.id)
+      }
+
       if (mappingDiseaseSymptom.length > 0) {
         await tx.diseaseSymptomMap.createMany({
-          data: mappingDiseaseSymptom.map((m) => ({
-            diseaseId: m.diseaseId,
-            symptomId: m.symptomId,
+          data: mappingDiseaseSymptom
+            .map((m) => ({
+              diseaseId: diseaseIdBySlug.get(m.diseaseSlug) || "",
+              symptomId: symptomIdBySlug.get(m.symptomSlug) || "",
             relevanceScore: m.score,
             note: m.note,
-          })),
+            }))
+            .filter((m) => m.diseaseId && m.symptomId),
         })
       }
       if (mappingDiseaseDrug.length > 0) {
         await tx.diseaseDrugMap.createMany({
-          data: mappingDiseaseDrug.map((m) => ({
-            diseaseId: m.diseaseId,
-            drugId: m.drugId,
+          data: mappingDiseaseDrug
+            .map((m) => ({
+              diseaseId: diseaseIdBySlug.get(m.diseaseSlug) || "",
+              drugId: drugIdByRef.get(normalizeRefKey(m.drugRef)) || "",
             recommendationLevel: m.level,
             note: m.note,
-          })),
+            }))
+            .filter((m) => m.diseaseId && m.drugId),
         })
       }
       if (mappingSymptomDrug.length > 0) {
         await tx.symptomDrugMap.createMany({
-          data: mappingSymptomDrug.map((m) => ({
-            symptomId: m.symptomId,
-            drugId: m.drugId,
+          data: mappingSymptomDrug
+            .map((m) => ({
+              symptomId: symptomIdBySlug.get(m.symptomSlug) || "",
+              drugId: drugIdByRef.get(normalizeRefKey(m.drugRef)) || "",
             recommendationLevel: m.level,
             note: m.note,
-          })),
+            }))
+            .filter((m) => m.symptomId && m.drugId),
         })
       }
     })
