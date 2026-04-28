@@ -291,11 +291,20 @@ export async function deleteMe() {
 
 export type DrugDto = {
   id: string
+  slug?: string | null
   name: string
+  genericName?: string | null
+  brandName?: string | null
   description: string
+  indication?: string | null
+  contraindications?: string | null
+  doseByAgeWeight?: string | null
   slotId: string
   quantity: number
   category: string | null
+  knowledgePriority?: number
+  isPublished?: boolean
+  keywords?: string
   dosageNotes: string | null
   warnings: string | null
   ingredientsText: string
@@ -428,6 +437,67 @@ export type AdminHealth = {
 
 export async function fetchAdminHealth() {
   return apiJson<AdminHealth>("/api/admin/health", {
+    auth: false,
+    adminAuth: true,
+  })
+}
+
+export type AdminKnowledgeSyncRowError = {
+  tab: string
+  rowNumber: number
+  message: string
+  row: Record<string, string>
+}
+
+export type AdminKnowledgeSyncResult = {
+  sheetUrl: string
+  tabs: string[]
+  disease: { inserted: number; updated: number; skipped: number }
+  symptom: { inserted: number; updated: number; skipped: number }
+  drug: { inserted: number; updated: number; skipped: number }
+  diseaseSymptomMap: { inserted: number; updated: number; skipped: number }
+  diseaseDrugMap: { inserted: number; updated: number; skipped: number }
+  symptomDrugMap: { inserted: number; updated: number; skipped: number }
+  errors: AdminKnowledgeSyncRowError[]
+}
+
+export async function syncAdminKnowledgeSheet() {
+  return apiJson<{ ok: boolean; result: AdminKnowledgeSyncResult }>(
+    "/api/admin/knowledge/sync",
+    {
+      method: "POST",
+      auth: false,
+      adminAuth: true,
+    }
+  )
+}
+
+export async function dryRunAdminKnowledgeSheet() {
+  return apiJson<{ ok: boolean; result: AdminKnowledgeSyncResult }>(
+    "/api/admin/knowledge/sync/dry-run",
+    {
+      method: "POST",
+      auth: false,
+      adminAuth: true,
+    }
+  )
+}
+
+export type AdminKnowledgeSyncStatus = {
+  lastSuccessfulSyncAt: string | null
+  recent: {
+    id: string
+    mode: string
+    status: string
+    operatorUserId: string | null
+    createdAt: string
+    summary: unknown
+    errors: unknown
+  }[]
+}
+
+export async function fetchAdminKnowledgeSyncStatus() {
+  return apiJson<AdminKnowledgeSyncStatus>("/api/admin/knowledge/sync/status", {
     auth: false,
     adminAuth: true,
   })
@@ -699,6 +769,132 @@ export async function sendChatMessage(
       imageUrl: imageUrl || undefined,
     }),
   })
+}
+
+// --- Knowledge graph ---
+export type KnowledgeDiseaseListItem = {
+  id: string
+  slug: string
+  nameTh: string
+  nameEn: string | null
+  definition: string
+  severityLevel: string
+}
+
+export type KnowledgeSymptomListItem = {
+  id: string
+  slug: string
+  nameTh: string
+  nameEn: string | null
+  observationGuide: string
+  dangerLevel: string
+  redFlag: boolean
+}
+
+export type KnowledgeDrugListItem = {
+  id: string
+  slug: string | null
+  name: string
+  genericName: string | null
+  description: string
+  category: string | null
+  slotId: string
+  quantity: number
+  imageUrl: string | null
+  inCabinet: boolean
+}
+
+export type KnowledgeSearchResponse = {
+  diseases: KnowledgeDiseaseListItem[]
+  symptoms: KnowledgeSymptomListItem[]
+  drugs: KnowledgeDrugListItem[]
+}
+
+export type DiseaseDetailResponse = {
+  id: string
+  slug: string
+  nameTh: string
+  nameEn: string | null
+  definition: string
+  severityLevel: string
+  selfCareAdvice: string
+  redFlagAdvice: string
+  relatedSymptoms: (KnowledgeSymptomListItem & { relevanceScore: number; note: string })[]
+  suggestedDrugs: (KnowledgeDrugListItem & {
+    recommendationLevel: string
+    note: string
+  })[]
+}
+
+export type SymptomDetailResponse = {
+  id: string
+  slug: string
+  nameTh: string
+  nameEn: string | null
+  observationGuide: string
+  firstAid: string
+  dangerLevel: string
+  redFlag: boolean
+  possibleDiseases: (KnowledgeDiseaseListItem & { relevanceScore: number; note: string })[]
+  reliefDrugs: (KnowledgeDrugListItem & { recommendationLevel: string; note: string })[]
+}
+
+export type DrugDetailResponse = KnowledgeDrugListItem & {
+  genericName: string | null
+  brandName: string | null
+  indication: string | null
+  contraindications: string | null
+  doseByAgeWeight: string | null
+  ingredientsText: string
+  warnings: string | null
+  treatsDiseases: (KnowledgeDiseaseListItem & {
+    recommendationLevel: string
+    note: string
+  })[]
+  relievesSymptoms: (KnowledgeSymptomListItem & {
+    recommendationLevel: string
+    note: string
+  })[]
+}
+
+export async function fetchKnowledgeSearch(query?: string) {
+  const q = query?.trim()
+    ? `?q=${encodeURIComponent(query.trim())}`
+    : ""
+  return apiJson<KnowledgeSearchResponse>(`/api/knowledge/search${q}`, { auth: false })
+}
+
+export async function fetchKnowledgeDiseases() {
+  return apiJson<KnowledgeDiseaseListItem[]>("/api/knowledge/diseases", { auth: false })
+}
+
+export async function fetchKnowledgeSymptoms() {
+  return apiJson<KnowledgeSymptomListItem[]>("/api/knowledge/symptoms", { auth: false })
+}
+
+export async function fetchKnowledgeDrugs() {
+  return apiJson<KnowledgeDrugListItem[]>("/api/knowledge/drugs", { auth: false })
+}
+
+export async function fetchKnowledgeDiseaseDetail(slug: string) {
+  return apiJson<DiseaseDetailResponse>(
+    `/api/knowledge/diseases/${encodeURIComponent(slug)}`,
+    { auth: false }
+  )
+}
+
+export async function fetchKnowledgeSymptomDetail(slug: string) {
+  return apiJson<SymptomDetailResponse>(
+    `/api/knowledge/symptoms/${encodeURIComponent(slug)}`,
+    { auth: false }
+  )
+}
+
+export async function fetchKnowledgeDrugDetail(idOrSlug: string) {
+  return apiJson<DrugDetailResponse>(
+    `/api/knowledge/drugs/${encodeURIComponent(idOrSlug)}`,
+    { auth: false }
+  )
 }
 
 function adminNum(v: unknown, fallback = 0): number {

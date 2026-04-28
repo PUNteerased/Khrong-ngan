@@ -10,6 +10,7 @@ import * as adminLogsController from "../controllers/adminLogs.controller.js"
 import * as adminLoginController from "../controllers/adminLogin.controller.js"
 import * as adminHealthController from "../controllers/adminHealth.controller.js"
 import * as adminUsersController from "../controllers/adminUsers.controller.js"
+import * as knowledgeController from "../controllers/knowledge.controller.js"
 import { authMiddleware } from "../middleware/auth.js"
 import { adminAuthMiddleware, adminOrKeyMiddleware } from "../middleware/adminAuth.js"
 
@@ -73,6 +74,14 @@ router.patch("/api/drugs/:id", adminOrKeyMiddleware, drugController.patchDrug)
 router.patch("/api/drugs/:id/restock", adminOrKeyMiddleware, drugController.restockDrug)
 router.delete("/api/drugs/:id", adminOrKeyMiddleware, drugController.deleteDrug)
 
+router.get("/api/knowledge/search", knowledgeController.searchKnowledge)
+router.get("/api/knowledge/diseases", knowledgeController.listDiseases)
+router.get("/api/knowledge/symptoms", knowledgeController.listSymptoms)
+router.get("/api/knowledge/drugs", knowledgeController.listKnowledgeDrugs)
+router.get("/api/knowledge/diseases/:slug", knowledgeController.getDiseaseDetail)
+router.get("/api/knowledge/symptoms/:slug", knowledgeController.getSymptomDetail)
+router.get("/api/knowledge/drugs/:idOrSlug", knowledgeController.getKnowledgeDrugDetail)
+
 router.post("/api/chat", chatLimiter, authMiddleware, chatController.postChat)
 router.get(
   "/api/chat/sessions",
@@ -127,4 +136,19 @@ router.delete(
   "/api/admin/users/:id",
   adminAuthMiddleware,
   adminUsersController.deleteUser
+)
+router.post(
+  "/api/admin/knowledge/sync/dry-run",
+  adminAuthMiddleware,
+  knowledgeController.dryRunKnowledgeSheetSync
+)
+router.post(
+  "/api/admin/knowledge/sync",
+  adminAuthMiddleware,
+  knowledgeController.syncKnowledgeSheet
+)
+router.get(
+  "/api/admin/knowledge/sync/status",
+  adminAuthMiddleware,
+  knowledgeController.getKnowledgeSyncStatus
 )

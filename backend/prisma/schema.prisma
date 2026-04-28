@@ -50,10 +50,19 @@ model User {
 model Drug {
   id          String    @id @default(cuid())
   name        String
+  slug        String?
+  genericName String?
+  brandName   String?
   description String
+  indication  String?
+  contraindications String?
+  doseByAgeWeight String?
   slotId      String    @unique
   quantity    Int       @default(0)
   category    String?
+  knowledgePriority Int @default(0)
+  isPublished Boolean   @default(true)
+  keywords    String    @default("")
   dosageNotes String?
   warnings    String?
   /// Comma-separated active ingredients for hard safety checks, e.g. "paracetamol,caffeine".
@@ -65,6 +74,100 @@ model Drug {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   sessions    ChatSession[] @relation("RecommendedDrug")
+  diseaseMaps DiseaseDrugMap[]
+  symptomMaps SymptomDrugMap[]
+
+  @@index([slug])
+}
+
+model KnowledgeDisease {
+  id             String  @id @default(cuid())
+  slug           String  @unique
+  nameTh         String
+  nameEn         String?
+  definition     String  @default("")
+  severityLevel  String  @default("ROUTINE")
+  selfCareAdvice String  @default("")
+  redFlagAdvice  String  @default("")
+  keywords       String  @default("")
+  isPublished    Boolean @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  symptomMaps    DiseaseSymptomMap[]
+  drugMaps       DiseaseDrugMap[]
+
+  @@index([nameTh])
+  @@index([nameEn])
+}
+
+model KnowledgeSymptom {
+  id               String  @id @default(cuid())
+  slug             String  @unique
+  nameTh           String
+  nameEn           String?
+  observationGuide String  @default("")
+  firstAid         String  @default("")
+  dangerLevel      String  @default("LOW")
+  redFlag          Boolean @default(false)
+  keywords         String  @default("")
+  isPublished      Boolean @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  diseaseMaps      DiseaseSymptomMap[]
+  drugMaps         SymptomDrugMap[]
+
+  @@index([nameTh])
+  @@index([nameEn])
+}
+
+model DiseaseSymptomMap {
+  id             String @id @default(cuid())
+  diseaseId      String
+  symptomId      String
+  relevanceScore Int    @default(0)
+  note           String @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  disease        KnowledgeDisease @relation(fields: [diseaseId], references: [id], onDelete: Cascade)
+  symptom        KnowledgeSymptom @relation(fields: [symptomId], references: [id], onDelete: Cascade)
+
+  @@unique([diseaseId, symptomId])
+  @@index([symptomId, diseaseId])
+}
+
+model DiseaseDrugMap {
+  id                  String @id @default(cuid())
+  diseaseId           String
+  drugId              String
+  recommendationLevel String @default("SUGGESTED")
+  note                String @default("")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  disease             KnowledgeDisease @relation(fields: [diseaseId], references: [id], onDelete: Cascade)
+  drug                Drug             @relation(fields: [drugId], references: [id], onDelete: Cascade)
+
+  @@unique([diseaseId, drugId])
+  @@index([drugId, diseaseId])
+}
+
+model SymptomDrugMap {
+  id                  String @id @default(cuid())
+  symptomId           String
+  drugId              String
+  recommendationLevel String @default("SUGGESTED")
+  note                String @default("")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  symptom             KnowledgeSymptom @relation(fields: [symptomId], references: [id], onDelete: Cascade)
+  drug                Drug             @relation(fields: [drugId], references: [id], onDelete: Cascade)
+
+  @@unique([symptomId, drugId])
+  @@index([drugId, symptomId])
 }
 
 enum PickupStatus {
@@ -132,4 +235,17 @@ model AdminAuditLog {
   targetUser    User?    @relation("AuditTarget", fields: [targetUserId], references: [id])
   payload       Json?
   createdAt     DateTime @default(now())
+}
+
+model SyncLog {
+  id               String   @id @default(cuid())
+  operatorUserId   String?
+  operatorUsername String?
+  mode             String
+  status           String
+  summary          Json?
+  errors           Json?
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
 }

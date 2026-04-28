@@ -5,11 +5,20 @@ import { checkDrugSafety, parseAllergyKeywords } from "../lib/safetyCheck.js"
 
 function serializeDrug(d: {
   id: string
+  slug: string | null
   name: string
+  genericName: string | null
+  brandName: string | null
   description: string
+  indication: string | null
+  contraindications: string | null
+  doseByAgeWeight: string | null
   slotId: string
   quantity: number
   category: string | null
+  knowledgePriority: number
+  isPublished: boolean
+  keywords: string
   dosageNotes: string | null
   warnings: string | null
   ingredientsText: string
@@ -19,11 +28,20 @@ function serializeDrug(d: {
 }) {
   return {
     id: d.id,
+    slug: d.slug,
     name: d.name,
+    genericName: d.genericName,
+    brandName: d.brandName,
     description: d.description,
+    indication: d.indication,
+    contraindications: d.contraindications,
+    doseByAgeWeight: d.doseByAgeWeight,
     slotId: d.slotId,
     quantity: d.quantity,
     category: d.category,
+    knowledgePriority: d.knowledgePriority,
+    isPublished: d.isPublished,
+    keywords: d.keywords,
     dosageNotes: d.dosageNotes,
     warnings: d.warnings,
     ingredientsText: d.ingredientsText,
@@ -72,10 +90,19 @@ export async function getDrug(req: Request, res: Response) {
 export async function createDrug(req: Request, res: Response) {
   const {
     name,
+    slug,
+    genericName,
+    brandName,
     description,
+    indication,
+    contraindications,
+    doseByAgeWeight,
     slotId,
     quantity,
     category,
+    knowledgePriority,
+    isPublished,
+    keywords,
     dosageNotes,
     warnings,
     ingredientsText,
@@ -100,10 +127,23 @@ export async function createDrug(req: Request, res: Response) {
     const drug = await prisma.drug.create({
       data: {
         name: String(name),
+        slug: slug != null && String(slug).trim() ? String(slug) : null,
+        genericName: genericName != null ? String(genericName) : null,
+        brandName: brandName != null ? String(brandName) : null,
         description: String(description),
+        indication: indication != null ? String(indication) : null,
+        contraindications:
+          contraindications != null ? String(contraindications) : null,
+        doseByAgeWeight:
+          doseByAgeWeight != null ? String(doseByAgeWeight) : null,
         slotId: String(slotId),
         quantity: quantity != null ? Number(quantity) : 0,
         category: category != null ? String(category) : null,
+        knowledgePriority:
+          knowledgePriority != null ? Number(knowledgePriority) : 0,
+        isPublished:
+          isPublished != null ? Boolean(isPublished) : true,
+        keywords: keywords != null ? String(keywords) : "",
         dosageNotes: dosageNotes != null ? String(dosageNotes) : null,
         warnings: warnings != null ? String(warnings) : null,
         ingredientsText:
@@ -123,9 +163,18 @@ export async function createDrug(req: Request, res: Response) {
 export async function patchDrug(req: Request, res: Response) {
   const {
     name,
+    slug,
+    genericName,
+    brandName,
     description,
+    indication,
+    contraindications,
+    doseByAgeWeight,
     quantity,
     category,
+    knowledgePriority,
+    isPublished,
+    keywords,
     dosageNotes,
     warnings,
     ingredientsText,
@@ -136,9 +185,22 @@ export async function patchDrug(req: Request, res: Response) {
   } = req.body as Record<string, unknown>
   const data: Record<string, unknown> = {}
   if (name !== undefined) data.name = String(name)
+  if (slug !== undefined) data.slug = slug ? String(slug) : null
+  if (genericName !== undefined)
+    data.genericName = genericName ? String(genericName) : null
+  if (brandName !== undefined) data.brandName = brandName ? String(brandName) : null
   if (description !== undefined) data.description = String(description)
+  if (indication !== undefined) data.indication = indication ? String(indication) : null
+  if (contraindications !== undefined)
+    data.contraindications = contraindications ? String(contraindications) : null
+  if (doseByAgeWeight !== undefined)
+    data.doseByAgeWeight = doseByAgeWeight ? String(doseByAgeWeight) : null
   if (quantity !== undefined) data.quantity = Number(quantity)
   if (category !== undefined) data.category = category ? String(category) : null
+  if (knowledgePriority !== undefined)
+    data.knowledgePriority = Number(knowledgePriority)
+  if (isPublished !== undefined) data.isPublished = Boolean(isPublished)
+  if (keywords !== undefined) data.keywords = String(keywords)
   if (dosageNotes !== undefined)
     data.dosageNotes = dosageNotes ? String(dosageNotes) : null
   if (warnings !== undefined) data.warnings = warnings ? String(warnings) : null

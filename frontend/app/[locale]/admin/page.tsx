@@ -20,6 +20,7 @@ import {
   UserPlus,
   Database,
   Cloud,
+  BookOpen,
 } from "lucide-react"
 import {
   LineChart,
@@ -66,6 +67,9 @@ import {
   adminLogin,
   fetchAdminHealth,
   fetchAdminOverview,
+  dryRunAdminKnowledgeSheet,
+  fetchAdminKnowledgeSyncStatus,
+  syncAdminKnowledgeSheet,
   deleteDrug,
   fetchAdminUsers,
   deleteAdminUser,
@@ -75,6 +79,8 @@ import {
   type AdminHealth,
   type AdminOverview,
   type AdminUserRow,
+  type AdminKnowledgeSyncResult,
+  type AdminKnowledgeSyncStatus,
   ApiError,
 } from "@/lib/api"
 import {
@@ -124,6 +130,12 @@ export default function AdminPage() {
     id: string
     name: string
   } | null>(null)
+  const [knowledgeDryRunning, setKnowledgeDryRunning] = useState(false)
+  const [knowledgeSyncing, setKnowledgeSyncing] = useState(false)
+  const [knowledgePreview, setKnowledgePreview] =
+    useState<AdminKnowledgeSyncResult | null>(null)
+  const [knowledgeStatus, setKnowledgeStatus] =
+    useState<AdminKnowledgeSyncStatus | null>(null)
 
   useEffect(() => {
     setUnlocked(!!getStoredAdminToken())
@@ -180,6 +192,9 @@ export default function AdminPage() {
       setSessionTotal(sess.total)
       setUserRows(ur.items)
       setUserTotal(ur.total)
+      void fetchAdminKnowledgeSyncStatus().then(setKnowledgeStatus).catch(() => {
+        /* ignore */
+      })
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         setStoredAdminToken(null)
@@ -301,6 +316,73 @@ export default function AdminPage() {
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : t("loadFail"))
     }
+  }
+
+  const handleKnowledgeDryRun = async () => {
+    try {
+      setKnowledgeDryRunning(true)
+      const payload = await dryRunAdminKnowledgeSheet()
+      setKnowledgePreview(payload.result)
+      toast.success(
+        payload.result.errors.length > 0
+          ? t("knowledgeDryRunFail")
+          : t("knowledgeDryRunOk")
+      )
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : t("knowledgeSyncFail"))
+    } finally {
+      setKnowledgeDryRunning(false)
+    }
+  }
+
+  const handleKnowledgeSync = async () => {
+    if (!knowledgePreview) {
+      toast.error(t("knowledgeRunDryRunFirst"))
+      return
+    }
+    if (knowledgePreview.errors.length > 0) {
+      toast.error(t("knowledgeFixErrorsFirst"))
+      return
+    }
+    try {
+      setKnowledgeSyncing(true)
+      const payload = await syncAdminKnowledgeSheet()
+      setKnowledgePreview(payload.result)
+      toast.success(t("knowledgeSyncOk"))
+      const st = await fetchAdminKnowledgeSyncStatus()
+      setKnowledgeStatus(st)
+      loadAll()
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : t("knowledgeSyncFail"))
+    } finally {
+      setKnowledgeSyncing(false)
+    }
+  }
+
+  const downloadKnowledgeErrorCsv = () => {
+    if (!knowledgePreview || knowledgePreview.errors.length === 0) return
+    const headers = ["tab", "rowNumber", "message", "row"]
+    const rows = knowledgePreview.errors.map((e) => [
+      e.tab,
+      String(e.rowNumber),
+      e.message,
+      JSON.stringify(e.row),
+    ])
+    const csv = [
+      headers.join(","),
+      ...rows.map((r) =>
+        r
+          .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+          .join(",")
+      ),
+    ].join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `knowledge-sync-errors-${Date.now()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const statCards = stats
@@ -462,7 +544,7 @@ export default function AdminPage() {
             </div>
 
             <Tabs value={mainTab} onValueChange={setMainTab}>
-              <TabsList className="grid h-auto w-full min-w-0 grid-cols-2 gap-1 sm:grid-cols-5">
+              <TabsList className="grid h-auto w-full min-w-0 grid-cols-2 gap-1 sm:grid-cols-6">
                 <TabsTrigger value="overview" className="text-xs sm:text-sm">
                   <LayoutDashboard className="h-4 w-4 mr-1 hidden sm:inline" />
                   {t("tabOverview")}
@@ -482,6 +564,10 @@ export default function AdminPage() {
                 <TabsTrigger value="hardware" className="text-xs sm:text-sm">
                   <Cpu className="h-4 w-4 mr-1 hidden sm:inline" />
                   {t("tabHardware")}
+                </TabsTrigger>
+                <TabsTrigger value="knowledge" className="text-xs sm:text-sm">
+                  <BookOpen className="h-4 w-4 mr-1 hidden sm:inline" />
+                  {t("tabKnowledge")}
                 </TabsTrigger>
               </TabsList>
 
@@ -927,6 +1013,193 @@ export default function AdminPage() {
                           <span className="text-xs">{t("resetCabinet")}</span>
                         </div>
                       </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="knowledge" className="space-y-4 mt-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle className="text-base">{t("knowledgeSyncTitle")}</CardTitle>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void handleKnowledgeDryRun()}
+                        disabled={knowledgeDryRunning || knowledgeSyncing}
+                      >
+                        {knowledgeDryRunning ? (
+                          <Spinner className="h-4 w-4 mr-1" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4 mr-1" />
+                        )}
+                        {knowledgeDryRunning ? t("knowledgeDryRunRunning") : t("knowledgeDryRun")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => void handleKnowledgeSync()}
+                        disabled={knowledgeSyncing || knowledgeDryRunning}
+                      >
+                        {knowledgeSyncing ? (
+                          <Spinner className="h-4 w-4 mr-1" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4 mr-1" />
+                        )}
+                        {knowledgeSyncing ? t("knowledgeSyncing") : t("knowledgeSyncNow")}
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="rounded border p-3 bg-muted/30">
+                      <div className="text-sm font-medium">{t("lastSuccessfulSync")}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {knowledgeStatus?.lastSuccessfulSyncAt
+                          ? new Date(knowledgeStatus.lastSuccessfulSyncAt).toLocaleString(
+                              locale === "en" ? "en-GB" : "th-TH"
+                            )
+                          : t("neverSynced")}
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {t("knowledgeSyncHint")}
+                    </p>
+                    {knowledgePreview ? (
+                      <>
+                        <div className="text-xs text-muted-foreground">
+                          {t("knowledgeSource")}: {knowledgePreview.sheetUrl} ({knowledgePreview.source})
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+                          <div className="rounded border p-2">
+                            Disease: +{knowledgePreview.disease.inserted} / ~
+                            {knowledgePreview.disease.updated} / -{knowledgePreview.disease.deleted} / skip{" "}
+                            {knowledgePreview.disease.skipped}
+                          </div>
+                          <div className="rounded border p-2">
+                            Symptom: +{knowledgePreview.symptom.inserted} / ~
+                            {knowledgePreview.symptom.updated} / -{knowledgePreview.symptom.deleted} / skip{" "}
+                            {knowledgePreview.symptom.skipped}
+                          </div>
+                          <div className="rounded border p-2">
+                            Drug: +{knowledgePreview.drug.inserted} / ~
+                            {knowledgePreview.drug.updated} / -{knowledgePreview.drug.deleted} / skip{" "}
+                            {knowledgePreview.drug.skipped}
+                          </div>
+                          <div className="rounded border p-2">
+                            D-S map: +{knowledgePreview.diseaseSymptomMap.inserted} / -{knowledgePreview.diseaseSymptomMap.deleted} / skip{" "}
+                            {knowledgePreview.diseaseSymptomMap.skipped}
+                          </div>
+                          <div className="rounded border p-2">
+                            D-Drug map: +{knowledgePreview.diseaseDrugMap.inserted} / -{knowledgePreview.diseaseDrugMap.deleted} / skip{" "}
+                            {knowledgePreview.diseaseDrugMap.skipped}
+                          </div>
+                          <div className="rounded border p-2">
+                            S-Drug map: +{knowledgePreview.symptomDrugMap.inserted} / -{knowledgePreview.symptomDrugMap.deleted} / skip{" "}
+                            {knowledgePreview.symptomDrugMap.skipped}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-sm font-medium">
+                            {t("knowledgeErrors")}: {knowledgePreview.errors.length}
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={downloadKnowledgeErrorCsv}
+                            disabled={knowledgePreview.errors.length === 0}
+                          >
+                            {t("downloadErrorCsv")}
+                          </Button>
+                        </div>
+                        <div className="max-h-80 overflow-auto rounded border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>{t("colSheetTab")}</TableHead>
+                                <TableHead>{t("colSheetRow")}</TableHead>
+                                <TableHead>{t("colErrorMessage")}</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {knowledgePreview.errors.length === 0 ? (
+                                <TableRow>
+                                  <TableCell
+                                    colSpan={3}
+                                    className="text-center text-muted-foreground"
+                                  >
+                                    {t("knowledgeNoErrors")}
+                                  </TableCell>
+                                </TableRow>
+                              ) : (
+                                knowledgePreview.errors.map((err, idx) => (
+                                  <TableRow key={`${err.tab}-${err.rowNumber}-${idx}`}>
+                                    <TableCell>{err.tab}</TableCell>
+                                    <TableCell>{err.rowNumber}</TableCell>
+                                    <TableCell className="text-xs">
+                                      <div>{err.message}</div>
+                                      <div className="text-muted-foreground mt-1 break-all">
+                                        {JSON.stringify(err.row)}
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                ))
+                              )}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{t("knowledgeNoRunYet")}</p>
+                    )}
+
+                    <div className="pt-2">
+                      <div className="text-sm font-medium mb-2">{t("knowledgeRecentRuns")}</div>
+                      <div className="max-h-64 overflow-auto rounded border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>{t("colWhen")}</TableHead>
+                              <TableHead>{t("colMode")}</TableHead>
+                              <TableHead>{t("colStatusText")}</TableHead>
+                              <TableHead className="text-right">{t("knowledgeErrors")}</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {(knowledgeStatus?.recent || []).length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={4} className="text-center text-muted-foreground">
+                                  {t("knowledgeNoHistory")}
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              (knowledgeStatus?.recent || []).map((r) => {
+                                const errs = Array.isArray(r.errors) ? r.errors.length : 0
+                                return (
+                                  <TableRow key={r.id}>
+                                    <TableCell className="text-xs whitespace-nowrap">
+                                      {new Date(r.createdAt).toLocaleString(
+                                        locale === "en" ? "en-GB" : "th-TH"
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="text-xs">
+                                      {r.mode === "dry_run" ? t("knowledgeDryRun") : t("knowledgeSyncNow")}
+                                    </TableCell>
+                                    <TableCell className="text-xs">
+                                      <Badge
+                                        variant={r.status === "success" ? "outline" : "destructive"}
+                                        className={r.status === "success" ? "border-success text-success" : ""}
+                                      >
+                                        {r.status === "success" ? t("statusSuccess") : t("statusFailed")}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-right text-xs">{errs}</TableCell>
+                                  </TableRow>
+                                )
+                              })
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

@@ -15,7 +15,8 @@
     "db:push": "prisma db push",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
-    "db:backfill-usernames": "tsx scripts/backfill-usernames.ts"
+    "db:backfill-usernames": "tsx scripts/backfill-usernames.ts",
+    "knowledge:sync": "tsx scripts/sync-knowledge-sheet.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
