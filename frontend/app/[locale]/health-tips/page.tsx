@@ -1,8 +1,10 @@
 import { getTranslations, setRequestLocale } from "next-intl/server"
 import { HealthTipCard } from "@/components/health-tip-card"
-import { getHealthArticles } from "@/data/health-locale"
+import { fetchHealthTipsSearch } from "@/lib/api"
 
 type Props = { params: Promise<{ locale: string }> }
+
+export const dynamic = "force-dynamic"
 
 export async function generateMetadata({ params }: Props) {
   const { locale } = await params
@@ -17,7 +19,7 @@ export default async function HealthTipsIndexPage({ params }: Props) {
   const { locale } = await params
   setRequestLocale(locale)
   const t = await getTranslations({ locale, namespace: "HealthTips" })
-  const articles = getHealthArticles(locale)
+  const tips = await fetchHealthTipsSearch("")
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 pb-10">
@@ -27,9 +29,17 @@ export default async function HealthTipsIndexPage({ params }: Props) {
       </div>
 
       <ul className="space-y-3">
-        {articles.map((article) => (
-          <li key={article.slug}>
-            <HealthTipCard article={article} />
+        {tips.map((tip) => (
+          <li key={tip.slug}>
+            <HealthTipCard
+              article={{
+                slug: tip.slug,
+                title: tip.titleTh,
+                excerpt: tip.summaryTh,
+                category: tip.category || "—",
+                imageUrl: tip.coverImageUrl || undefined,
+              }}
+            />
           </li>
         ))}
       </ul>

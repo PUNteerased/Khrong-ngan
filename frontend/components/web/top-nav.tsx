@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Database, Home, MessageCircle, Ticket, User } from "lucide-react"
+import { BookOpenText, Database, Home, MessageCircle, Ticket, User } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { Link, usePathname } from "@/i18n/navigation"
 import { getStoredToken } from "@/lib/auth-token"
@@ -12,6 +12,7 @@ import { LanguageSwitcher } from "@/components/language-switcher"
 const NAV_ITEMS = [
   { href: "/", icon: Home, key: "home" },
   { href: "/knowledge", icon: Database, key: "knowledge" },
+  { href: "/health-tips", icon: BookOpenText, key: "healthTips" },
   { href: "/chat", icon: MessageCircle, key: "chat" },
   { href: "/tickets", icon: Ticket, key: "tickets" },
   { href: "/profile", icon: User, key: "profile" },

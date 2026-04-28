@@ -11,6 +11,7 @@ import * as adminLoginController from "../controllers/adminLogin.controller.js"
 import * as adminHealthController from "../controllers/adminHealth.controller.js"
 import * as adminUsersController from "../controllers/adminUsers.controller.js"
 import * as knowledgeController from "../controllers/knowledge.controller.js"
+import * as healthTipsController from "../controllers/healthTips.controller.js"
 import { authMiddleware } from "../middleware/auth.js"
 import { adminAuthMiddleware, adminOrKeyMiddleware } from "../middleware/adminAuth.js"
 
@@ -81,6 +82,9 @@ router.get("/api/knowledge/drugs", knowledgeController.listKnowledgeDrugs)
 router.get("/api/knowledge/diseases/:slug", knowledgeController.getDiseaseDetail)
 router.get("/api/knowledge/symptoms/:slug", knowledgeController.getSymptomDetail)
 router.get("/api/knowledge/drugs/:idOrSlug", knowledgeController.getKnowledgeDrugDetail)
+
+router.get("/api/health-tips/search", healthTipsController.searchHealthTips)
+router.get("/api/health-tips/:slug", healthTipsController.getHealthTipDetail)
 
 router.post("/api/chat", chatLimiter, authMiddleware, chatController.postChat)
 router.get(

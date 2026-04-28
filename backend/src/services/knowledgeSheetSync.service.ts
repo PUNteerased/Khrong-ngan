@@ -30,6 +30,8 @@ export type KnowledgeSyncResult = {
   disease: DiffCounters
   symptom: DiffCounters
   drug: DiffCounters
+  healthTip: DiffCounters
+  healthTipRef: DiffCounters
   diseaseSymptomMap: DiffCounters
   diseaseDrugMap: DiffCounters
   symptomDrugMap: DiffCounters
@@ -140,6 +142,18 @@ function detectSheetType(rows: ParsedCsvRow[]): "empty" | "drug" | "disease" | "
   if (isValidUnifiedMappingsShape(rows)) return "mapping"
   if (hasKeyCI(first, "slug") && hasKeyCI(first, "name_th")) return "disease"
   return "unknown"
+}
+
+function isHealthTipShape(rows: ParsedCsvRow[]): boolean {
+  const first = rows.find(hasAnyValue)
+  if (!first) return false
+  return hasKeyCI(first, "title_th") || hasKeyCI(first, "summary_th") || hasKeyCI(first, "content_md_th")
+}
+
+function isHealthTipRefShape(rows: ParsedCsvRow[]): boolean {
+  const first = rows.find(hasAnyValue)
+  if (!first) return false
+  return hasKeyCI(first, "tip_slug") || hasKeyCI(first, "ref_url") || hasKeyCI(first, "ref_title")
 }
 
 function firstRowKeysPreview(rows: ParsedCsvRow[]): string {
@@ -307,6 +321,8 @@ async function loadSheetData(): Promise<{
   symptomRows: ParsedCsvRow[]
   drugRows: ParsedCsvRow[]
   mappingRows: ParsedCsvRow[]
+  healthTipRows: ParsedCsvRow[]
+  healthTipRefRows: ParsedCsvRow[]
 }> {
   const sheetUrl = process.env.KNOWLEDGE_SHEET_PUBLISHED_URL?.trim() || DEFAULT_SHEET_URL
   const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim()
@@ -325,6 +341,8 @@ async function loadSheetData(): Promise<{
     process.env.KNOWLEDGE_SHEET_TAB_MAP_DISEASE_DRUG?.trim() || "Map_Disease_Drug"
   const tabMapSymptomDrug =
     process.env.KNOWLEDGE_SHEET_TAB_MAP_SYMPTOM_DRUG?.trim() || "Map_Symptom_Drug"
+  const tabHealthTip = process.env.KNOWLEDGE_SHEET_TAB_HEALTH_TIP?.trim() || "HealthTip"
+  const tabHealthTipRef = process.env.KNOWLEDGE_SHEET_TAB_HEALTH_TIP_REF?.trim() || "HealthTip_Ref"
 
   if (spreadsheetId && (serviceAccountJson || (serviceAccountEmail && serviceAccountPrivateKey))) {
     let clientEmail = serviceAccountEmail || ""
@@ -398,6 +416,19 @@ async function loadSheetData(): Promise<{
         ...sdRows.map((r) => ({ ...r, map_type: "symptom_drug" })),
       ]
     }
+    let [healthTipRows, healthTipRefRows] = await Promise.all([
+      fetchGoogleServiceAccountRows(spreadsheetId, clientEmail, normalizedKey, tabHealthTip).catch(
+        () => []
+      ),
+      fetchGoogleServiceAccountRows(
+        spreadsheetId,
+        clientEmail,
+        normalizedKey,
+        tabHealthTipRef
+      ).catch(() => []),
+    ])
+    if (!isHealthTipShape(healthTipRows)) healthTipRows = []
+    if (!isHealthTipRefShape(healthTipRefRows)) healthTipRefRows = []
     return {
       source: "google_sheets_api",
       sheetUrl,
@@ -406,6 +437,8 @@ async function loadSheetData(): Promise<{
       symptomRows,
       drugRows,
       mappingRows,
+      healthTipRows,
+      healthTipRefRows,
     }
   }
 
@@ -428,6 +461,12 @@ async function loadSheetData(): Promise<{
         ...sdRows.map((r) => ({ ...r, map_type: "symptom_drug" })),
       ]
     }
+    let [healthTipRows, healthTipRefRows] = await Promise.all([
+      fetchGoogleApiRows(spreadsheetId, apiKey, tabHealthTip).catch(() => []),
+      fetchGoogleApiRows(spreadsheetId, apiKey, tabHealthTipRef).catch(() => []),
+    ])
+    if (!isHealthTipShape(healthTipRows)) healthTipRows = []
+    if (!isHealthTipRefShape(healthTipRefRows)) healthTipRefRows = []
     return {
       source: "google_sheets_api",
       sheetUrl,
@@ -436,6 +475,8 @@ async function loadSheetData(): Promise<{
       symptomRows,
       drugRows,
       mappingRows,
+      healthTipRows,
+      healthTipRefRows,
     }
   }
 
@@ -460,6 +501,12 @@ async function loadSheetData(): Promise<{
         ...sdRows.map((r) => ({ ...r, map_type: "symptom_drug" })),
       ]
     }
+    let [healthTipRows, healthTipRefRows] = await Promise.all([
+      fetchGvizSheetRows(spreadsheetId, tabHealthTip).catch(() => []),
+      fetchGvizSheetRows(spreadsheetId, tabHealthTipRef).catch(() => []),
+    ])
+    if (!isHealthTipShape(healthTipRows)) healthTipRows = []
+    if (!isHealthTipRefShape(healthTipRefRows)) healthTipRefRows = []
 
     const diseaseType = detectSheetType(diseaseRows)
     const symptomType = detectSheetType(symptomRows)
@@ -474,6 +521,8 @@ async function loadSheetData(): Promise<{
         symptomRows,
         drugRows,
         mappingRows,
+        healthTipRows,
+        healthTipRefRows,
       }
     }
     // else fallthrough to published pubhtml flow for backward compatibility,
@@ -571,6 +620,16 @@ async function loadSheetData(): Promise<{
   if (mappingRows.length === 0) {
     throw new Error("ไม่พบแท็บ mappings หรือ mapping แยก 3 แท็บ")
   }
+  const [healthTipRows, healthTipRefRows] = await Promise.all([
+    fetchPublishedSheetWithFallback(sheetUrl, tabHealthTip, tabs.get(tabHealthTip.toLowerCase())),
+    fetchPublishedSheetWithFallback(
+      sheetUrl,
+      tabHealthTipRef,
+      tabs.get(tabHealthTipRef.toLowerCase())
+    ),
+  ])
+  const safeHealthTipRows = isHealthTipShape(healthTipRows) ? healthTipRows : []
+  const safeHealthTipRefRows = isHealthTipRefShape(healthTipRefRows) ? healthTipRefRows : []
   return {
     source: "published_csv",
     sheetUrl,
@@ -579,6 +638,8 @@ async function loadSheetData(): Promise<{
     symptomRows,
     drugRows,
     mappingRows,
+    healthTipRows: safeHealthTipRows,
+    healthTipRefRows: safeHealthTipRefRows,
   }
 }
 
@@ -598,18 +659,30 @@ export async function syncKnowledgeFromSheet(options?: {
   const diseaseStats = counters()
   const symptomStats = counters()
   const drugStats = counters()
+  const healthTipStats = counters()
+  const healthTipRefStats = counters()
   const dsStats = counters()
   const ddStats = counters()
   const sdStats = counters()
 
   const sourceData = await loadSheetData()
-  const { source, sheetUrl, tabs, diseaseRows, symptomRows, drugRows, mappingRows } =
-    sourceData
+  const {
+    source,
+    sheetUrl,
+    tabs,
+    diseaseRows,
+    symptomRows,
+    drugRows,
+    mappingRows,
+    healthTipRows,
+    healthTipRefRows,
+  } = sourceData
 
-  const [existingDiseases, existingSymptoms, existingDrugs] = await Promise.all([
+  const [existingDiseases, existingSymptoms, existingDrugs, existingTips] = await Promise.all([
     prisma.knowledgeDisease.findMany({ select: { id: true, slug: true } }),
     prisma.knowledgeSymptom.findMany({ select: { id: true, slug: true } }),
     prisma.drug.findMany({ select: { id: true, slug: true, slotId: true } }),
+    prisma.knowledgeHealthTip.findMany({ select: { id: true, slug: true } }),
   ])
 
   const diseaseBySlug = new Map(existingDiseases.map((d) => [d.slug, d]))
@@ -626,10 +699,20 @@ export async function syncKnowledgeFromSheet(options?: {
   const incomingSymptomSlugs = new Set<string>()
   const incomingDrugIds = new Set<string>()
   const drugRefsInSheet = new Set<string>()
+  const incomingTipSlugs = new Set<string>()
 
   const mappingDiseaseSymptom: { diseaseSlug: string; symptomSlug: string; score: number; note: string }[] = []
   const mappingDiseaseDrug: { diseaseSlug: string; drugRef: string; level: string; note: string }[] = []
   const mappingSymptomDrug: { symptomSlug: string; drugRef: string; level: string; note: string }[] = []
+  const tipRefRowsNormalized: {
+    tipSlug: string
+    title: string
+    url: string
+    publisher: string
+    accessedAt: string
+    note: string
+    isPublished: boolean
+  }[] = []
 
   for (const [idx, row] of diseaseRows.entries()) {
     const slug = normalizeSlug(row.slug || row.name_th || row.name || "")
@@ -799,9 +882,54 @@ export async function syncKnowledgeFromSheet(options?: {
     }
   }
 
+  const tipBySlug = new Map(existingTips.map((t) => [t.slug, t]))
+  for (const [idx, row] of healthTipRows.entries()) {
+    const slug = normalizeSlug(row.slug || row.title_th || row.title || "")
+    const titleTh = row.title_th || row.title || ""
+    if (!slug || !titleTh) {
+      healthTipStats.skipped += 1
+      pushErr(errors, "HealthTip", idx + 2, "missing required fields: slug/title_th", row)
+      continue
+    }
+    incomingTipSlugs.add(slug)
+    if (tipBySlug.has(slug)) healthTipStats.updated += 1
+    else healthTipStats.inserted += 1
+  }
+
+  for (const [idx, row] of healthTipRefRows.entries()) {
+    const tipSlug = normalizeSlug(row.tip_slug || row.health_tip_slug || "")
+    const title = String(row.ref_title || row.title || "").trim()
+    const url = String(row.ref_url || row.url || "").trim()
+    if (!hasAnyValue(row)) continue
+    if (!tipSlug || !title || !url) {
+      healthTipRefStats.skipped += 1
+      pushErr(errors, "HealthTip_Ref", idx + 2, "missing required fields: tip_slug/ref_title/ref_url", row)
+      continue
+    }
+    const tipOk = incomingTipSlugs.has(tipSlug) || tipBySlug.has(tipSlug)
+    if (!tipOk) {
+      healthTipRefStats.skipped += 1
+      pushErr(errors, "HealthTip_Ref", idx + 2, `tip_slug not found in HealthTip tab: ${tipSlug}`, row)
+      continue
+    }
+    healthTipRefStats.inserted += 1
+    tipRefRowsNormalized.push({
+      tipSlug,
+      title,
+      url,
+      publisher: String(row.ref_publisher || row.publisher || "").trim(),
+      accessedAt: String(row.accessed_at || "").trim(),
+      note: String(row.note || "").trim(),
+      isPublished: row.published ? toBool(row.published) : true,
+    })
+  }
+
   diseaseStats.deleted = existingDiseases.filter((d) => !incomingDiseaseSlugs.has(d.slug)).length
   symptomStats.deleted = existingSymptoms.filter((s) => !incomingSymptomSlugs.has(s.slug)).length
   drugStats.deleted = existingDrugs.filter((d) => !incomingDrugIds.has(d.id)).length
+  healthTipStats.deleted = existingTips.filter((t) => !incomingTipSlugs.has(t.slug)).length
+  // references are replaced per sync
+  healthTipRefStats.deleted = 0
   dsStats.deleted = await prisma.diseaseSymptomMap.count()
   ddStats.deleted = await prisma.diseaseDrugMap.count()
   sdStats.deleted = await prisma.symptomDrugMap.count()
@@ -913,6 +1041,74 @@ export async function syncKnowledgeFromSheet(options?: {
             },
           })
         }
+      }
+
+      for (const row of healthTipRows) {
+        const slug = normalizeSlug(row.slug || row.title_th || row.title || "")
+        const titleTh = row.title_th || row.title || ""
+        if (!slug || !titleTh) continue
+        await tx.knowledgeHealthTip.upsert({
+          where: { slug },
+          update: {
+            titleTh,
+            titleEn: row.title_en || null,
+            summaryTh: row.summary_th || "",
+            summaryEn: row.summary_en || "",
+            contentMdTh: row.content_md_th || row.content_md || "",
+            contentMdEn: row.content_md_en || "",
+            keywords: row.keywords || "",
+            category: row.category || null,
+            coverImageUrl: row.cover_image_url || null,
+            isPublished: row.published ? toBool(row.published) : true,
+          },
+          create: {
+            slug,
+            titleTh,
+            titleEn: row.title_en || null,
+            summaryTh: row.summary_th || "",
+            summaryEn: row.summary_en || "",
+            contentMdTh: row.content_md_th || row.content_md || "",
+            contentMdEn: row.content_md_en || "",
+            keywords: row.keywords || "",
+            category: row.category || null,
+            coverImageUrl: row.cover_image_url || null,
+            isPublished: row.published ? toBool(row.published) : true,
+          },
+        })
+      }
+
+      if (deleteMode === "soft") {
+        await tx.knowledgeHealthTip.updateMany({
+          where: { slug: { notIn: Array.from(incomingTipSlugs) }, isPublished: true },
+          data: { isPublished: false },
+        })
+      } else {
+        await tx.knowledgeHealthTip.deleteMany({
+          where: { slug: { notIn: Array.from(incomingTipSlugs) } },
+        })
+      }
+
+      // Replace all references each sync (simple + deterministic)
+      await tx.knowledgeHealthTipReference.deleteMany({})
+      if (tipRefRowsNormalized.length > 0) {
+        const tipRows = await tx.knowledgeHealthTip.findMany({
+          where: { slug: { in: Array.from(new Set(tipRefRowsNormalized.map((r) => r.tipSlug))) } },
+          select: { id: true, slug: true },
+        })
+        const tipIdBySlug = new Map(tipRows.map((r) => [r.slug, r.id]))
+        await tx.knowledgeHealthTipReference.createMany({
+          data: tipRefRowsNormalized
+            .map((r) => ({
+              tipId: tipIdBySlug.get(r.tipSlug) || "",
+              title: r.title,
+              url: r.url,
+              publisher: r.publisher || null,
+              accessedAt: r.accessedAt ? new Date(r.accessedAt) : null,
+              note: r.note || "",
+              isPublished: r.isPublished,
+            }))
+            .filter((r) => r.tipId),
+        })
       }
 
       if (deleteMode === "soft") {
@@ -1037,6 +1233,8 @@ export async function syncKnowledgeFromSheet(options?: {
     disease: diseaseStats,
     symptom: symptomStats,
     drug: drugStats,
+    healthTip: healthTipStats,
+    healthTipRef: healthTipRefStats,
     diseaseSymptomMap: dsStats,
     diseaseDrugMap: ddStats,
     symptomDrugMap: sdStats,

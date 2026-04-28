@@ -12,6 +12,7 @@ export const thMessages = {
   Nav: {
     home: "หน้าหลัก",
     knowledge: "คลังข้อมูล",
+    healthTips: "เกล็ดความรู้",
     chat: "ปรึกษาแชตบอท",
     tickets: "ตั๋วรับยา",
     admin: "สำหรับผู้ดูแล",
@@ -213,6 +214,7 @@ export const thMessages = {
     tabDisease: "โรค",
     tabSymptom: "อาการ",
     tabDrug: "ยา",
+    tabTip: "เกล็ดความรู้",
     inCabinet: "มีในตู้จ่ายยา ({slot})",
     generalDrug: "ข้อมูลยาทั่วไป",
     slotLabel: "ตำแหน่งในตู้: {slot}",
@@ -597,6 +599,7 @@ export const enMessages = {
   Nav: {
     home: "Home",
     knowledge: "Knowledge base",
+    healthTips: "Health tips",
     chat: "AI chat",
     tickets: "Tickets",
     admin: "Staff",

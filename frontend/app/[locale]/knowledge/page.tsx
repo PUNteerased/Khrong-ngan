@@ -10,7 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Spinner } from "@/components/ui/spinner"
-import { fetchKnowledgeSearch, type KnowledgeSearchResponse } from "@/lib/api"
+import {
+  fetchKnowledgeSearch,
+  type KnowledgeSearchResponse,
+} from "@/lib/api"
 
 function KnowledgeContent() {
   const searchParams = useSearchParams()
@@ -37,11 +40,13 @@ function KnowledgeContent() {
     let cancelled = false
     setLoading(true)
     fetchKnowledgeSearch(searchQuery)
-      .then((payload) => {
-        if (!cancelled) setData(payload)
+      .then((kg) => {
+        if (cancelled) return
+        setData(kg)
       })
       .catch(() => {
-        if (!cancelled) setData({ diseases: [], symptoms: [], drugs: [] })
+        if (cancelled) return
+        setData({ diseases: [], symptoms: [], drugs: [] })
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -216,6 +221,7 @@ function KnowledgeContent() {
             })
           )}
         </TabsContent>
+
       </Tabs>
     </div>
   )

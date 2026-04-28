@@ -170,6 +170,45 @@ model SymptomDrugMap {
   @@index([drugId, symptomId])
 }
 
+model KnowledgeHealthTip {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  titleTh       String
+  titleEn       String?
+  summaryTh     String   @default("")
+  summaryEn     String   @default("")
+  contentMdTh   String   @default("")
+  contentMdEn   String   @default("")
+  keywords      String   @default("")
+  category      String?
+  coverImageUrl String?
+  isPublished   Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  references    KnowledgeHealthTipReference[]
+
+  @@index([titleTh])
+  @@index([titleEn])
+}
+
+model KnowledgeHealthTipReference {
+  id          String   @id @default(cuid())
+  tipId       String
+  title       String
+  url         String
+  publisher   String?
+  accessedAt  DateTime?
+  note        String   @default("")
+  isPublished Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tip         KnowledgeHealthTip @relation(fields: [tipId], references: [id], onDelete: Cascade)
+
+  @@index([tipId])
+}
+
 enum PickupStatus {
   NONE
   QR_ISSUED

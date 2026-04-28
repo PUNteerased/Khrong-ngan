@@ -15,6 +15,7 @@ import {
   Settings,
   Shield,
   Cookie,
+  BookOpenText,
   ChevronDown,
   X,
   UserCircle,
@@ -63,6 +64,7 @@ export function AppSidebar({ isOpen, onClose }: AppSidebarProps) {
       icon: Database,
       hasChildren: true,
     },
+    { href: "/health-tips", label: t("healthTips"), icon: BookOpenText },
     { href: "/chat", label: t("chat"), icon: Bot },
   ]
 

@@ -2,13 +2,19 @@
 
 import { Link } from "@/i18n/navigation"
 import { useTranslations } from "next-intl"
-import type { HealthArticle } from "@/data/health-articles"
 import { Card, CardContent } from "@/components/ui/card"
 import { ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 
+export type HealthTipCardItem = {
+  slug: string
+  title: string
+  excerpt: string
+  category: string
+}
+
 type HealthTipCardProps = {
-  article: HealthArticle
+  article: HealthTipCardItem
   layout?: "list" | "carousel"
 }
 

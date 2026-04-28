@@ -810,6 +810,54 @@ export type KnowledgeSearchResponse = {
   drugs: KnowledgeDrugListItem[]
 }
 
+export type HealthTipListItem = {
+  id: string
+  slug: string
+  titleTh: string
+  titleEn: string | null
+  summaryTh: string
+  summaryEn: string
+  category: string | null
+  coverImageUrl: string | null
+  updatedAt: string
+}
+
+export type HealthTipReference = {
+  id: string
+  title: string
+  url: string
+  publisher: string | null
+  accessedAt: string | null
+  note: string
+}
+
+export type HealthTipDetailResponse = {
+  id: string
+  slug: string
+  titleTh: string
+  titleEn: string | null
+  summaryTh: string
+  summaryEn: string
+  contentMdTh: string
+  contentMdEn: string
+  keywords: string
+  category: string | null
+  coverImageUrl: string | null
+  references: HealthTipReference[]
+  updatedAt: string
+}
+
+export async function fetchHealthTipsSearch(query?: string) {
+  const q = query?.trim() ? `?q=${encodeURIComponent(query.trim())}` : ""
+  return apiJson<HealthTipListItem[]>(`/api/health-tips/search${q}`, { auth: false })
+}
+
+export async function fetchHealthTipDetail(slug: string) {
+  return apiJson<HealthTipDetailResponse>(`/api/health-tips/${encodeURIComponent(slug)}`, {
+    auth: false,
+  })
+}
+
 export type DiseaseDetailResponse = {
   id: string
   slug: string
