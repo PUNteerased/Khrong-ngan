@@ -1,7 +1,7 @@
 "use client"
 
 import { Link } from "@/i18n/navigation"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 import {
   Bot,
   Search,
@@ -23,6 +23,7 @@ import { fetchHealthTipsSearch, type HealthTipListItem } from "@/lib/api"
 const HOME_HEALTH_TIPS_LIMIT = 5
 
 export default function HomePage() {
+  const locale = useLocale()
   const t = useTranslations("Home")
   const [hasQRCode] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -188,8 +189,12 @@ export default function HomePage() {
               <HealthTipCard
                 article={{
                   slug: article.slug,
-                  title: article.titleTh,
-                  excerpt: article.summaryTh,
+                  title:
+                    locale === "en" ? article.titleEn || article.titleTh : article.titleTh,
+                  excerpt:
+                    locale === "en"
+                      ? article.summaryEn || article.summaryTh
+                      : article.summaryTh,
                   category: article.category || "—",
                 }}
                 layout="carousel"

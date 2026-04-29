@@ -858,6 +858,22 @@ export async function fetchHealthTipDetail(slug: string) {
   })
 }
 
+export type UiTranslationItem = {
+  namespace: string
+  key: string
+  th: string
+  en: string
+  updatedAt: string
+}
+
+export async function fetchUiTranslations(params?: { namespace?: string; key?: string }) {
+  const sp = new URLSearchParams()
+  if (params?.namespace) sp.set("namespace", params.namespace)
+  if (params?.key) sp.set("key", params.key)
+  const qs = sp.toString()
+  return apiJson<UiTranslationItem[]>(`/api/i18n/ui${qs ? `?${qs}` : ""}`, { auth: false })
+}
+
 export type DiseaseDetailResponse = {
   id: string
   slug: string

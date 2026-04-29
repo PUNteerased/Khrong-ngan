@@ -20,6 +20,7 @@ export default async function HealthTipsIndexPage({ params }: Props) {
   setRequestLocale(locale)
   const t = await getTranslations({ locale, namespace: "HealthTips" })
   const tips = await fetchHealthTipsSearch("")
+  const isEn = locale === "en"
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 pb-10">
@@ -34,8 +35,8 @@ export default async function HealthTipsIndexPage({ params }: Props) {
             <HealthTipCard
               article={{
                 slug: tip.slug,
-                title: tip.titleTh,
-                excerpt: tip.summaryTh,
+                title: isEn ? tip.titleEn || tip.titleTh : tip.titleTh,
+                excerpt: isEn ? tip.summaryEn || tip.summaryTh : tip.summaryTh,
                 category: tip.category || "—",
                 imageUrl: tip.coverImageUrl || undefined,
               }}

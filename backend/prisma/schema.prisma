@@ -209,6 +209,22 @@ model KnowledgeHealthTipReference {
   @@index([tipId])
 }
 
+model UiTranslation {
+  id              String   @id @default(cuid())
+  namespace       String
+  key             String
+  th              String   @default("")
+  en              String   @default("")
+  isPublished     Boolean  @default(true)
+  sourceUpdatedBy String?
+  sourceUpdatedAt String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([namespace, key])
+  @@index([namespace, isPublished])
+}
+
 enum PickupStatus {
   NONE
   QR_ISSUED

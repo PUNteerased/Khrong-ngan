@@ -95,6 +95,8 @@ function KnowledgeContent() {
             </div>
           ) : (
             data.diseases.map((disease) => {
+              const diseaseLabel =
+                locale === "en" ? disease.nameEn || disease.nameTh : disease.nameTh
               return (
                 <Link
                   key={disease.id}
@@ -105,7 +107,7 @@ function KnowledgeContent() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1.5">
                           <h3 className="font-semibold text-foreground">
-                            {disease.nameTh}
+                            {diseaseLabel}
                           </h3>
                           <p className="text-sm text-muted-foreground">
                             {disease.definition}
@@ -133,6 +135,8 @@ function KnowledgeContent() {
             </div>
           ) : (
             data.symptoms.map((symptom) => {
+              const symptomLabel =
+                locale === "en" ? symptom.nameEn || symptom.nameTh : symptom.nameTh
               return (
                 <Link
                   key={symptom.id}
@@ -143,7 +147,7 @@ function KnowledgeContent() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1.5">
                           <h3 className="font-semibold text-foreground">
-                            {symptom.nameTh}
+                            {symptomLabel}
                           </h3>
                           <p className="text-sm text-muted-foreground">
                             {symptom.observationGuide}

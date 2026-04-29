@@ -12,14 +12,26 @@ type Props = { params: Promise<{ locale: string; slug: string }> }
 
 export const dynamic = "force-dynamic"
 
+function normalizeMarkdownText(text: string): string {
+  return String(text || "")
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
 export async function generateMetadata({ params }: Props) {
   const { locale, slug } = await params
   const t = await getTranslations({ locale, namespace: "HealthArticle" })
   const tip = await fetchHealthTipDetail(slug).catch(() => null)
   if (!tip) return { title: t("notFoundTitle") }
+  const isEn = locale === "en"
+  const title = isEn ? tip.titleEn || tip.titleTh : tip.titleTh
+  const summary = isEn ? tip.summaryEn || tip.summaryTh : tip.summaryTh
   return {
-    title: `${tip.titleTh} | LaneYa`,
-    description: tip.summaryTh,
+    title: `${title} | LaneYa`,
+    description: summary,
   }
 }
 
@@ -29,6 +41,12 @@ export default async function HealthArticlePage({ params }: Props) {
   const t = await getTranslations({ locale, namespace: "HealthArticle" })
   const tip = await fetchHealthTipDetail(slug).catch(() => null)
   if (!tip) notFound()
+  const isEn = locale === "en"
+  const title = isEn ? tip.titleEn || tip.titleTh : tip.titleTh
+  const summaryRaw = isEn ? tip.summaryEn || tip.summaryTh : tip.summaryTh
+  const contentRaw = isEn ? tip.contentMdEn || tip.contentMdTh : tip.contentMdTh
+  const summary = normalizeMarkdownText(summaryRaw)
+  const content = normalizeMarkdownText(contentRaw)
 
   return (
     <div className="mx-auto max-w-lg px-4 py-4 pb-12">
@@ -43,24 +61,24 @@ export default async function HealthArticlePage({ params }: Props) {
         <header className="space-y-3">
           <Badge variant="secondary">{tip.category || "—"}</Badge>
           <h1 className="text-xl font-semibold leading-snug text-foreground">
-            {tip.titleTh}
+            {title}
           </h1>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            {tip.summaryTh}
+            {summary}
           </p>
         </header>
 
-        {tip.contentMdTh ? (
-          <ChatMarkdown className="text-foreground">{tip.contentMdTh}</ChatMarkdown>
+        {content ? (
+          <ChatMarkdown className="text-foreground">{content}</ChatMarkdown>
         ) : null}
 
-        {tip.summaryTh ? (
+        {summary ? (
           <Card className="border-primary/20 bg-primary/5">
             <CardContent className="space-y-2 p-4">
               <p className="text-sm font-medium text-foreground">
                 {t("summaryShort")}
               </p>
-              <p className="text-sm text-muted-foreground">{tip.summaryTh}</p>
+              <p className="text-sm text-muted-foreground">{summary}</p>
             </CardContent>
           </Card>
         ) : null}

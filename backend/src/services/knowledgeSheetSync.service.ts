@@ -32,6 +32,7 @@ export type KnowledgeSyncResult = {
   drug: DiffCounters
   healthTip: DiffCounters
   healthTipRef: DiffCounters
+  i18nUi: DiffCounters
   diseaseSymptomMap: DiffCounters
   diseaseDrugMap: DiffCounters
   symptomDrugMap: DiffCounters
@@ -154,6 +155,12 @@ function isHealthTipRefShape(rows: ParsedCsvRow[]): boolean {
   const first = rows.find(hasAnyValue)
   if (!first) return false
   return hasKeyCI(first, "tip_slug") || hasKeyCI(first, "ref_url") || hasKeyCI(first, "ref_title")
+}
+
+function isI18nUiShape(rows: ParsedCsvRow[]): boolean {
+  const first = rows.find(hasAnyValue)
+  if (!first) return false
+  return hasKeyCI(first, "namespace") && hasKeyCI(first, "key") && hasKeyCI(first, "th")
 }
 
 function firstRowKeysPreview(rows: ParsedCsvRow[]): string {
@@ -323,6 +330,7 @@ async function loadSheetData(): Promise<{
   mappingRows: ParsedCsvRow[]
   healthTipRows: ParsedCsvRow[]
   healthTipRefRows: ParsedCsvRow[]
+  i18nUiRows: ParsedCsvRow[]
 }> {
   const sheetUrl = process.env.KNOWLEDGE_SHEET_PUBLISHED_URL?.trim() || DEFAULT_SHEET_URL
   const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim()
@@ -343,6 +351,7 @@ async function loadSheetData(): Promise<{
     process.env.KNOWLEDGE_SHEET_TAB_MAP_SYMPTOM_DRUG?.trim() || "Map_Symptom_Drug"
   const tabHealthTip = process.env.KNOWLEDGE_SHEET_TAB_HEALTH_TIP?.trim() || "HealthTip"
   const tabHealthTipRef = process.env.KNOWLEDGE_SHEET_TAB_HEALTH_TIP_REF?.trim() || "HealthTip_Ref"
+  const tabI18nUi = process.env.KNOWLEDGE_SHEET_TAB_I18N_UI?.trim() || "I18N_UI"
 
   if (spreadsheetId && (serviceAccountJson || (serviceAccountEmail && serviceAccountPrivateKey))) {
     let clientEmail = serviceAccountEmail || ""
@@ -416,7 +425,7 @@ async function loadSheetData(): Promise<{
         ...sdRows.map((r) => ({ ...r, map_type: "symptom_drug" })),
       ]
     }
-    let [healthTipRows, healthTipRefRows] = await Promise.all([
+    let [healthTipRows, healthTipRefRows, i18nUiRows] = await Promise.all([
       fetchGoogleServiceAccountRows(spreadsheetId, clientEmail, normalizedKey, tabHealthTip).catch(
         () => []
       ),
@@ -426,9 +435,13 @@ async function loadSheetData(): Promise<{
         normalizedKey,
         tabHealthTipRef
       ).catch(() => []),
+      fetchGoogleServiceAccountRows(spreadsheetId, clientEmail, normalizedKey, tabI18nUi).catch(
+        () => []
+      ),
     ])
     if (!isHealthTipShape(healthTipRows)) healthTipRows = []
     if (!isHealthTipRefShape(healthTipRefRows)) healthTipRefRows = []
+    if (!isI18nUiShape(i18nUiRows)) i18nUiRows = []
     return {
       source: "google_sheets_api",
       sheetUrl,
@@ -439,6 +452,7 @@ async function loadSheetData(): Promise<{
       mappingRows,
       healthTipRows,
       healthTipRefRows,
+      i18nUiRows,
     }
   }
 
@@ -461,12 +475,14 @@ async function loadSheetData(): Promise<{
         ...sdRows.map((r) => ({ ...r, map_type: "symptom_drug" })),
       ]
     }
-    let [healthTipRows, healthTipRefRows] = await Promise.all([
+    let [healthTipRows, healthTipRefRows, i18nUiRows] = await Promise.all([
       fetchGoogleApiRows(spreadsheetId, apiKey, tabHealthTip).catch(() => []),
       fetchGoogleApiRows(spreadsheetId, apiKey, tabHealthTipRef).catch(() => []),
+      fetchGoogleApiRows(spreadsheetId, apiKey, tabI18nUi).catch(() => []),
     ])
     if (!isHealthTipShape(healthTipRows)) healthTipRows = []
     if (!isHealthTipRefShape(healthTipRefRows)) healthTipRefRows = []
+    if (!isI18nUiShape(i18nUiRows)) i18nUiRows = []
     return {
       source: "google_sheets_api",
       sheetUrl,
@@ -477,6 +493,7 @@ async function loadSheetData(): Promise<{
       mappingRows,
       healthTipRows,
       healthTipRefRows,
+      i18nUiRows,
     }
   }
 
@@ -501,12 +518,14 @@ async function loadSheetData(): Promise<{
         ...sdRows.map((r) => ({ ...r, map_type: "symptom_drug" })),
       ]
     }
-    let [healthTipRows, healthTipRefRows] = await Promise.all([
+    let [healthTipRows, healthTipRefRows, i18nUiRows] = await Promise.all([
       fetchGvizSheetRows(spreadsheetId, tabHealthTip).catch(() => []),
       fetchGvizSheetRows(spreadsheetId, tabHealthTipRef).catch(() => []),
+      fetchGvizSheetRows(spreadsheetId, tabI18nUi).catch(() => []),
     ])
     if (!isHealthTipShape(healthTipRows)) healthTipRows = []
     if (!isHealthTipRefShape(healthTipRefRows)) healthTipRefRows = []
+    if (!isI18nUiShape(i18nUiRows)) i18nUiRows = []
 
     const diseaseType = detectSheetType(diseaseRows)
     const symptomType = detectSheetType(symptomRows)
@@ -523,6 +542,7 @@ async function loadSheetData(): Promise<{
         mappingRows,
         healthTipRows,
         healthTipRefRows,
+        i18nUiRows,
       }
     }
     // else fallthrough to published pubhtml flow for backward compatibility,
@@ -620,16 +640,18 @@ async function loadSheetData(): Promise<{
   if (mappingRows.length === 0) {
     throw new Error("ไม่พบแท็บ mappings หรือ mapping แยก 3 แท็บ")
   }
-  const [healthTipRows, healthTipRefRows] = await Promise.all([
+  const [healthTipRows, healthTipRefRows, i18nUiRows] = await Promise.all([
     fetchPublishedSheetWithFallback(sheetUrl, tabHealthTip, tabs.get(tabHealthTip.toLowerCase())),
     fetchPublishedSheetWithFallback(
       sheetUrl,
       tabHealthTipRef,
       tabs.get(tabHealthTipRef.toLowerCase())
     ),
+    fetchPublishedSheetWithFallback(sheetUrl, tabI18nUi, tabs.get(tabI18nUi.toLowerCase())),
   ])
   const safeHealthTipRows = isHealthTipShape(healthTipRows) ? healthTipRows : []
   const safeHealthTipRefRows = isHealthTipRefShape(healthTipRefRows) ? healthTipRefRows : []
+  const safeI18nUiRows = isI18nUiShape(i18nUiRows) ? i18nUiRows : []
   return {
     source: "published_csv",
     sheetUrl,
@@ -640,6 +662,7 @@ async function loadSheetData(): Promise<{
     mappingRows,
     healthTipRows: safeHealthTipRows,
     healthTipRefRows: safeHealthTipRefRows,
+    i18nUiRows: safeI18nUiRows,
   }
 }
 
@@ -661,6 +684,7 @@ export async function syncKnowledgeFromSheet(options?: {
   const drugStats = counters()
   const healthTipStats = counters()
   const healthTipRefStats = counters()
+  const i18nUiStats = counters()
   const dsStats = counters()
   const ddStats = counters()
   const sdStats = counters()
@@ -676,6 +700,7 @@ export async function syncKnowledgeFromSheet(options?: {
     mappingRows,
     healthTipRows,
     healthTipRefRows,
+    i18nUiRows,
   } = sourceData
 
   const [existingDiseases, existingSymptoms, existingDrugs, existingTips] = await Promise.all([
@@ -700,6 +725,7 @@ export async function syncKnowledgeFromSheet(options?: {
   const incomingDrugIds = new Set<string>()
   const drugRefsInSheet = new Set<string>()
   const incomingTipSlugs = new Set<string>()
+  const incomingUiKeys = new Set<string>()
 
   const mappingDiseaseSymptom: { diseaseSlug: string; symptomSlug: string; score: number; note: string }[] = []
   const mappingDiseaseDrug: { diseaseSlug: string; drugRef: string; level: string; note: string }[] = []
@@ -712,6 +738,15 @@ export async function syncKnowledgeFromSheet(options?: {
     accessedAt: string
     note: string
     isPublished: boolean
+  }[] = []
+  const i18nUiRowsNormalized: {
+    namespace: string
+    key: string
+    th: string
+    en: string
+    isPublished: boolean
+    sourceUpdatedBy: string
+    sourceUpdatedAt: string
   }[] = []
 
   for (const [idx, row] of diseaseRows.entries()) {
@@ -924,12 +959,43 @@ export async function syncKnowledgeFromSheet(options?: {
     })
   }
 
+  const existingUiRows = await prisma.uiTranslation.findMany({
+    select: { namespace: true, key: true },
+  })
+  const existingUiKeys = new Set(existingUiRows.map((r) => `${r.namespace}::${r.key}`))
+  for (const [idx, row] of i18nUiRows.entries()) {
+    if (!hasAnyValue(row)) continue
+    const namespace = String(row.namespace || "").trim()
+    const key = String(row.key || "").trim()
+    const th = String(row.th || "").trim()
+    const en = String(row.en || "").trim()
+    if (!namespace || !key || !th) {
+      i18nUiStats.skipped += 1
+      pushErr(errors, "I18N_UI", idx + 2, "missing required fields: namespace/key/th", row)
+      continue
+    }
+    const fullKey = `${namespace}::${key}`
+    incomingUiKeys.add(fullKey)
+    if (existingUiKeys.has(fullKey)) i18nUiStats.updated += 1
+    else i18nUiStats.inserted += 1
+    i18nUiRowsNormalized.push({
+      namespace,
+      key,
+      th,
+      en,
+      isPublished: row.published ? toBool(row.published) : true,
+      sourceUpdatedBy: String(row.updated_by || "").trim(),
+      sourceUpdatedAt: String(row.updated_at || "").trim(),
+    })
+  }
+
   diseaseStats.deleted = existingDiseases.filter((d) => !incomingDiseaseSlugs.has(d.slug)).length
   symptomStats.deleted = existingSymptoms.filter((s) => !incomingSymptomSlugs.has(s.slug)).length
   drugStats.deleted = existingDrugs.filter((d) => !incomingDrugIds.has(d.id)).length
   healthTipStats.deleted = existingTips.filter((t) => !incomingTipSlugs.has(t.slug)).length
   // references are replaced per sync
   healthTipRefStats.deleted = 0
+  i18nUiStats.deleted = existingUiRows.filter((r) => !incomingUiKeys.has(`${r.namespace}::${r.key}`)).length
   dsStats.deleted = await prisma.diseaseSymptomMap.count()
   ddStats.deleted = await prisma.diseaseDrugMap.count()
   sdStats.deleted = await prisma.symptomDrugMap.count()
@@ -1111,6 +1177,55 @@ export async function syncKnowledgeFromSheet(options?: {
         })
       }
 
+      for (const row of i18nUiRowsNormalized) {
+        await tx.uiTranslation.upsert({
+          where: { namespace_key: { namespace: row.namespace, key: row.key } },
+          update: {
+            th: row.th,
+            en: row.en,
+            isPublished: row.isPublished,
+            sourceUpdatedBy: row.sourceUpdatedBy || null,
+            sourceUpdatedAt: row.sourceUpdatedAt || null,
+          },
+          create: {
+            namespace: row.namespace,
+            key: row.key,
+            th: row.th,
+            en: row.en,
+            isPublished: row.isPublished,
+            sourceUpdatedBy: row.sourceUpdatedBy || null,
+            sourceUpdatedAt: row.sourceUpdatedAt || null,
+          },
+        })
+      }
+
+      if (deleteMode === "soft") {
+        if (i18nUiRowsNormalized.length > 0) {
+          await tx.uiTranslation.updateMany({
+            where: {
+              NOT: i18nUiRowsNormalized.map((r) => ({ namespace: r.namespace, key: r.key })),
+              isPublished: true,
+            },
+            data: { isPublished: false },
+          })
+        } else {
+          await tx.uiTranslation.updateMany({
+            where: { isPublished: true },
+            data: { isPublished: false },
+          })
+        }
+      } else {
+        if (i18nUiRowsNormalized.length > 0) {
+          await tx.uiTranslation.deleteMany({
+            where: {
+              NOT: i18nUiRowsNormalized.map((r) => ({ namespace: r.namespace, key: r.key })),
+            },
+          })
+        } else {
+          await tx.uiTranslation.deleteMany({})
+        }
+      }
+
       if (deleteMode === "soft") {
         await tx.knowledgeDisease.updateMany({
           where: {
@@ -1235,6 +1350,7 @@ export async function syncKnowledgeFromSheet(options?: {
     drug: drugStats,
     healthTip: healthTipStats,
     healthTipRef: healthTipRefStats,
+    i18nUi: i18nUiStats,
     diseaseSymptomMap: dsStats,
     diseaseDrugMap: ddStats,
     symptomDrugMap: sdStats,
