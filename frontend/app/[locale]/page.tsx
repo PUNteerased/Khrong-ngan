@@ -1,7 +1,7 @@
 "use client"
 
 import { Link } from "@/i18n/navigation"
-import { useLocale, useTranslations } from "next-intl"
+import { useTranslations } from "next-intl"
 import {
   Bot,
   Search,
@@ -16,22 +16,31 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { useMemo, useState } from "react"
-import { getHealthArticles } from "@/data/health-locale"
+import { useEffect, useMemo, useState } from "react"
 import { HealthTipCard } from "@/components/health-tip-card"
+import { fetchHealthTipsSearch, type HealthTipListItem } from "@/lib/api"
 
 const HOME_HEALTH_TIPS_LIMIT = 5
 
 export default function HomePage() {
-  const locale = useLocale()
   const t = useTranslations("Home")
   const [hasQRCode] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [articles, setArticles] = useState<HealthTipListItem[]>([])
 
-  const articles = useMemo(
-    () => getHealthArticles(locale).slice(0, HOME_HEALTH_TIPS_LIMIT),
-    [locale]
-  )
+  useEffect(() => {
+    let cancelled = false
+    fetchHealthTipsSearch("")
+      .then((rows) => {
+        if (!cancelled) setArticles(rows.slice(0, HOME_HEALTH_TIPS_LIMIT))
+      })
+      .catch(() => {
+        if (!cancelled) setArticles([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const quickAccessItems = useMemo(
     () => [
@@ -176,7 +185,15 @@ export default function HomePage() {
         <ul className="-mx-4 flex snap-x snap-mandatory list-none gap-3 overflow-x-auto overflow-y-hidden px-4 pb-2 scroll-smooth">
           {articles.map((article) => (
             <li key={article.slug} className="snap-start">
-              <HealthTipCard article={article} layout="carousel" />
+              <HealthTipCard
+                article={{
+                  slug: article.slug,
+                  title: article.titleTh,
+                  excerpt: article.summaryTh,
+                  category: article.category || "—",
+                }}
+                layout="carousel"
+              />
             </li>
           ))}
         </ul>
