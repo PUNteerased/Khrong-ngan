@@ -119,30 +119,39 @@ function hasAnyValue(row: ParsedCsvRow): boolean {
   return Object.values(row).some((v) => String(v).trim())
 }
 
-function isValidUnifiedMappingsShape(rows: ParsedCsvRow[]): boolean {
-  const first = rows.find(hasAnyValue)
-  if (!first) return false
-  const keys = Object.keys(first)
-  const hasMapType = keys.includes("map_type") || keys.includes("type")
-  const hasLeft = keys.includes("left_ref") || keys.includes("left_slug") || keys.includes("disease_slug") || keys.includes("symptom_slug")
-  const hasRight = keys.includes("right_ref") || keys.includes("right_slug") || keys.includes("drug_ref") || keys.includes("symptom_slug")
-  return hasMapType && hasLeft && hasRight
-}
-
 function hasKeyCI(row: ParsedCsvRow, key: string): boolean {
   const target = key.trim().toLowerCase()
   return Object.keys(row).some((k) => k.trim().toLowerCase() === target)
 }
 
-function detectSheetType(rows: ParsedCsvRow[]): "empty" | "drug" | "disease" | "symptom" | "mapping" | "unknown" {
+function detectSheetType(rows: ParsedCsvRow[]): "empty" | "drug" | "disease" | "symptom" | "unknown" {
   const first = rows.find(hasAnyValue)
   if (!first) return "empty"
   if (hasKeyCI(first, "drug_ref")) return "drug"
-  if (hasKeyCI(first, "observation_guide") || hasKeyCI(first, "danger_level")) return "symptom"
-  if (hasKeyCI(first, "severity_level") || hasKeyCI(first, "self_care_advice")) return "disease"
-  if (isValidUnifiedMappingsShape(rows)) return "mapping"
+  if (
+    hasKeyCI(first, "observation_th") ||
+    hasKeyCI(first, "observation_guide") ||
+    hasKeyCI(first, "danger_level")
+  ) {
+    return "symptom"
+  }
+  if (
+    hasKeyCI(first, "severity_level") ||
+    hasKeyCI(first, "self_care_advice") ||
+    hasKeyCI(first, "self_care_th") ||
+    hasKeyCI(first, "definition_th")
+  ) {
+    return "disease"
+  }
   if (hasKeyCI(first, "slug") && hasKeyCI(first, "name_th")) return "disease"
   return "unknown"
+}
+
+/** If English empty, use Thai (sheet + API contract). */
+function fallbackEn(th: string, en: string): string {
+  const t = String(th ?? "").trim()
+  const e = String(en ?? "").trim()
+  return e || t
 }
 
 function isHealthTipShape(rows: ParsedCsvRow[]): boolean {
@@ -160,7 +169,11 @@ function isHealthTipRefShape(rows: ParsedCsvRow[]): boolean {
 function isI18nUiShape(rows: ParsedCsvRow[]): boolean {
   const first = rows.find(hasAnyValue)
   if (!first) return false
-  return hasKeyCI(first, "namespace") && hasKeyCI(first, "key") && hasKeyCI(first, "th")
+  return (
+    hasKeyCI(first, "namespace") &&
+    hasKeyCI(first, "key") &&
+    (hasKeyCI(first, "th") || hasKeyCI(first, "en"))
+  )
 }
 
 function firstRowKeysPreview(rows: ParsedCsvRow[]): string {
@@ -327,7 +340,9 @@ async function loadSheetData(): Promise<{
   diseaseRows: ParsedCsvRow[]
   symptomRows: ParsedCsvRow[]
   drugRows: ParsedCsvRow[]
-  mappingRows: ParsedCsvRow[]
+  mapDiseaseSymptom: ParsedCsvRow[]
+  mapDiseaseDrug: ParsedCsvRow[]
+  mapSymptomDrug: ParsedCsvRow[]
   healthTipRows: ParsedCsvRow[]
   healthTipRefRows: ParsedCsvRow[]
   i18nUiRows: ParsedCsvRow[]
@@ -342,7 +357,6 @@ async function loadSheetData(): Promise<{
   const tabDisease = process.env.KNOWLEDGE_SHEET_TAB_DISEASE?.trim() || "Disease"
   const tabSymptom = process.env.KNOWLEDGE_SHEET_TAB_SYMPTOM?.trim() || "Symptom"
   const tabDrug = process.env.KNOWLEDGE_SHEET_TAB_DRUG?.trim() || "Drug"
-  const tabMappingsUnified = process.env.KNOWLEDGE_SHEET_TAB_MAPPINGS?.trim() || "mappings"
   const tabMapDiseaseSymptom =
     process.env.KNOWLEDGE_SHEET_TAB_MAP_DISEASE_SYMPTOM?.trim() || "Map_Disease_Symptom"
   const tabMapDiseaseDrug =
@@ -352,6 +366,8 @@ async function loadSheetData(): Promise<{
   const tabHealthTip = process.env.KNOWLEDGE_SHEET_TAB_HEALTH_TIP?.trim() || "HealthTip"
   const tabHealthTipRef = process.env.KNOWLEDGE_SHEET_TAB_HEALTH_TIP_REF?.trim() || "HealthTip_Ref"
   const tabI18nUi = process.env.KNOWLEDGE_SHEET_TAB_I18N_UI?.trim() || "I18N_UI"
+
+  const mappingTabNames = [tabMapDiseaseSymptom, tabMapDiseaseDrug, tabMapSymptomDrug]
 
   if (spreadsheetId && (serviceAccountJson || (serviceAccountEmail && serviceAccountPrivateKey))) {
     let clientEmail = serviceAccountEmail || ""
@@ -390,41 +406,26 @@ async function loadSheetData(): Promise<{
       normalizedKey,
       tabDrug
     )
-    let mappingRows: ParsedCsvRow[] = []
-    try {
-      mappingRows = await fetchGoogleServiceAccountRows(
+    const [mapDiseaseSymptom, mapDiseaseDrug, mapSymptomDrug] = await Promise.all([
+      fetchGoogleServiceAccountRows(
         spreadsheetId,
         clientEmail,
         normalizedKey,
-        tabMappingsUnified
-      )
-    } catch {
-      const [dsRows, ddRows, sdRows] = await Promise.all([
-        fetchGoogleServiceAccountRows(
-          spreadsheetId,
-          clientEmail,
-          normalizedKey,
-          tabMapDiseaseSymptom
-        ),
-        fetchGoogleServiceAccountRows(
-          spreadsheetId,
-          clientEmail,
-          normalizedKey,
-          tabMapDiseaseDrug
-        ),
-        fetchGoogleServiceAccountRows(
-          spreadsheetId,
-          clientEmail,
-          normalizedKey,
-          tabMapSymptomDrug
-        ),
-      ])
-      mappingRows = [
-        ...dsRows.map((r) => ({ ...r, map_type: "disease_symptom" })),
-        ...ddRows.map((r) => ({ ...r, map_type: "disease_drug" })),
-        ...sdRows.map((r) => ({ ...r, map_type: "symptom_drug" })),
-      ]
-    }
+        tabMapDiseaseSymptom
+      ),
+      fetchGoogleServiceAccountRows(
+        spreadsheetId,
+        clientEmail,
+        normalizedKey,
+        tabMapDiseaseDrug
+      ),
+      fetchGoogleServiceAccountRows(
+        spreadsheetId,
+        clientEmail,
+        normalizedKey,
+        tabMapSymptomDrug
+      ),
+    ])
     let [healthTipRows, healthTipRefRows, i18nUiRows] = await Promise.all([
       fetchGoogleServiceAccountRows(spreadsheetId, clientEmail, normalizedKey, tabHealthTip).catch(
         () => []
@@ -445,11 +446,13 @@ async function loadSheetData(): Promise<{
     return {
       source: "google_sheets_api",
       sheetUrl,
-      tabs: [tabDisease, tabSymptom, tabDrug, tabMappingsUnified],
+      tabs: [tabDisease, tabSymptom, tabDrug, ...mappingTabNames, tabHealthTip, tabHealthTipRef, tabI18nUi],
       diseaseRows,
       symptomRows,
       drugRows,
-      mappingRows,
+      mapDiseaseSymptom,
+      mapDiseaseDrug,
+      mapSymptomDrug,
       healthTipRows,
       healthTipRefRows,
       i18nUiRows,
@@ -460,21 +463,11 @@ async function loadSheetData(): Promise<{
     const diseaseRows = await fetchGoogleApiRows(spreadsheetId, apiKey, tabDisease)
     const symptomRows = await fetchGoogleApiRows(spreadsheetId, apiKey, tabSymptom)
     const drugRows = await fetchGoogleApiRows(spreadsheetId, apiKey, tabDrug)
-    let mappingRows: ParsedCsvRow[] = []
-    try {
-      mappingRows = await fetchGoogleApiRows(spreadsheetId, apiKey, tabMappingsUnified)
-    } catch {
-      const [dsRows, ddRows, sdRows] = await Promise.all([
-        fetchGoogleApiRows(spreadsheetId, apiKey, tabMapDiseaseSymptom),
-        fetchGoogleApiRows(spreadsheetId, apiKey, tabMapDiseaseDrug),
-        fetchGoogleApiRows(spreadsheetId, apiKey, tabMapSymptomDrug),
-      ])
-      mappingRows = [
-        ...dsRows.map((r) => ({ ...r, map_type: "disease_symptom" })),
-        ...ddRows.map((r) => ({ ...r, map_type: "disease_drug" })),
-        ...sdRows.map((r) => ({ ...r, map_type: "symptom_drug" })),
-      ]
-    }
+    const [mapDiseaseSymptom, mapDiseaseDrug, mapSymptomDrug] = await Promise.all([
+      fetchGoogleApiRows(spreadsheetId, apiKey, tabMapDiseaseSymptom),
+      fetchGoogleApiRows(spreadsheetId, apiKey, tabMapDiseaseDrug),
+      fetchGoogleApiRows(spreadsheetId, apiKey, tabMapSymptomDrug),
+    ])
     let [healthTipRows, healthTipRefRows, i18nUiRows] = await Promise.all([
       fetchGoogleApiRows(spreadsheetId, apiKey, tabHealthTip).catch(() => []),
       fetchGoogleApiRows(spreadsheetId, apiKey, tabHealthTipRef).catch(() => []),
@@ -486,11 +479,13 @@ async function loadSheetData(): Promise<{
     return {
       source: "google_sheets_api",
       sheetUrl,
-      tabs: [tabDisease, tabSymptom, tabDrug, tabMappingsUnified],
+      tabs: [tabDisease, tabSymptom, tabDrug, ...mappingTabNames, tabHealthTip, tabHealthTipRef, tabI18nUi],
       diseaseRows,
       symptomRows,
       drugRows,
-      mappingRows,
+      mapDiseaseSymptom,
+      mapDiseaseDrug,
+      mapSymptomDrug,
       healthTipRows,
       healthTipRefRows,
       i18nUiRows,
@@ -503,21 +498,11 @@ async function loadSheetData(): Promise<{
     const diseaseRows = await fetchGvizSheetRows(spreadsheetId, tabDisease).catch(() => [])
     const symptomRows = await fetchGvizSheetRows(spreadsheetId, tabSymptom).catch(() => [])
     const drugRows = await fetchGvizSheetRows(spreadsheetId, tabDrug).catch(() => [])
-    let mappingRows: ParsedCsvRow[] = []
-    mappingRows = await fetchGvizSheetRows(spreadsheetId, tabMappingsUnified).catch(() => [])
-    if (mappingRows.length > 0 && !isValidUnifiedMappingsShape(mappingRows)) mappingRows = []
-    if (mappingRows.length === 0) {
-      const [dsRows, ddRows, sdRows] = await Promise.all([
-        fetchGvizSheetRows(spreadsheetId, tabMapDiseaseSymptom).catch(() => []),
-        fetchGvizSheetRows(spreadsheetId, tabMapDiseaseDrug).catch(() => []),
-        fetchGvizSheetRows(spreadsheetId, tabMapSymptomDrug).catch(() => []),
-      ])
-      mappingRows = [
-        ...dsRows.map((r) => ({ ...r, map_type: "disease_symptom" })),
-        ...ddRows.map((r) => ({ ...r, map_type: "disease_drug" })),
-        ...sdRows.map((r) => ({ ...r, map_type: "symptom_drug" })),
-      ]
-    }
+    const [mapDiseaseSymptom, mapDiseaseDrug, mapSymptomDrug] = await Promise.all([
+      fetchGvizSheetRows(spreadsheetId, tabMapDiseaseSymptom).catch(() => []),
+      fetchGvizSheetRows(spreadsheetId, tabMapDiseaseDrug).catch(() => []),
+      fetchGvizSheetRows(spreadsheetId, tabMapSymptomDrug).catch(() => []),
+    ])
     let [healthTipRows, healthTipRefRows, i18nUiRows] = await Promise.all([
       fetchGvizSheetRows(spreadsheetId, tabHealthTip).catch(() => []),
       fetchGvizSheetRows(spreadsheetId, tabHealthTipRef).catch(() => []),
@@ -531,15 +516,23 @@ async function loadSheetData(): Promise<{
     const symptomType = detectSheetType(symptomRows)
     const drugType = detectSheetType(drugRows)
     if (diseaseType === "disease" && symptomType === "symptom" && drugType === "drug") {
-      if (mappingRows.length === 0) throw new Error("ไม่พบแท็บ mappings หรือ mapping แยก 3 แท็บ")
+      if (
+        mapDiseaseSymptom.length === 0 &&
+        mapDiseaseDrug.length === 0 &&
+        mapSymptomDrug.length === 0
+      ) {
+        throw new Error(`ไม่พบข้อมูลในแท็บ mapping ทั้ง 3 แท็บ (${mappingTabNames.join(", ")})`)
+      }
       return {
         source: "published_csv",
         sheetUrl,
-        tabs: [tabDisease, tabSymptom, tabDrug, tabMappingsUnified],
+        tabs: [tabDisease, tabSymptom, tabDrug, ...mappingTabNames, tabHealthTip, tabHealthTipRef, tabI18nUi],
         diseaseRows,
         symptomRows,
         drugRows,
-        mappingRows,
+        mapDiseaseSymptom,
+        mapDiseaseDrug,
+        mapSymptomDrug,
         healthTipRows,
         healthTipRefRows,
         i18nUiRows,
@@ -593,52 +586,34 @@ async function loadSheetData(): Promise<{
       )}) — ${hint}`
     )
   }
-  let mappingRows: ParsedCsvRow[] = []
+  let mapDiseaseSymptom: ParsedCsvRow[] = []
+  let mapDiseaseDrug: ParsedCsvRow[] = []
+  let mapSymptomDrug: ParsedCsvRow[] = []
 
-  // 1) unified mappings tab
-  if (tabs.has(tabMappingsUnified.toLowerCase())) {
-    mappingRows = await fetchCsvTabRows(sheetUrl, tabs.get(tabMappingsUnified.toLowerCase()) || "")
+  if (
+    tabs.has(tabMapDiseaseSymptom.toLowerCase()) &&
+    tabs.has(tabMapDiseaseDrug.toLowerCase()) &&
+    tabs.has(tabMapSymptomDrug.toLowerCase())
+  ) {
+    ;[mapDiseaseSymptom, mapDiseaseDrug, mapSymptomDrug] = await Promise.all([
+      fetchCsvTabRows(sheetUrl, tabs.get(tabMapDiseaseSymptom.toLowerCase()) || ""),
+      fetchCsvTabRows(sheetUrl, tabs.get(tabMapDiseaseDrug.toLowerCase()) || ""),
+      fetchCsvTabRows(sheetUrl, tabs.get(tabMapSymptomDrug.toLowerCase()) || ""),
+    ])
   } else {
-    mappingRows = await fetchCsvSheetRows(sheetUrl, tabMappingsUnified).catch(() => [])
-  }
-  // Ignore mappings tab if it doesn't follow the expected structure (common mistake: copy Disease rows here).
-  if (mappingRows.length > 0 && !isValidUnifiedMappingsShape(mappingRows)) {
-    mappingRows = []
-  }
-
-  // 2) separate mapping tabs (only if unified not available)
-  if (mappingRows.length === 0) {
-    if (
-      tabs.has(tabMapDiseaseSymptom.toLowerCase()) &&
-      tabs.has(tabMapDiseaseDrug.toLowerCase()) &&
-      tabs.has(tabMapSymptomDrug.toLowerCase())
-    ) {
-      const [dsRows, ddRows, sdRows] = await Promise.all([
-        fetchCsvTabRows(sheetUrl, tabs.get(tabMapDiseaseSymptom.toLowerCase()) || ""),
-        fetchCsvTabRows(sheetUrl, tabs.get(tabMapDiseaseDrug.toLowerCase()) || ""),
-        fetchCsvTabRows(sheetUrl, tabs.get(tabMapSymptomDrug.toLowerCase()) || ""),
-      ])
-      mappingRows = [
-        ...dsRows.map((r) => ({ ...r, map_type: "disease_symptom" })),
-        ...ddRows.map((r) => ({ ...r, map_type: "disease_drug" })),
-        ...sdRows.map((r) => ({ ...r, map_type: "symptom_drug" })),
-      ]
-    } else {
-      const [dsRows, ddRows, sdRows] = await Promise.all([
-        fetchCsvSheetRows(sheetUrl, tabMapDiseaseSymptom).catch(() => []),
-        fetchCsvSheetRows(sheetUrl, tabMapDiseaseDrug).catch(() => []),
-        fetchCsvSheetRows(sheetUrl, tabMapSymptomDrug).catch(() => []),
-      ])
-      mappingRows = [
-        ...dsRows.map((r) => ({ ...r, map_type: "disease_symptom" })),
-        ...ddRows.map((r) => ({ ...r, map_type: "disease_drug" })),
-        ...sdRows.map((r) => ({ ...r, map_type: "symptom_drug" })),
-      ]
-    }
+    ;[mapDiseaseSymptom, mapDiseaseDrug, mapSymptomDrug] = await Promise.all([
+      fetchCsvSheetRows(sheetUrl, tabMapDiseaseSymptom).catch(() => []),
+      fetchCsvSheetRows(sheetUrl, tabMapDiseaseDrug).catch(() => []),
+      fetchCsvSheetRows(sheetUrl, tabMapSymptomDrug).catch(() => []),
+    ])
   }
 
-  if (mappingRows.length === 0) {
-    throw new Error("ไม่พบแท็บ mappings หรือ mapping แยก 3 แท็บ")
+  if (
+    mapDiseaseSymptom.length === 0 &&
+    mapDiseaseDrug.length === 0 &&
+    mapSymptomDrug.length === 0
+  ) {
+    throw new Error(`ไม่พบข้อมูลในแท็บ mapping (${mappingTabNames.join(", ")})`)
   }
   const [healthTipRows, healthTipRefRows, i18nUiRows] = await Promise.all([
     fetchPublishedSheetWithFallback(sheetUrl, tabHealthTip, tabs.get(tabHealthTip.toLowerCase())),
@@ -659,7 +634,9 @@ async function loadSheetData(): Promise<{
     diseaseRows,
     symptomRows,
     drugRows,
-    mappingRows,
+    mapDiseaseSymptom,
+    mapDiseaseDrug,
+    mapSymptomDrug,
     healthTipRows: safeHealthTipRows,
     healthTipRefRows: safeHealthTipRefRows,
     i18nUiRows: safeI18nUiRows,
@@ -697,7 +674,9 @@ export async function syncKnowledgeFromSheet(options?: {
     diseaseRows,
     symptomRows,
     drugRows,
-    mappingRows,
+    mapDiseaseSymptom,
+    mapDiseaseDrug,
+    mapSymptomDrug,
     healthTipRows,
     healthTipRefRows,
     i18nUiRows,
@@ -803,118 +782,111 @@ export async function syncKnowledgeFromSheet(options?: {
       incomingDrugIds.add(found.id)
       drugStats.updated += 1
     }
-    const kp = row.knowledge_priority?.trim()
-    if (kp && !isNumericString(kp)) {
-      drugStats.skipped += 1
-      pushErr(errors, "Drug", idx + 2, "knowledge_priority must be number", row)
+    if (hasKeyCI(row, "knowledge_priority")) {
+      const kp = row.knowledge_priority?.trim()
+      if (kp && !isNumericString(kp)) {
+        drugStats.skipped += 1
+        pushErr(errors, "Drug", idx + 2, "knowledge_priority must be number", row)
+      }
     }
   }
 
-  for (const [idx, row] of mappingRows.entries()) {
-    const mapType = (row.map_type || row.type || "").trim().toLowerCase()
-    const left = normalizeSlug(
-      row.left_ref || row.left_slug || row.disease_slug || row.symptom_slug || ""
-    )
-    const right = (row.right_ref || row.right_slug || row.drug_ref || row.symptom_slug || "").trim()
-    const rightKey = normalizeRefKey(right)
+  const tabMapDs = process.env.KNOWLEDGE_SHEET_TAB_MAP_DISEASE_SYMPTOM?.trim() || "Map_Disease_Symptom"
+  const tabMapDd = process.env.KNOWLEDGE_SHEET_TAB_MAP_DISEASE_DRUG?.trim() || "Map_Disease_Drug"
+  const tabMapSd = process.env.KNOWLEDGE_SHEET_TAB_MAP_SYMPTOM_DRUG?.trim() || "Map_Symptom_Drug"
+
+  for (const [idx, row] of mapDiseaseSymptom.entries()) {
+    const diseaseSlug = normalizeSlug(row.disease_slug || row.left_slug || row.left_ref || "")
+    const symptomSlug = normalizeSlug(row.symptom_slug || row.right_slug || row.right_ref || "")
     const scoreRaw = row.score || row.relevance_score || ""
     const score = scoreRaw ? toInt(scoreRaw, 0) : 0
     const note = row.note || ""
-    const level = row.recommendation_level || "SUGGESTED"
-
-    if (!mapType || !left || !right) {
-      if (hasAnyValue(row)) {
-        pushErr(
-          errors,
-          "mappings",
-          idx + 2,
-          "missing mapping fields: map_type/left_ref/right_ref",
-          row
-        )
-      }
-      continue
-    }
-    if ((mapType === "disease_symptom" || mapType === "symptom_disease") && scoreRaw && !isNumericString(scoreRaw)) {
-      pushErr(errors, "mappings", idx + 2, "score/relevance_score must be number", row)
+    if (!hasAnyValue(row)) continue
+    if (!diseaseSlug || !symptomSlug) {
+      pushErr(errors, tabMapDs, idx + 2, "missing disease_slug or symptom_slug", row)
       dsStats.skipped += 1
       continue
     }
-
-    if (mapType === "disease_symptom") {
-      const symptomSlug = normalizeSlug(right)
-      const diseaseOk = incomingDiseaseSlugs.has(left) || diseaseBySlug.has(left)
-      const symptomOk = incomingSymptomSlugs.has(symptomSlug) || symptomBySlug.has(symptomSlug)
-      if (!diseaseOk || !symptomOk) {
-        dsStats.skipped += 1
-        pushErr(
-          errors,
-          "mappings",
-          idx + 2,
-          `mapping target not found (disease=${left} in Disease tab? ${diseaseOk}, symptom=${symptomSlug} in Symptom tab? ${symptomOk})`,
-          row
-        )
-        continue
-      }
-      dsStats.inserted += 1
-      mappingDiseaseSymptom.push({
-        diseaseSlug: left,
-        symptomSlug,
-        score,
-        note,
-      })
-    } else if (mapType === "disease_drug") {
-      const diseaseOk = incomingDiseaseSlugs.has(left) || diseaseBySlug.has(left)
-      if (!diseaseOk) {
-        ddStats.skipped += 1
-        pushErr(errors, "mappings", idx + 2, `disease_slug not found in Disease tab: ${left}`, row)
-        continue
-      }
-      if (!drugRefsInSheet.has(rightKey)) {
-        ddStats.skipped += 1
-        pushErr(
-          errors,
-          "mappings",
-          idx + 2,
-          `drug_ref not found in Drug tab: ${right} (add it to Drug sheet first)`,
-          row
-        )
-        continue
-      }
-      ddStats.inserted += 1
-      mappingDiseaseDrug.push({
-        diseaseSlug: left,
-        drugRef: right,
-        level,
-        note,
-      })
-    } else if (mapType === "symptom_drug") {
-      const symptomOk = incomingSymptomSlugs.has(left) || symptomBySlug.has(left)
-      if (!symptomOk) {
-        sdStats.skipped += 1
-        pushErr(errors, "mappings", idx + 2, `symptom_slug not found in Symptom tab: ${left}`, row)
-        continue
-      }
-      if (!drugRefsInSheet.has(rightKey)) {
-        sdStats.skipped += 1
-        pushErr(
-          errors,
-          "mappings",
-          idx + 2,
-          `drug_ref not found in Drug tab: ${right} (add it to Drug sheet first)`,
-          row
-        )
-        continue
-      }
-      sdStats.inserted += 1
-      mappingSymptomDrug.push({
-        symptomSlug: left,
-        drugRef: right,
-        level,
-        note,
-      })
-    } else {
-      pushErr(errors, "mappings", idx + 2, `unknown map_type: ${mapType}`, row)
+    if (scoreRaw && !isNumericString(scoreRaw)) {
+      pushErr(errors, tabMapDs, idx + 2, "relevance_score must be number", row)
+      dsStats.skipped += 1
+      continue
     }
+    const diseaseOk = incomingDiseaseSlugs.has(diseaseSlug) || diseaseBySlug.has(diseaseSlug)
+    const symptomOk = incomingSymptomSlugs.has(symptomSlug) || symptomBySlug.has(symptomSlug)
+    if (!diseaseOk || !symptomOk) {
+      dsStats.skipped += 1
+      pushErr(
+        errors,
+        tabMapDs,
+        idx + 2,
+        `invalid slug refs (disease=${diseaseSlug} ok=${diseaseOk}, symptom=${symptomSlug} ok=${symptomOk})`,
+        row
+      )
+      continue
+    }
+    dsStats.inserted += 1
+    mappingDiseaseSymptom.push({ diseaseSlug, symptomSlug, score, note })
+  }
+
+  for (const [idx, row] of mapDiseaseDrug.entries()) {
+    const diseaseSlug = normalizeSlug(row.disease_slug || "")
+    const drugRef = String(row.drug_ref || "").trim()
+    const rightKey = normalizeRefKey(drugRef)
+    const level = row.recommendation_level || "SUGGESTED"
+    const note = row.note || ""
+    if (!hasAnyValue(row)) continue
+    if (!diseaseSlug || !drugRef) {
+      pushErr(errors, tabMapDd, idx + 2, "missing disease_slug or drug_ref", row)
+      ddStats.skipped += 1
+      continue
+    }
+    const diseaseOk = incomingDiseaseSlugs.has(diseaseSlug) || diseaseBySlug.has(diseaseSlug)
+    if (!diseaseOk) {
+      ddStats.skipped += 1
+      pushErr(errors, tabMapDd, idx + 2, `disease_slug not in Disease tab: ${diseaseSlug}`, row)
+      continue
+    }
+    if (!drugRefsInSheet.has(rightKey)) {
+      ddStats.skipped += 1
+      pushErr(
+        errors,
+        tabMapDd,
+        idx + 2,
+        `drug_ref not in Drug tab: ${drugRef}`,
+        row
+      )
+      continue
+    }
+    ddStats.inserted += 1
+    mappingDiseaseDrug.push({ diseaseSlug, drugRef, level, note })
+  }
+
+  for (const [idx, row] of mapSymptomDrug.entries()) {
+    const symptomSlug = normalizeSlug(row.symptom_slug || "")
+    const drugRef = String(row.drug_ref || "").trim()
+    const rightKey = normalizeRefKey(drugRef)
+    const level = row.recommendation_level || "SUGGESTED"
+    const note = row.note || ""
+    if (!hasAnyValue(row)) continue
+    if (!symptomSlug || !drugRef) {
+      pushErr(errors, tabMapSd, idx + 2, "missing symptom_slug or drug_ref", row)
+      sdStats.skipped += 1
+      continue
+    }
+    const symptomOk = incomingSymptomSlugs.has(symptomSlug) || symptomBySlug.has(symptomSlug)
+    if (!symptomOk) {
+      sdStats.skipped += 1
+      pushErr(errors, tabMapSd, idx + 2, `symptom_slug not in Symptom tab: ${symptomSlug}`, row)
+      continue
+    }
+    if (!drugRefsInSheet.has(rightKey)) {
+      sdStats.skipped += 1
+      pushErr(errors, tabMapSd, idx + 2, `drug_ref not in Drug tab: ${drugRef}`, row)
+      continue
+    }
+    sdStats.inserted += 1
+    mappingSymptomDrug.push({ symptomSlug, drugRef, level, note })
   }
 
   const tipBySlug = new Map(existingTips.map((t) => [t.slug, t]))
@@ -967,11 +939,13 @@ export async function syncKnowledgeFromSheet(options?: {
     if (!hasAnyValue(row)) continue
     const namespace = String(row.namespace || "").trim()
     const key = String(row.key || "").trim()
-    const th = String(row.th || "").trim()
-    const en = String(row.en || "").trim()
+    const thRaw = String(row.th || "").trim()
+    const enRaw = String(row.en || "").trim()
+    const th = thRaw || enRaw
+    const en = fallbackEn(th, enRaw)
     if (!namespace || !key || !th) {
       i18nUiStats.skipped += 1
-      pushErr(errors, "I18N_UI", idx + 2, "missing required fields: namespace/key/th", row)
+      pushErr(errors, "I18N_UI", idx + 2, "missing required fields: namespace/key and (th or en)", row)
       continue
     }
     const fullKey = `${namespace}::${key}`
@@ -1006,26 +980,39 @@ export async function syncKnowledgeFromSheet(options?: {
         const slug = normalizeSlug(row.slug || row.name_th || row.name || "")
         const nameTh = row.name_th || row.name || ""
         if (!slug || !nameTh) continue
+        const defTh = row.definition_th || row.definition || ""
+        const defEnRaw = row.definition_en || ""
+        const selfTh = row.self_care_th || row.self_care_advice || ""
+        const selfEnRaw = row.self_care_en || ""
+        const redTh = row.red_flag_th || row.red_flag_advice || ""
+        const redEnRaw = row.red_flag_en || ""
+        const nameEnRaw = (row.name_en || "").trim()
         await tx.knowledgeDisease.upsert({
           where: { slug },
           update: {
             nameTh,
-            nameEn: row.name_en || null,
-            definition: row.definition || "",
+            nameEn: nameEnRaw || null,
+            definition: defTh,
+            definitionEn: defEnRaw.trim() ? defEnRaw.trim() : null,
             severityLevel: row.severity_level || "ROUTINE",
-            selfCareAdvice: row.self_care_advice || "",
-            redFlagAdvice: row.red_flag_advice || "",
+            selfCareAdvice: selfTh,
+            selfCareEn: selfEnRaw.trim() ? selfEnRaw.trim() : null,
+            redFlagAdvice: redTh,
+            redFlagEn: redEnRaw.trim() ? redEnRaw.trim() : null,
             keywords: row.keywords || "",
             isPublished: row.published ? toBool(row.published) : true,
           },
           create: {
             slug,
             nameTh,
-            nameEn: row.name_en || null,
-            definition: row.definition || "",
+            nameEn: nameEnRaw || null,
+            definition: defTh,
+            definitionEn: defEnRaw.trim() ? defEnRaw.trim() : null,
             severityLevel: row.severity_level || "ROUTINE",
-            selfCareAdvice: row.self_care_advice || "",
-            redFlagAdvice: row.red_flag_advice || "",
+            selfCareAdvice: selfTh,
+            selfCareEn: selfEnRaw.trim() ? selfEnRaw.trim() : null,
+            redFlagAdvice: redTh,
+            redFlagEn: redEnRaw.trim() ? redEnRaw.trim() : null,
             keywords: row.keywords || "",
             isPublished: row.published ? toBool(row.published) : true,
           },
@@ -1035,12 +1022,16 @@ export async function syncKnowledgeFromSheet(options?: {
         const slug = normalizeSlug(row.slug || row.name_th || row.name || "")
         const nameTh = row.name_th || row.name || ""
         if (!slug || !nameTh) continue
+        const obsTh = row.observation_th || row.observation_guide || ""
+        const obsEnRaw = row.observation_en || ""
+        const nameEnRaw = (row.name_en || "").trim()
         await tx.knowledgeSymptom.upsert({
           where: { slug },
           update: {
             nameTh,
-            nameEn: row.name_en || null,
-            observationGuide: row.observation_guide || "",
+            nameEn: nameEnRaw || null,
+            observationGuide: obsTh,
+            observationEn: obsEnRaw.trim() ? obsEnRaw.trim() : null,
             firstAid: row.first_aid || "",
             dangerLevel: row.danger_level || "LOW",
             redFlag: row.red_flag ? toBool(row.red_flag) : false,
@@ -1050,8 +1041,9 @@ export async function syncKnowledgeFromSheet(options?: {
           create: {
             slug,
             nameTh,
-            nameEn: row.name_en || null,
-            observationGuide: row.observation_guide || "",
+            nameEn: nameEnRaw || null,
+            observationGuide: obsTh,
+            observationEn: obsEnRaw.trim() ? obsEnRaw.trim() : null,
             firstAid: row.first_aid || "",
             dangerLevel: row.danger_level || "LOW",
             redFlag: row.red_flag ? toBool(row.red_flag) : false,
@@ -1070,9 +1062,14 @@ export async function syncKnowledgeFromSheet(options?: {
           : null
         const found = byId || bySlot || bySlug
         const desiredSlug = row.slug ? normalizeSlug(row.slug) : null
-        const name =
-          row.brand_name || row.generic_name || desiredSlug || ref
-        const description = row.indication || ""
+        const brandTh = row.brand_name_th || row.brand_name || ""
+        const brandEnRaw = (row.brand_name_en || "").trim()
+        const indTh = row.indication_th || row.indication || ""
+        const indEnRaw = (row.indication_en || "").trim()
+        const doseTh = row.dose_th || row.dose_by_age_weight || ""
+        const doseEnRaw = (row.dose_en || "").trim()
+        const name = brandTh || row.generic_name || desiredSlug || ref
+        const description = indTh || row.generic_name || name
         if (!found) {
           if (!createMissingDrugs) continue
           await tx.drug.create({
@@ -1082,10 +1079,13 @@ export async function syncKnowledgeFromSheet(options?: {
               description,
               slug: desiredSlug,
               genericName: row.generic_name || null,
-              brandName: row.brand_name || null,
-              indication: row.indication || null,
+              brandName: brandTh || null,
+              brandNameEn: brandEnRaw || null,
+              indication: indTh || null,
+              indicationEn: indEnRaw || null,
               contraindications: row.contraindications || null,
-              doseByAgeWeight: row.dose_by_age_weight || null,
+              doseByAgeWeight: doseTh || null,
+              doseEn: doseEnRaw || null,
               keywords: row.keywords || "",
               isPublished: row.published ? toBool(row.published) : true,
               knowledgePriority: toInt(row.knowledge_priority, 0),
@@ -1095,12 +1095,17 @@ export async function syncKnowledgeFromSheet(options?: {
           await tx.drug.update({
             where: { id: found.id },
             data: {
+              name,
+              description,
               slug: desiredSlug ?? found.slug,
               genericName: row.generic_name || null,
-              brandName: row.brand_name || null,
-              indication: row.indication || null,
+              brandName: brandTh || null,
+              brandNameEn: brandEnRaw || null,
+              indication: indTh || null,
+              indicationEn: indEnRaw || null,
               contraindications: row.contraindications || null,
-              doseByAgeWeight: row.dose_by_age_weight || null,
+              doseByAgeWeight: doseTh || null,
+              doseEn: doseEnRaw || null,
               keywords: row.keywords || "",
               isPublished: row.published ? toBool(row.published) : true,
               knowledgePriority: toInt(row.knowledge_priority, 0),
@@ -1113,15 +1118,22 @@ export async function syncKnowledgeFromSheet(options?: {
         const slug = normalizeSlug(row.slug || row.title_th || row.title || "")
         const titleTh = row.title_th || row.title || ""
         if (!slug || !titleTh) continue
+        const sumTh = row.summary_th || ""
+        const sumEnRaw = row.summary_en || ""
+        const mdTh = row.content_md_th || row.content_md || ""
+        const mdEnRaw = row.content_md_en || ""
+        const titleEnRaw = (row.title_en || "").trim()
+        const summaryEnStored = sumEnRaw.trim() ? sumEnRaw.trim() : sumTh
+        const contentMdEnStored = mdEnRaw.trim() ? mdEnRaw.trim() : mdTh
         await tx.knowledgeHealthTip.upsert({
           where: { slug },
           update: {
             titleTh,
-            titleEn: row.title_en || null,
-            summaryTh: row.summary_th || "",
-            summaryEn: row.summary_en || "",
-            contentMdTh: row.content_md_th || row.content_md || "",
-            contentMdEn: row.content_md_en || "",
+            titleEn: titleEnRaw || null,
+            summaryTh: sumTh,
+            summaryEn: summaryEnStored,
+            contentMdTh: mdTh,
+            contentMdEn: contentMdEnStored,
             keywords: row.keywords || "",
             category: row.category || null,
             coverImageUrl: row.cover_image_url || null,
@@ -1130,11 +1142,11 @@ export async function syncKnowledgeFromSheet(options?: {
           create: {
             slug,
             titleTh,
-            titleEn: row.title_en || null,
-            summaryTh: row.summary_th || "",
-            summaryEn: row.summary_en || "",
-            contentMdTh: row.content_md_th || row.content_md || "",
-            contentMdEn: row.content_md_en || "",
+            titleEn: titleEnRaw || null,
+            summaryTh: sumTh,
+            summaryEn: summaryEnStored,
+            contentMdTh: mdTh,
+            contentMdEn: contentMdEnStored,
             keywords: row.keywords || "",
             category: row.category || null,
             coverImageUrl: row.cover_image_url || null,

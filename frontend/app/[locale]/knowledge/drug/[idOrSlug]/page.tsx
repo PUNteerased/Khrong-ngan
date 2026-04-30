@@ -5,26 +5,17 @@ import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { useLocale, useTranslations } from "next-intl"
 import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Spinner } from "@/components/ui/spinner"
-import { useToast } from "@/hooks/use-toast"
-import {
-  fetchKnowledgeDrugDetail,
-  fetchDrugSafetyCheck,
-  type DrugDetailResponse,
-} from "@/lib/api"
-import { getStoredToken } from "@/lib/auth-token"
+import { fetchKnowledgeDrugDetail, type DrugDetailResponse } from "@/lib/api"
 
 export default function KnowledgeDrugDetailPage() {
   const t = useTranslations("Knowledge")
   const locale = useLocale()
   const params = useParams<{ idOrSlug: string }>()
-  const { toast } = useToast()
   const [key, setKey] = useState("")
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<DrugDetailResponse | null>(null)
-  const [checking, setChecking] = useState(false)
 
   useEffect(() => {
     setKey(String(params.idOrSlug || ""))
@@ -34,7 +25,7 @@ export default function KnowledgeDrugDetailPage() {
     if (!key) return
     let cancelled = false
     setLoading(true)
-    fetchKnowledgeDrugDetail(key)
+    fetchKnowledgeDrugDetail(key, locale)
       .then((d) => {
         if (!cancelled) setData(d)
       })
@@ -47,41 +38,7 @@ export default function KnowledgeDrugDetailPage() {
     return () => {
       cancelled = true
     }
-  }, [key])
-
-  const handleSafetyCheck = async () => {
-    if (!data) return
-    if (!getStoredToken()) {
-      toast({
-        variant: "destructive",
-        title: t("safetyLoginHint"),
-      })
-      return
-    }
-    try {
-      setChecking(true)
-      const result = await fetchDrugSafetyCheck(data.id)
-      if (result.isSafe) {
-        toast({
-          title: t("safetySafeTitle"),
-          description: t("safetySafeDesc"),
-        })
-      } else {
-        toast({
-          variant: "destructive",
-          title: t("safetyUnsafeTitle"),
-          description: `${t("safetyUnsafeDesc")} ${result.matchedAllergies.join(", ")}`,
-        })
-      }
-    } catch {
-      toast({
-        variant: "destructive",
-        title: "ตรวจสอบความปลอดภัยไม่สำเร็จ",
-      })
-    } finally {
-      setChecking(false)
-    }
-  }
+  }, [key, locale])
 
   if (loading) {
     return (
@@ -108,16 +65,15 @@ export default function KnowledgeDrugDetailPage() {
           {data.brandName ? <p className="text-sm">ยี่ห้อ: {data.brandName}</p> : null}
           <p className="text-sm">{data.description}</p>
           {data.indication ? <p className="text-sm">สรรพคุณ: {data.indication}</p> : null}
-          {data.doseByAgeWeight ? <p className="text-sm">วิธีใช้: {data.doseByAgeWeight}</p> : null}
+          {data.doseByAgeWeight ? (
+            <p className="text-sm">วิธีใช้: {data.doseByAgeWeight}</p>
+          ) : null}
           {data.contraindications ? (
             <p className="text-sm text-destructive">ข้อควรระวัง: {data.contraindications}</p>
           ) : null}
           <Badge variant={data.inCabinet ? "default" : "secondary"}>
-            {data.inCabinet ? t("inCabinet", { slot: data.slotId }) : t("outOfStock")}
+            {data.inCabinet ? t("inCabinetShort") : t("outOfStock")}
           </Badge>
-          <Button onClick={handleSafetyCheck} disabled={checking}>
-            {checking ? t("safetyChecking") : "เช็คความปลอดภัยกับโปรไฟล์ของฉัน"}
-          </Button>
         </CardContent>
       </Card>
 
@@ -127,7 +83,7 @@ export default function KnowledgeDrugDetailPage() {
           <div className="flex flex-wrap gap-2">
             {data.treatsDiseases.map((d) => (
               <Link key={d.id} href={`/${locale}/knowledge/disease/${d.slug}`}>
-                <Badge variant="outline">{d.nameTh}</Badge>
+                <Badge variant="outline">{d.name}</Badge>
               </Link>
             ))}
           </div>
@@ -140,7 +96,7 @@ export default function KnowledgeDrugDetailPage() {
           <div className="flex flex-wrap gap-2">
             {data.relievesSymptoms.map((s) => (
               <Link key={s.id} href={`/${locale}/knowledge/symptom/${s.slug}`}>
-                <Badge variant="outline">{s.nameTh}</Badge>
+                <Badge variant="outline">{s.name}</Badge>
               </Link>
             ))}
           </div>

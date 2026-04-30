@@ -11,12 +11,19 @@ import {
   Cookie,
   ChevronRight,
   UserCircle,
+  Type,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Spinner } from "@/components/ui/spinner"
 import { getStoredToken } from "@/lib/auth-token"
+import {
+  applyFontSizePref,
+  FONT_SIZE_STORAGE_KEY,
+  readFontSizePref,
+  type FontSizePref,
+} from "@/components/font-size-root"
 
 export default function SettingsPage() {
   const t = useTranslations("Settings")
@@ -24,9 +31,11 @@ export default function SettingsPage() {
   const pathname = usePathname()
   const [darkMode, setDarkMode] = useState(true)
   const [mounted, setMounted] = useState(false)
+  const [fontSize, setFontSize] = useState<FontSizePref>("md")
 
   useEffect(() => {
     setMounted(true)
+    setFontSize(readFontSizePref())
   }, [])
 
   const handleThemeToggle = (checked: boolean) => {
@@ -115,6 +124,39 @@ export default function SettingsPage() {
                 >
                   Dark
                 </Button>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Type className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium text-foreground">{t("fontSizeTitle")}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 p-1 rounded-lg bg-muted">
+                {(["sm", "md", "lg"] as const).map((size) => (
+                  <Button
+                    key={size}
+                    variant={fontSize === size ? "secondary" : "ghost"}
+                    size="sm"
+                    className="h-8 px-3"
+                    type="button"
+                    onClick={() => {
+                      setFontSize(size)
+                      localStorage.setItem(FONT_SIZE_STORAGE_KEY, size)
+                      applyFontSizePref(size)
+                    }}
+                  >
+                    {size === "sm"
+                      ? t("fontSizeSmall")
+                      : size === "md"
+                        ? t("fontSizeMedium")
+                        : t("fontSizeLarge")}
+                  </Button>
+                ))}
               </div>
             </div>
 

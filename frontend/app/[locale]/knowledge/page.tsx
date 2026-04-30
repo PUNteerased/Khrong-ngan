@@ -39,7 +39,7 @@ function KnowledgeContent() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    fetchKnowledgeSearch(searchQuery)
+    fetchKnowledgeSearch(searchQuery, locale)
       .then((kg) => {
         if (cancelled) return
         setData(kg)
@@ -54,7 +54,7 @@ function KnowledgeContent() {
     return () => {
       cancelled = true
     }
-  }, [searchQuery])
+  }, [searchQuery, locale])
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-60px)]">
@@ -95,8 +95,6 @@ function KnowledgeContent() {
             </div>
           ) : (
             data.diseases.map((disease) => {
-              const diseaseLabel =
-                locale === "en" ? disease.nameEn || disease.nameTh : disease.nameTh
               return (
                 <Link
                   key={disease.id}
@@ -107,7 +105,7 @@ function KnowledgeContent() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1.5">
                           <h3 className="font-semibold text-foreground">
-                            {diseaseLabel}
+                            {disease.name}
                           </h3>
                           <p className="text-sm text-muted-foreground">
                             {disease.definition}
@@ -135,8 +133,6 @@ function KnowledgeContent() {
             </div>
           ) : (
             data.symptoms.map((symptom) => {
-              const symptomLabel =
-                locale === "en" ? symptom.nameEn || symptom.nameTh : symptom.nameTh
               return (
                 <Link
                   key={symptom.id}
@@ -147,7 +143,7 @@ function KnowledgeContent() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1.5">
                           <h3 className="font-semibold text-foreground">
-                            {symptomLabel}
+                            {symptom.name}
                           </h3>
                           <p className="text-sm text-muted-foreground">
                             {symptom.observationGuide}
@@ -200,7 +196,7 @@ function KnowledgeContent() {
                             {drug.inCabinet ? (
                               <Badge className="bg-success/20 text-success hover:bg-success/30 text-xs">
                                 <CheckCircle className="h-3 w-3 mr-1" />
-                                {t("inCabinet", { slot: drug.slotId })}
+                                {t("inCabinetShort")}
                               </Badge>
                             ) : (
                               <Badge variant="secondary" className="text-xs">

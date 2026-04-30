@@ -1086,6 +1086,21 @@ export default function AdminPage() {
                             {knowledgePreview.drug.skipped}
                           </div>
                           <div className="rounded border p-2">
+                            {t("knowledgePreviewHealthTip")}: +{knowledgePreview.healthTip.inserted} / ~
+                            {knowledgePreview.healthTip.updated} / -{knowledgePreview.healthTip.deleted} / skip{" "}
+                            {knowledgePreview.healthTip.skipped}
+                          </div>
+                          <div className="rounded border p-2">
+                            {t("knowledgePreviewHealthTipRef")}: +{knowledgePreview.healthTipRef.inserted} / ~
+                            {knowledgePreview.healthTipRef.updated} / -{knowledgePreview.healthTipRef.deleted} / skip{" "}
+                            {knowledgePreview.healthTipRef.skipped}
+                          </div>
+                          <div className="rounded border p-2">
+                            {t("knowledgePreviewI18nUi")}: +{knowledgePreview.i18nUi.inserted} / ~
+                            {knowledgePreview.i18nUi.updated} / -{knowledgePreview.i18nUi.deleted} / skip{" "}
+                            {knowledgePreview.i18nUi.skipped}
+                          </div>
+                          <div className="rounded border p-2">
                             D-S map: +{knowledgePreview.diseaseSymptomMap.inserted} / -{knowledgePreview.diseaseSymptomMap.deleted} / skip{" "}
                             {knowledgePreview.diseaseSymptomMap.skipped}
                           </div>

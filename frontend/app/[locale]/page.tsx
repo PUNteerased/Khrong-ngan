@@ -18,7 +18,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useEffect, useMemo, useState } from "react"
 import { HealthTipCard } from "@/components/health-tip-card"
-import { fetchHealthTipsSearch, type HealthTipListItem } from "@/lib/api"
+import { fetchHealthTipsSearch, fetchUiTranslations, type HealthTipListItem } from "@/lib/api"
 
 const HOME_HEALTH_TIPS_LIMIT = 5
 
@@ -28,10 +28,28 @@ export default function HomePage() {
   const [hasQRCode] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [articles, setArticles] = useState<HealthTipListItem[]>([])
+  const [uiHome, setUiHome] = useState<Record<string, string>>({})
 
   useEffect(() => {
     let cancelled = false
-    fetchHealthTipsSearch("")
+    fetchUiTranslations({ namespace: "Home", locale })
+      .then((rows) => {
+        if (cancelled) return
+        const m: Record<string, string> = {}
+        for (const r of rows) m[r.key] = r.value
+        setUiHome(m)
+      })
+      .catch(() => {
+        if (!cancelled) setUiHome({})
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [locale])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchHealthTipsSearch("", locale)
       .then((rows) => {
         if (!cancelled) setArticles(rows.slice(0, HOME_HEALTH_TIPS_LIMIT))
       })
@@ -41,36 +59,36 @@ export default function HomePage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [locale])
 
   const quickAccessItems = useMemo(
     () => [
       {
         href: "/knowledge?tab=drug",
-        label: t("quickDrug"),
+        label: uiHome.quickDrug || t("quickDrug"),
         icon: Pill,
         color: "bg-blue-500/10 text-blue-600",
       },
       {
         href: "/knowledge?tab=disease",
-        label: t("quickDisease"),
+        label: uiHome.quickDisease || t("quickDisease"),
         icon: Stethoscope,
         color: "bg-green-500/10 text-green-600",
       },
       {
         href: "/knowledge?tab=symptom",
-        label: t("quickSymptom"),
+        label: uiHome.quickSymptom || t("quickSymptom"),
         icon: Thermometer,
         color: "bg-orange-500/10 text-orange-600",
       },
       {
         href: "/history",
-        label: t("quickHistory"),
+        label: uiHome.quickHistory || t("quickHistory"),
         icon: Clock,
         color: "bg-purple-500/10 text-purple-600",
       },
     ],
-    [t]
+    [t, uiHome]
   )
 
   return (
@@ -189,12 +207,8 @@ export default function HomePage() {
               <HealthTipCard
                 article={{
                   slug: article.slug,
-                  title:
-                    locale === "en" ? article.titleEn || article.titleTh : article.titleTh,
-                  excerpt:
-                    locale === "en"
-                      ? article.summaryEn || article.summaryTh
-                      : article.summaryTh,
+                  title: article.title,
+                  excerpt: article.summary,
                   category: article.category || "—",
                 }}
                 layout="carousel"

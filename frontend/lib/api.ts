@@ -449,15 +449,29 @@ export type AdminKnowledgeSyncRowError = {
   row: Record<string, string>
 }
 
+/** Diff counters returned by knowledge sheet sync (matches backend KnowledgeSyncResult). */
+export type AdminKnowledgeSyncDiff = {
+  inserted: number
+  updated: number
+  deleted: number
+  skipped: number
+}
+
 export type AdminKnowledgeSyncResult = {
+  source: "google_sheets_api" | "published_csv"
   sheetUrl: string
   tabs: string[]
-  disease: { inserted: number; updated: number; skipped: number }
-  symptom: { inserted: number; updated: number; skipped: number }
-  drug: { inserted: number; updated: number; skipped: number }
-  diseaseSymptomMap: { inserted: number; updated: number; skipped: number }
-  diseaseDrugMap: { inserted: number; updated: number; skipped: number }
-  symptomDrugMap: { inserted: number; updated: number; skipped: number }
+  dryRun: boolean
+  deleteMode: "soft" | "hard"
+  disease: AdminKnowledgeSyncDiff
+  symptom: AdminKnowledgeSyncDiff
+  drug: AdminKnowledgeSyncDiff
+  healthTip: AdminKnowledgeSyncDiff
+  healthTipRef: AdminKnowledgeSyncDiff
+  i18nUi: AdminKnowledgeSyncDiff
+  diseaseSymptomMap: AdminKnowledgeSyncDiff
+  diseaseDrugMap: AdminKnowledgeSyncDiff
+  symptomDrugMap: AdminKnowledgeSyncDiff
   errors: AdminKnowledgeSyncRowError[]
 }
 
@@ -775,20 +789,27 @@ export async function sendChatMessage(
 export type KnowledgeDiseaseListItem = {
   id: string
   slug: string
-  nameTh: string
-  nameEn: string | null
+  name: string
   definition: string
   severityLevel: string
+  nameTh: string
+  nameEn: string | null
+  definitionTh: string
+  definitionEn: string | null
 }
 
 export type KnowledgeSymptomListItem = {
   id: string
   slug: string
-  nameTh: string
-  nameEn: string | null
+  name: string
+  observation: string
   observationGuide: string
   dangerLevel: string
   redFlag: boolean
+  nameTh: string
+  nameEn: string | null
+  observationTh: string
+  observationEn: string | null
 }
 
 export type KnowledgeDrugListItem = {
@@ -813,6 +834,8 @@ export type KnowledgeSearchResponse = {
 export type HealthTipListItem = {
   id: string
   slug: string
+  title: string
+  summary: string
   titleTh: string
   titleEn: string | null
   summaryTh: string
@@ -834,6 +857,9 @@ export type HealthTipReference = {
 export type HealthTipDetailResponse = {
   id: string
   slug: string
+  title: string
+  summary: string
+  contentMd: string
   titleTh: string
   titleEn: string | null
   summaryTh: string
@@ -845,17 +871,30 @@ export type HealthTipDetailResponse = {
   coverImageUrl: string | null
   references: HealthTipReference[]
   updatedAt: string
+  createdAt?: string
+  isPublished?: boolean
 }
 
-export async function fetchHealthTipsSearch(query?: string) {
-  const q = query?.trim() ? `?q=${encodeURIComponent(query.trim())}` : ""
-  return apiJson<HealthTipListItem[]>(`/api/health-tips/search${q}`, { auth: false })
+function knowledgeLang(locale?: string): "th" | "en" {
+  return locale === "en" ? "en" : "th"
 }
 
-export async function fetchHealthTipDetail(slug: string) {
-  return apiJson<HealthTipDetailResponse>(`/api/health-tips/${encodeURIComponent(slug)}`, {
-    auth: false,
-  })
+export async function fetchHealthTipsSearch(query?: string, locale?: string) {
+  const sp = new URLSearchParams()
+  if (query?.trim()) sp.set("q", query.trim())
+  sp.set("lang", knowledgeLang(locale))
+  return apiJson<HealthTipListItem[]>(`/api/health-tips/search?${sp.toString()}`, { auth: false })
+}
+
+export async function fetchHealthTipDetail(slug: string, locale?: string) {
+  const sp = new URLSearchParams()
+  sp.set("lang", knowledgeLang(locale))
+  return apiJson<HealthTipDetailResponse>(
+    `/api/health-tips/${encodeURIComponent(slug)}?${sp.toString()}`,
+    {
+      auth: false,
+    }
+  )
 }
 
 export type UiTranslationItem = {
@@ -863,100 +902,178 @@ export type UiTranslationItem = {
   key: string
   th: string
   en: string
+  value: string
   updatedAt: string
 }
 
-export async function fetchUiTranslations(params?: { namespace?: string; key?: string }) {
+export async function fetchUiTranslations(params?: {
+  namespace?: string
+  key?: string
+  locale?: string
+}) {
   const sp = new URLSearchParams()
   if (params?.namespace) sp.set("namespace", params.namespace)
   if (params?.key) sp.set("key", params.key)
-  const qs = sp.toString()
-  return apiJson<UiTranslationItem[]>(`/api/i18n/ui${qs ? `?${qs}` : ""}`, { auth: false })
+  sp.set("lang", knowledgeLang(params?.locale))
+  return apiJson<UiTranslationItem[]>(`/api/i18n/ui?${sp.toString()}`, { auth: false })
+}
+
+export type DiseaseSymptomLink = {
+  id: string
+  slug: string
+  name: string
+  nameTh: string
+  nameEn: string | null
+  dangerLevel: string
+  redFlag: boolean
+  relevanceScore: number
+  note: string
+}
+
+/** Linked symptom row (e.g. on drug detail). */
+export type SymptomSummaryLink = {
+  id: string
+  slug: string
+  name: string
+  nameTh: string
+  nameEn: string | null
+  dangerLevel: string
+  redFlag: boolean
+  recommendationLevel: string
+  note: string
+}
+
+export type DiseaseDrugLink = KnowledgeDrugListItem & {
+  recommendationLevel: string
+  note: string
 }
 
 export type DiseaseDetailResponse = {
   id: string
   slug: string
-  nameTh: string
-  nameEn: string | null
+  name: string
   definition: string
-  severityLevel: string
   selfCareAdvice: string
   redFlagAdvice: string
-  relatedSymptoms: (KnowledgeSymptomListItem & { relevanceScore: number; note: string })[]
-  suggestedDrugs: (KnowledgeDrugListItem & {
-    recommendationLevel: string
-    note: string
-  })[]
+  severityLevel: string
+  nameTh: string
+  nameEn: string | null
+  definitionTh: string
+  definitionEn: string | null
+  selfCareTh: string
+  selfCareEn: string | null
+  redFlagTh: string
+  redFlagEn: string | null
+  keywords: string
+  isPublished: boolean
+  createdAt: string
+  updatedAt: string
+  relatedSymptoms: DiseaseSymptomLink[]
+  suggestedDrugs: DiseaseDrugLink[]
+}
+
+export type SymptomDiseaseLink = {
+  id: string
+  slug: string
+  name: string
+  nameTh: string
+  nameEn: string | null
+  severityLevel: string
+  relevanceScore: number
+  note: string
 }
 
 export type SymptomDetailResponse = {
   id: string
   slug: string
-  nameTh: string
-  nameEn: string | null
+  name: string
+  observation: string
   observationGuide: string
   firstAid: string
   dangerLevel: string
   redFlag: boolean
-  possibleDiseases: (KnowledgeDiseaseListItem & { relevanceScore: number; note: string })[]
-  reliefDrugs: (KnowledgeDrugListItem & { recommendationLevel: string; note: string })[]
+  nameTh: string
+  nameEn: string | null
+  observationTh: string
+  observationEn: string | null
+  keywords: string
+  isPublished: boolean
+  createdAt: string
+  updatedAt: string
+  possibleDiseases: SymptomDiseaseLink[]
+  reliefDrugs: DiseaseDrugLink[]
 }
 
 export type DrugDetailResponse = KnowledgeDrugListItem & {
   genericName: string | null
-  brandName: string | null
-  indication: string | null
+  brandName: string
+  brandNameTh: string | null
+  brandNameEn: string | null
+  indication: string
+  indicationTh: string | null
+  indicationEn: string | null
   contraindications: string | null
-  doseByAgeWeight: string | null
+  doseByAgeWeight: string
+  doseTh: string | null
+  doseEn: string | null
   ingredientsText: string
   warnings: string | null
-  treatsDiseases: (KnowledgeDiseaseListItem & {
-    recommendationLevel: string
-    note: string
-  })[]
-  relievesSymptoms: (KnowledgeSymptomListItem & {
-    recommendationLevel: string
-    note: string
-  })[]
+  treatsDiseases: (SymptomDiseaseLink & { recommendationLevel: string; note: string })[]
+  relievesSymptoms: SymptomSummaryLink[]
 }
 
-export async function fetchKnowledgeSearch(query?: string) {
-  const q = query?.trim()
-    ? `?q=${encodeURIComponent(query.trim())}`
-    : ""
-  return apiJson<KnowledgeSearchResponse>(`/api/knowledge/search${q}`, { auth: false })
+export async function fetchKnowledgeSearch(query?: string, locale?: string) {
+  const sp = new URLSearchParams()
+  if (query?.trim()) sp.set("q", query.trim())
+  sp.set("lang", knowledgeLang(locale))
+  return apiJson<KnowledgeSearchResponse>(`/api/knowledge/search?${sp.toString()}`, { auth: false })
 }
 
-export async function fetchKnowledgeDiseases() {
-  return apiJson<KnowledgeDiseaseListItem[]>("/api/knowledge/diseases", { auth: false })
+export async function fetchKnowledgeDiseases(locale?: string) {
+  const sp = new URLSearchParams()
+  sp.set("lang", knowledgeLang(locale))
+  return apiJson<KnowledgeDiseaseListItem[]>(`/api/knowledge/diseases?${sp.toString()}`, {
+    auth: false,
+  })
 }
 
-export async function fetchKnowledgeSymptoms() {
-  return apiJson<KnowledgeSymptomListItem[]>("/api/knowledge/symptoms", { auth: false })
+export async function fetchKnowledgeSymptoms(locale?: string) {
+  const sp = new URLSearchParams()
+  sp.set("lang", knowledgeLang(locale))
+  return apiJson<KnowledgeSymptomListItem[]>(`/api/knowledge/symptoms?${sp.toString()}`, {
+    auth: false,
+  })
 }
 
-export async function fetchKnowledgeDrugs() {
-  return apiJson<KnowledgeDrugListItem[]>("/api/knowledge/drugs", { auth: false })
+export async function fetchKnowledgeDrugs(locale?: string) {
+  const sp = new URLSearchParams()
+  sp.set("lang", knowledgeLang(locale))
+  return apiJson<KnowledgeDrugListItem[]>(`/api/knowledge/drugs?${sp.toString()}`, { auth: false })
 }
 
-export async function fetchKnowledgeDiseaseDetail(slug: string) {
+export async function fetchKnowledgeDiseaseDetail(slug: string, locale?: string) {
+  const sp = new URLSearchParams()
+  sp.set("lang", knowledgeLang(locale))
   return apiJson<DiseaseDetailResponse>(
-    `/api/knowledge/diseases/${encodeURIComponent(slug)}`,
+    `/api/knowledge/diseases/${encodeURIComponent(slug)}?${sp.toString()}`,
     { auth: false }
   )
 }
 
-export async function fetchKnowledgeSymptomDetail(slug: string) {
+export async function fetchKnowledgeSymptomDetail(slug: string, locale?: string) {
+  const sp = new URLSearchParams()
+  sp.set("lang", knowledgeLang(locale))
   return apiJson<SymptomDetailResponse>(
-    `/api/knowledge/symptoms/${encodeURIComponent(slug)}`,
+    `/api/knowledge/symptoms/${encodeURIComponent(slug)}?${sp.toString()}`,
     { auth: false }
   )
 }
 
-export async function fetchKnowledgeDrugDetail(idOrSlug: string) {
+export async function fetchKnowledgeDrugDetail(idOrSlug: string, locale?: string) {
+  const sp = new URLSearchParams()
+  sp.set("lang", knowledgeLang(locale))
   return apiJson<DrugDetailResponse>(
-    `/api/knowledge/drugs/${encodeURIComponent(idOrSlug)}`,
+    `/api/knowledge/drugs/${encodeURIComponent(idOrSlug)}?${sp.toString()}`,
     { auth: false }
   )
 }

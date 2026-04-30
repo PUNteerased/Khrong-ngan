@@ -53,10 +53,13 @@ model Drug {
   slug        String?
   genericName String?
   brandName   String?
+  brandNameEn String?
   description String
   indication  String?
+  indicationEn String?
   contraindications String?
   doseByAgeWeight String?
+  doseEn          String?
   slotId      String    @unique
   quantity    Int       @default(0)
   category    String?
@@ -86,9 +89,13 @@ model KnowledgeDisease {
   nameTh         String
   nameEn         String?
   definition     String  @default("")
+  /// English definition; falls back to Thai in API when empty.
+  definitionEn   String?
   severityLevel  String  @default("ROUTINE")
   selfCareAdvice String  @default("")
+  selfCareEn     String?
   redFlagAdvice  String  @default("")
+  redFlagEn      String?
   keywords       String  @default("")
   isPublished    Boolean @default(true)
   createdAt      DateTime @default(now())
@@ -107,6 +114,7 @@ model KnowledgeSymptom {
   nameTh           String
   nameEn           String?
   observationGuide String  @default("")
+  observationEn    String?
   firstAid         String  @default("")
   dangerLevel      String  @default("LOW")
   redFlag          Boolean @default(false)

@@ -135,3 +135,14 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* User preference: text size (Settings) */
+html[data-font-size="sm"] {
+  font-size: 14px;
+}
+html[data-font-size="md"] {
+  font-size: 16px;
+}
+html[data-font-size="lg"] {
+  font-size: 18px;
+}

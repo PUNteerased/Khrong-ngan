@@ -502,7 +502,7 @@ export default function ProfilePage() {
                   />
                 </Field>
                 <Field>
-                  <FieldLabel>เบอร์โทร (ต้องยืนยัน OTP เมื่อแก้ไข)</FieldLabel>
+                  <FieldLabel>เบอร์โทร</FieldLabel>
                   <Input
                     type="tel"
                     value={phoneInput}

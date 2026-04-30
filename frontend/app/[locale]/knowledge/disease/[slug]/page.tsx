@@ -24,7 +24,7 @@ export default function DiseaseDetailPage() {
     if (!slug) return
     let cancelled = false
     setLoading(true)
-    fetchKnowledgeDiseaseDetail(slug)
+    fetchKnowledgeDiseaseDetail(slug, locale)
       .then((d) => {
         if (!cancelled) setData(d)
       })
@@ -37,7 +37,7 @@ export default function DiseaseDetailPage() {
     return () => {
       cancelled = true
     }
-  }, [slug])
+  }, [slug, locale])
 
   if (loading) {
     return (
@@ -54,15 +54,17 @@ export default function DiseaseDetailPage() {
         <Link href={`/${locale}/knowledge`} className="hover:underline">
           คลังข้อมูล
         </Link>{" "}
-        / <span>{data.nameTh}</span>
+        / <span>{data.name}</span>
       </div>
       <Card>
         <CardContent className="p-4 space-y-2">
-          <h1 className="text-xl font-semibold">{data.nameTh}</h1>
+          <h1 className="text-xl font-semibold">{data.name}</h1>
           {data.nameEn ? <p className="text-sm text-muted-foreground">{data.nameEn}</p> : null}
           <Badge variant="secondary">{data.severityLevel}</Badge>
           <p className="text-sm">{data.definition}</p>
-          {data.selfCareAdvice ? <p className="text-sm">การดูแลเบื้องต้น: {data.selfCareAdvice}</p> : null}
+          {data.selfCareAdvice ? (
+            <p className="text-sm">การดูแลเบื้องต้น: {data.selfCareAdvice}</p>
+          ) : null}
           {data.redFlagAdvice ? (
             <p className="text-sm text-destructive">สัญญาณอันตราย: {data.redFlagAdvice}</p>
           ) : null}
@@ -75,7 +77,7 @@ export default function DiseaseDetailPage() {
           <div className="flex flex-wrap gap-2">
             {data.relatedSymptoms.map((s) => (
               <Link key={s.id} href={`/${locale}/knowledge/symptom/${s.slug}`}>
-                <Badge variant="outline">{s.nameTh}</Badge>
+                <Badge variant="outline">{s.name}</Badge>
               </Link>
             ))}
           </div>

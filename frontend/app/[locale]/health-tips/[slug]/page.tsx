@@ -24,11 +24,10 @@ function normalizeMarkdownText(text: string): string {
 export async function generateMetadata({ params }: Props) {
   const { locale, slug } = await params
   const t = await getTranslations({ locale, namespace: "HealthArticle" })
-  const tip = await fetchHealthTipDetail(slug).catch(() => null)
+  const tip = await fetchHealthTipDetail(slug, locale).catch(() => null)
   if (!tip) return { title: t("notFoundTitle") }
-  const isEn = locale === "en"
-  const title = isEn ? tip.titleEn || tip.titleTh : tip.titleTh
-  const summary = isEn ? tip.summaryEn || tip.summaryTh : tip.summaryTh
+  const title = tip.title
+  const summary = tip.summary
   return {
     title: `${title} | LaneYa`,
     description: summary,
@@ -39,14 +38,10 @@ export default async function HealthArticlePage({ params }: Props) {
   const { locale, slug } = await params
   setRequestLocale(locale)
   const t = await getTranslations({ locale, namespace: "HealthArticle" })
-  const tip = await fetchHealthTipDetail(slug).catch(() => null)
+  const tip = await fetchHealthTipDetail(slug, locale).catch(() => null)
   if (!tip) notFound()
-  const isEn = locale === "en"
-  const title = isEn ? tip.titleEn || tip.titleTh : tip.titleTh
-  const summaryRaw = isEn ? tip.summaryEn || tip.summaryTh : tip.summaryTh
-  const contentRaw = isEn ? tip.contentMdEn || tip.contentMdTh : tip.contentMdTh
-  const summary = normalizeMarkdownText(summaryRaw)
-  const content = normalizeMarkdownText(contentRaw)
+  const summary = normalizeMarkdownText(tip.summary)
+  const content = normalizeMarkdownText(tip.contentMd)
 
   return (
     <div className="mx-auto max-w-lg px-4 py-4 pb-12">
@@ -61,7 +56,7 @@ export default async function HealthArticlePage({ params }: Props) {
         <header className="space-y-3">
           <Badge variant="secondary">{tip.category || "—"}</Badge>
           <h1 className="text-xl font-semibold leading-snug text-foreground">
-            {title}
+            {tip.title}
           </h1>
           <p className="text-sm leading-relaxed text-muted-foreground">
             {summary}

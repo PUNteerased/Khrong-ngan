@@ -2,49 +2,49 @@ import type { Request, Response } from "express"
 import type { Prisma } from "@prisma/client"
 import { prisma } from "../lib/prisma.js"
 import { syncKnowledgeFromSheet } from "../services/knowledgeSheetSync.service.js"
+import { parseLangQuery } from "../utils/lang.js"
+import {
+  projectDiseaseCard,
+  projectDiseaseDetail,
+  projectDiseaseRef,
+  projectDrugCard,
+  projectDrugDetail,
+  projectSymptomCard,
+  projectSymptomDetail,
+  projectSymptomRef,
+} from "../utils/knowledgeProjection.js"
 
 function normalizeQuery(q: string): string {
   return q.trim()
 }
 
-function drugLite(d: {
-  id: string
-  slug: string | null
-  name: string
-  genericName: string | null
-  description: string
-  category: string | null
-  slotId: string
-  quantity: number
-  imageUrl: string | null
-}): Record<string, unknown> {
-  return {
-    id: d.id,
-    slug: d.slug,
-    name: d.name,
-    genericName: d.genericName,
-    description: d.description,
-    category: d.category,
-    slotId: d.slotId,
-    quantity: d.quantity,
-    imageUrl: d.imageUrl,
-    inCabinet: d.quantity > 0,
-  }
-}
-
 export async function searchKnowledge(req: Request, res: Response) {
+  const lang = parseLangQuery(req)
   const q = normalizeQuery(String(req.query.q || ""))
   const whereContains = q
     ? {
         OR: [
           { nameTh: { contains: q } },
           { nameEn: { contains: q } },
+          { definition: { contains: q } },
+          { definitionEn: { contains: q } },
           { keywords: { contains: q } },
         ],
       }
     : {}
   const diseaseWhere = { isPublished: true, ...whereContains }
-  const symptomWhere = { isPublished: true, ...whereContains }
+  const symptomWhere = q
+    ? {
+        isPublished: true,
+        OR: [
+          { nameTh: { contains: q } },
+          { nameEn: { contains: q } },
+          { observationGuide: { contains: q } },
+          { observationEn: { contains: q } },
+          { keywords: { contains: q } },
+        ],
+      }
+    : { isPublished: true }
   const drugWhere = q
     ? {
         isPublished: true,
@@ -52,7 +52,10 @@ export async function searchKnowledge(req: Request, res: Response) {
           { name: { contains: q } },
           { genericName: { contains: q } },
           { brandName: { contains: q } },
+          { brandNameEn: { contains: q } },
           { description: { contains: q } },
+          { indication: { contains: q } },
+          { indicationEn: { contains: q } },
           { keywords: { contains: q } },
         ],
       }
@@ -69,6 +72,7 @@ export async function searchKnowledge(req: Request, res: Response) {
         nameTh: true,
         nameEn: true,
         definition: true,
+        definitionEn: true,
         severityLevel: true,
       },
     }),
@@ -82,6 +86,7 @@ export async function searchKnowledge(req: Request, res: Response) {
         nameTh: true,
         nameEn: true,
         observationGuide: true,
+        observationEn: true,
         dangerLevel: true,
         redFlag: true,
       },
@@ -95,7 +100,11 @@ export async function searchKnowledge(req: Request, res: Response) {
         slug: true,
         name: true,
         genericName: true,
+        brandName: true,
+        brandNameEn: true,
         description: true,
+        indication: true,
+        indicationEn: true,
         category: true,
         slotId: true,
         quantity: true,
@@ -105,13 +114,14 @@ export async function searchKnowledge(req: Request, res: Response) {
   ])
 
   res.json({
-    diseases,
-    symptoms,
-    drugs: drugs.map(drugLite),
+    diseases: diseases.map((d) => projectDiseaseCard(d, lang)),
+    symptoms: symptoms.map((s) => projectSymptomCard(s, lang)),
+    drugs: drugs.map((d) => projectDrugCard(d, lang)),
   })
 }
 
-export async function listDiseases(_req: Request, res: Response) {
+export async function listDiseases(req: Request, res: Response) {
+  const lang = parseLangQuery(req)
   const rows = await prisma.knowledgeDisease.findMany({
     where: { isPublished: true },
     orderBy: [{ severityLevel: "desc" }, { nameTh: "asc" }],
@@ -121,13 +131,15 @@ export async function listDiseases(_req: Request, res: Response) {
       nameTh: true,
       nameEn: true,
       definition: true,
+      definitionEn: true,
       severityLevel: true,
     },
   })
-  res.json(rows)
+  res.json(rows.map((d) => projectDiseaseCard(d, lang)))
 }
 
-export async function listSymptoms(_req: Request, res: Response) {
+export async function listSymptoms(req: Request, res: Response) {
+  const lang = parseLangQuery(req)
   const rows = await prisma.knowledgeSymptom.findMany({
     where: { isPublished: true },
     orderBy: [{ dangerLevel: "desc" }, { nameTh: "asc" }],
@@ -137,14 +149,16 @@ export async function listSymptoms(_req: Request, res: Response) {
       nameTh: true,
       nameEn: true,
       observationGuide: true,
+      observationEn: true,
       dangerLevel: true,
       redFlag: true,
     },
   })
-  res.json(rows)
+  res.json(rows.map((s) => projectSymptomCard(s, lang)))
 }
 
-export async function listKnowledgeDrugs(_req: Request, res: Response) {
+export async function listKnowledgeDrugs(req: Request, res: Response) {
+  const lang = parseLangQuery(req)
   const rows = await prisma.drug.findMany({
     where: { isPublished: true },
     orderBy: [{ knowledgePriority: "desc" }, { name: "asc" }],
@@ -153,17 +167,22 @@ export async function listKnowledgeDrugs(_req: Request, res: Response) {
       slug: true,
       name: true,
       genericName: true,
+      brandName: true,
+      brandNameEn: true,
       description: true,
+      indication: true,
+      indicationEn: true,
       category: true,
       slotId: true,
       quantity: true,
       imageUrl: true,
     },
   })
-  res.json(rows.map(drugLite))
+  res.json(rows.map((d) => projectDrugCard(d, lang)))
 }
 
 export async function getDiseaseDetail(req: Request, res: Response) {
+  const lang = parseLangQuery(req)
   const slug = String(req.params.slug)
   const row = await prisma.knowledgeDisease.findUnique({
     where: { slug },
@@ -191,7 +210,11 @@ export async function getDiseaseDetail(req: Request, res: Response) {
               slug: true,
               name: true,
               genericName: true,
+              brandName: true,
+              brandNameEn: true,
               description: true,
+              indication: true,
+              indicationEn: true,
               category: true,
               slotId: true,
               quantity: true,
@@ -206,15 +229,16 @@ export async function getDiseaseDetail(req: Request, res: Response) {
     res.status(404).json({ error: "ไม่พบข้อมูลโรค" })
     return
   }
+  const { symptomMaps, drugMaps, ...entity } = row
   res.json({
-    ...row,
-    relatedSymptoms: row.symptomMaps.map((m) => ({
-      ...m.symptom,
+    ...projectDiseaseDetail(entity, lang),
+    relatedSymptoms: symptomMaps.map((m) => ({
+      ...projectSymptomRef(m.symptom, lang),
       relevanceScore: m.relevanceScore,
       note: m.note,
     })),
-    suggestedDrugs: row.drugMaps.map((m) => ({
-      ...drugLite(m.drug),
+    suggestedDrugs: drugMaps.map((m) => ({
+      ...projectDrugCard(m.drug, lang),
       recommendationLevel: m.recommendationLevel,
       note: m.note,
     })),
@@ -222,6 +246,7 @@ export async function getDiseaseDetail(req: Request, res: Response) {
 }
 
 export async function getSymptomDetail(req: Request, res: Response) {
+  const lang = parseLangQuery(req)
   const slug = String(req.params.slug)
   const row = await prisma.knowledgeSymptom.findUnique({
     where: { slug },
@@ -248,7 +273,11 @@ export async function getSymptomDetail(req: Request, res: Response) {
               slug: true,
               name: true,
               genericName: true,
+              brandName: true,
+              brandNameEn: true,
               description: true,
+              indication: true,
+              indicationEn: true,
               category: true,
               slotId: true,
               quantity: true,
@@ -263,15 +292,16 @@ export async function getSymptomDetail(req: Request, res: Response) {
     res.status(404).json({ error: "ไม่พบข้อมูลอาการ" })
     return
   }
+  const { diseaseMaps, drugMaps, ...entity } = row
   res.json({
-    ...row,
-    possibleDiseases: row.diseaseMaps.map((m) => ({
-      ...m.disease,
+    ...projectSymptomDetail(entity, lang),
+    possibleDiseases: diseaseMaps.map((m) => ({
+      ...projectDiseaseRef(m.disease, lang),
       relevanceScore: m.relevanceScore,
       note: m.note,
     })),
-    reliefDrugs: row.drugMaps.map((m) => ({
-      ...drugLite(m.drug),
+    reliefDrugs: drugMaps.map((m) => ({
+      ...projectDrugCard(m.drug, lang),
       recommendationLevel: m.recommendationLevel,
       note: m.note,
     })),
@@ -279,6 +309,7 @@ export async function getSymptomDetail(req: Request, res: Response) {
 }
 
 export async function getKnowledgeDrugDetail(req: Request, res: Response) {
+  const lang = parseLangQuery(req)
   const key = String(req.params.idOrSlug)
   const drug = await prisma.drug.findFirst({
     where: {
@@ -323,34 +354,31 @@ export async function getKnowledgeDrugDetail(req: Request, res: Response) {
     res.status(404).json({ error: "ไม่พบข้อมูลยา" })
     return
   }
+  const { diseaseMaps, symptomMaps, ...drugEntity } = drug
   res.json({
-    ...drugLite(drug),
-    genericName: drug.genericName,
-    brandName: drug.brandName,
-    indication: drug.indication,
-    contraindications: drug.contraindications,
-    doseByAgeWeight: drug.doseByAgeWeight,
-    ingredientsText: drug.ingredientsText,
-    warnings: drug.warnings,
-    treatsDiseases: drug.diseaseMaps.map((m) => ({
-      ...m.disease,
+    ...projectDrugDetail(drugEntity, lang),
+    treatsDiseases: diseaseMaps.map((m) => ({
+      ...projectDiseaseRef(m.disease, lang),
       recommendationLevel: m.recommendationLevel,
       note: m.note,
     })),
-    relievesSymptoms: drug.symptomMaps.map((m) => ({
-      ...m.symptom,
+    relievesSymptoms: symptomMaps.map((m) => ({
+      ...projectSymptomRef(m.symptom, lang),
       recommendationLevel: m.recommendationLevel,
       note: m.note,
     })),
   })
 }
 
-async function writeSyncLog(req: Request, params: {
-  mode: "dry_run" | "commit"
-  status: "success" | "failed"
-  summary?: unknown
-  errors?: unknown
-}) {
+async function writeSyncLog(
+  req: Request,
+  params: {
+    mode: "dry_run" | "commit"
+    status: "success" | "failed"
+    summary?: unknown
+    errors?: unknown
+  }
+) {
   let operatorUsername: string | null = null
   if (req.adminAuth?.userId) {
     const u = await prisma.user.findUnique({

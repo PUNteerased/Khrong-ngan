@@ -24,7 +24,7 @@ export default function SymptomDetailPage() {
     if (!slug) return
     let cancelled = false
     setLoading(true)
-    fetchKnowledgeSymptomDetail(slug)
+    fetchKnowledgeSymptomDetail(slug, locale)
       .then((d) => {
         if (!cancelled) setData(d)
       })
@@ -37,7 +37,7 @@ export default function SymptomDetailPage() {
     return () => {
       cancelled = true
     }
-  }, [slug])
+  }, [slug, locale])
 
   if (loading) {
     return (
@@ -54,12 +54,12 @@ export default function SymptomDetailPage() {
         <Link href={`/${locale}/knowledge`} className="hover:underline">
           คลังข้อมูล
         </Link>{" "}
-        / <span>{data.nameTh}</span>
+        / <span>{data.name}</span>
       </div>
 
       <Card>
         <CardContent className="p-4 space-y-2">
-          <h1 className="text-xl font-semibold">{data.nameTh}</h1>
+          <h1 className="text-xl font-semibold">{data.name}</h1>
           <Badge variant="secondary">{data.dangerLevel}</Badge>
           <p className="text-sm">{data.observationGuide}</p>
           {data.firstAid ? <p className="text-sm">การปฐมพยาบาล: {data.firstAid}</p> : null}
@@ -76,7 +76,7 @@ export default function SymptomDetailPage() {
             {data.possibleDiseases.map((d) => (
               <Link key={d.id} href={`/${locale}/knowledge/disease/${d.slug}`}>
                 <div className="rounded-md border p-3 hover:bg-muted/40">
-                  <div className="font-medium">{d.nameTh}</div>
+                  <div className="font-medium">{d.name}</div>
                   <div className="text-sm text-muted-foreground">{d.severityLevel}</div>
                 </div>
               </Link>
