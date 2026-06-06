@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { ChatMarkdown } from "@/components/chat-markdown"
-import { fetchHealthTipDetail } from "@/lib/api"
+import { fetchHealthTipDetail, fetchWithRetry } from "@/lib/api"
 import { getTranslations, setRequestLocale } from "next-intl/server"
 
 type Props = { params: Promise<{ locale: string; slug: string }> }
@@ -24,7 +24,7 @@ function normalizeMarkdownText(text: string): string {
 export async function generateMetadata({ params }: Props) {
   const { locale, slug } = await params
   const t = await getTranslations({ locale, namespace: "HealthArticle" })
-  const tip = await fetchHealthTipDetail(slug, locale).catch(() => null)
+  const tip = await fetchWithRetry(() => fetchHealthTipDetail(slug, locale)).catch(() => null)
   if (!tip) return { title: t("notFoundTitle") }
   const title = tip.title
   const summary = tip.summary
@@ -38,7 +38,7 @@ export default async function HealthArticlePage({ params }: Props) {
   const { locale, slug } = await params
   setRequestLocale(locale)
   const t = await getTranslations({ locale, namespace: "HealthArticle" })
-  const tip = await fetchHealthTipDetail(slug, locale).catch(() => null)
+  const tip = await fetchWithRetry(() => fetchHealthTipDetail(slug, locale)).catch(() => null)
   if (!tip) notFound()
   const summary = normalizeMarkdownText(tip.summary)
   const content = normalizeMarkdownText(tip.contentMd)

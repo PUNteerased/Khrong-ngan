@@ -10,8 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Spinner } from "@/components/ui/spinner"
+import { Button } from "@/components/ui/button"
 import {
   fetchKnowledgeSearch,
+  fetchWithRetry,
   type KnowledgeSearchResponse,
 } from "@/lib/api"
 
@@ -24,6 +26,8 @@ function KnowledgeContent() {
   const [activeTab, setActiveTab] = useState(tabParam || "disease")
   const [searchQuery, setSearchQuery] = useState("")
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
   const [data, setData] = useState<KnowledgeSearchResponse>({
     diseases: [],
     symptoms: [],
@@ -39,7 +43,8 @@ function KnowledgeContent() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    fetchKnowledgeSearch(searchQuery, locale)
+    setError(false)
+    fetchWithRetry(() => fetchKnowledgeSearch(searchQuery, locale))
       .then((kg) => {
         if (cancelled) return
         setData(kg)
@@ -47,6 +52,7 @@ function KnowledgeContent() {
       .catch(() => {
         if (cancelled) return
         setData({ diseases: [], symptoms: [], drugs: [] })
+        setError(true)
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -54,7 +60,19 @@ function KnowledgeContent() {
     return () => {
       cancelled = true
     }
-  }, [searchQuery, locale])
+  }, [searchQuery, locale, reloadKey])
+
+  const errorState = (
+    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-12 text-center">
+      <p className="text-sm text-muted-foreground">{t("loadError")}</p>
+      <Button variant="outline" size="sm" onClick={() => setReloadKey((k) => k + 1)}>
+        {t("retry")}
+      </Button>
+    </div>
+  )
+  const emptyState = (
+    <div className="py-12 text-center text-sm text-muted-foreground">{t("empty")}</div>
+  )
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-60px)]">
@@ -93,6 +111,10 @@ function KnowledgeContent() {
             <div className="flex justify-center py-12">
               <Spinner className="h-8 w-8" />
             </div>
+          ) : error ? (
+            errorState
+          ) : data.diseases.length === 0 ? (
+            emptyState
           ) : (
             data.diseases.map((disease) => {
               return (
@@ -131,6 +153,10 @@ function KnowledgeContent() {
             <div className="flex justify-center py-12">
               <Spinner className="h-8 w-8" />
             </div>
+          ) : error ? (
+            errorState
+          ) : data.symptoms.length === 0 ? (
+            emptyState
           ) : (
             data.symptoms.map((symptom) => {
               return (
@@ -167,6 +193,10 @@ function KnowledgeContent() {
             <div className="flex justify-center py-12">
               <Spinner className="h-8 w-8" />
             </div>
+          ) : error ? (
+            errorState
+          ) : data.drugs.length === 0 ? (
+            emptyState
           ) : (
             data.drugs.map((drug) => {
               return (

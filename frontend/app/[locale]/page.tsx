@@ -16,9 +16,15 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { useEffect, useMemo, useState } from "react"
+import { Spinner } from "@/components/ui/spinner"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { HealthTipCard } from "@/components/health-tip-card"
-import { fetchHealthTipsSearch, fetchUiTranslations, type HealthTipListItem } from "@/lib/api"
+import {
+  fetchHealthTipsSearch,
+  fetchUiTranslations,
+  fetchWithRetry,
+  type HealthTipListItem,
+} from "@/lib/api"
 
 const HOME_HEALTH_TIPS_LIMIT = 5
 
@@ -28,6 +34,7 @@ export default function HomePage() {
   const [hasQRCode] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [articles, setArticles] = useState<HealthTipListItem[]>([])
+  const [tipsStatus, setTipsStatus] = useState<"loading" | "ready" | "error">("loading")
   const [uiHome, setUiHome] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -47,19 +54,28 @@ export default function HomePage() {
     }
   }, [locale])
 
+  const [tipsReloadKey, setTipsReloadKey] = useState(0)
+
+  const reloadTips = useCallback(() => setTipsReloadKey((k) => k + 1), [])
+
   useEffect(() => {
     let cancelled = false
-    fetchHealthTipsSearch("", locale)
+    setTipsStatus("loading")
+    fetchWithRetry(() => fetchHealthTipsSearch("", locale))
       .then((rows) => {
-        if (!cancelled) setArticles(rows.slice(0, HOME_HEALTH_TIPS_LIMIT))
+        if (cancelled) return
+        setArticles(rows.slice(0, HOME_HEALTH_TIPS_LIMIT))
+        setTipsStatus("ready")
       })
       .catch(() => {
-        if (!cancelled) setArticles([])
+        if (cancelled) return
+        setArticles([])
+        setTipsStatus("error")
       })
     return () => {
       cancelled = true
     }
-  }, [locale])
+  }, [locale, tipsReloadKey])
 
   const quickAccessItems = useMemo(
     () => [
@@ -201,21 +217,37 @@ export default function HomePage() {
           </Button>
         </div>
 
-        <ul className="-mx-4 flex snap-x snap-mandatory list-none gap-3 overflow-x-auto overflow-y-hidden px-4 pb-2 scroll-smooth">
-          {articles.map((article) => (
-            <li key={article.slug} className="snap-start">
-              <HealthTipCard
-                article={{
-                  slug: article.slug,
-                  title: article.title,
-                  excerpt: article.summary,
-                  category: article.category || "—",
-                }}
-                layout="carousel"
-              />
-            </li>
-          ))}
-        </ul>
+        {tipsStatus === "loading" ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+            <Spinner className="h-4 w-4" />
+            <span>{t("tipsLoading")}</span>
+          </div>
+        ) : tipsStatus === "error" ? (
+          <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-8 text-center">
+            <p className="text-sm text-muted-foreground">{t("tipsError")}</p>
+            <Button variant="outline" size="sm" onClick={reloadTips}>
+              {t("retry")}
+            </Button>
+          </div>
+        ) : articles.length === 0 ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">{t("tipsEmpty")}</div>
+        ) : (
+          <ul className="-mx-4 flex snap-x snap-mandatory list-none gap-3 overflow-x-auto overflow-y-hidden px-4 pb-2 scroll-smooth">
+            {articles.map((article) => (
+              <li key={article.slug} className="snap-start">
+                <HealthTipCard
+                  article={{
+                    slug: article.slug,
+                    title: article.title,
+                    excerpt: article.summary,
+                    category: article.category || "—",
+                  }}
+                  layout="carousel"
+                />
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="mt-auto px-4 py-4 space-y-3">

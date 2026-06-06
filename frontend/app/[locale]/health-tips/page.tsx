@@ -1,6 +1,5 @@
 import { getTranslations, setRequestLocale } from "next-intl/server"
-import { HealthTipCard } from "@/components/health-tip-card"
-import { fetchHealthTipsSearch } from "@/lib/api"
+import { HealthTipsList } from "./health-tips-list"
 
 type Props = { params: Promise<{ locale: string }> }
 
@@ -19,7 +18,6 @@ export default async function HealthTipsIndexPage({ params }: Props) {
   const { locale } = await params
   setRequestLocale(locale)
   const t = await getTranslations({ locale, namespace: "HealthTips" })
-  const tips = await fetchHealthTipsSearch("", locale)
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 pb-10">
@@ -28,20 +26,7 @@ export default async function HealthTipsIndexPage({ params }: Props) {
         <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
       </div>
 
-      <ul className="space-y-3">
-        {tips.map((tip) => (
-          <li key={tip.slug}>
-            <HealthTipCard
-              article={{
-                slug: tip.slug,
-                title: tip.title,
-                excerpt: tip.summary,
-                category: tip.category || "—",
-              }}
-            />
-          </li>
-        ))}
-      </ul>
+      <HealthTipsList />
     </div>
   )
 }

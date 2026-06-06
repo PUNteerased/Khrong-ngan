@@ -85,6 +85,41 @@ export async function apiJson<T>(
   return data as T
 }
 
+/**
+ * Retry an async fetch a few times with linear backoff.
+ *
+ * Public deployments run on a free-tier backend that spins down when idle and
+ * answers the first request(s) after a cold start with 502/503. Without a retry
+ * the UI swallows that transient failure and looks permanently empty, which is
+ * indistinguishable from "no data / not logged in". A couple of retries usually
+ * lands once the instance has woken up.
+ */
+export async function fetchWithRetry<T>(
+  fn: () => Promise<T>,
+  options: { retries?: number; delayMs?: number; shouldRetry?: (err: unknown) => boolean } = {}
+): Promise<T> {
+  const { retries = 3, delayMs = 1500 } = options
+  const shouldRetry =
+    options.shouldRetry ??
+    ((err: unknown) => {
+      // Retry transient backend/cold-start failures and network errors.
+      if (err instanceof ApiError) return err.status >= 500 || err.status === 0
+      return true
+    })
+
+  let lastErr: unknown
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      if (attempt === retries || !shouldRetry(err)) break
+      await new Promise((resolve) => setTimeout(resolve, delayMs * (attempt + 1)))
+    }
+  }
+  throw lastErr
+}
+
 // --- Auth & user ---
 
 export type UserProfile = {

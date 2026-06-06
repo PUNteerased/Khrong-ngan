@@ -7,7 +7,7 @@ import { useLocale } from "next-intl"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Spinner } from "@/components/ui/spinner"
-import { fetchKnowledgeSymptomDetail, type SymptomDetailResponse } from "@/lib/api"
+import { fetchKnowledgeSymptomDetail, fetchWithRetry, type SymptomDetailResponse } from "@/lib/api"
 
 export default function SymptomDetailPage() {
   const locale = useLocale()
@@ -24,7 +24,7 @@ export default function SymptomDetailPage() {
     if (!slug) return
     let cancelled = false
     setLoading(true)
-    fetchKnowledgeSymptomDetail(slug, locale)
+    fetchWithRetry(() => fetchKnowledgeSymptomDetail(slug, locale))
       .then((d) => {
         if (!cancelled) setData(d)
       })

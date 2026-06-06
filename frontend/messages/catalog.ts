@@ -45,6 +45,10 @@ export const thMessages = {
     tipsSubtitlePrefix: "เลื่อนดูเกร็ดล่าสุด",
     tipsSubtitleMid: "เรื่อง — เรื่องอื่นกด",
     tipsSubtitleHighlight: "ดูทั้งหมด",
+    tipsLoading: "กำลังโหลดเกร็ดความรู้…",
+    tipsEmpty: "ยังไม่มีเกร็ดความรู้ในขณะนี้",
+    tipsError: "โหลดข้อมูลไม่สำเร็จ เซิร์ฟเวอร์อาจกำลังเริ่มทำงาน",
+    retry: "ลองใหม่อีกครั้ง",
     viewAll: "ดูทั้งหมด",
     emergency: "กรณีฉุกเฉิน โทร 1669",
     disclaimer:
@@ -219,6 +223,9 @@ export const thMessages = {
     tabSymptom: "อาการ",
     tabDrug: "ยา",
     tabTip: "เกล็ดความรู้",
+    empty: "ไม่พบข้อมูล",
+    loadError: "โหลดข้อมูลไม่สำเร็จ เซิร์ฟเวอร์อาจกำลังเริ่มทำงาน",
+    retry: "ลองใหม่อีกครั้ง",
     inCabinet: "มีในตู้จ่ายยา ({slot})",
     inCabinetShort: "มีในตู้",
     generalDrug: "ข้อมูลยาทั่วไป",
@@ -280,6 +287,10 @@ export const thMessages = {
     metaTitle: "เกร็ดความรู้สุขภาพ | LaneYa",
     metaDesc:
       "บทความสั้นเกี่ยวกับการใช้ยา การป้องกันโรค และไลฟ์สไตล์ พร้อมแหล่งอ้างอิง",
+    loading: "กำลังโหลดเกร็ดความรู้…",
+    empty: "ยังไม่มีเกร็ดความรู้ในขณะนี้",
+    loadError: "โหลดข้อมูลไม่สำเร็จ เซิร์ฟเวอร์อาจกำลังเริ่มทำงาน",
+    retry: "ลองใหม่อีกครั้ง",
   },
   HealthArticle: {
     back: "เกร็ดความรู้ทั้งหมด",
@@ -640,6 +651,10 @@ export const enMessages = {
     tipsSubtitlePrefix: "Swipe the latest",
     tipsSubtitleMid: "topics — for more, tap",
     tipsSubtitleHighlight: "View all",
+    tipsLoading: "Loading health tips…",
+    tipsEmpty: "No health tips available right now",
+    tipsError: "Couldn't load data — the server may be waking up",
+    retry: "Try again",
     viewAll: "View all",
     emergency: "Emergency — call 1669",
     disclaimer:
@@ -812,6 +827,9 @@ export const enMessages = {
     tabDisease: "Disease",
     tabSymptom: "Symptom",
     tabDrug: "Drug",
+    empty: "No results found",
+    loadError: "Couldn't load data — the server may be waking up",
+    retry: "Try again",
     inCabinet: "In kiosk ({slot})",
     inCabinetShort: "In cabinet",
     generalDrug: "General drug info",
@@ -873,6 +891,10 @@ export const enMessages = {
     metaTitle: "Health tips | LaneYa",
     metaDesc:
       "Short articles on medicines, prevention, and lifestyle with references.",
+    loading: "Loading health tips…",
+    empty: "No health tips available right now",
+    loadError: "Couldn't load data — the server may be waking up",
+    retry: "Try again",
   },
   HealthArticle: {
     back: "All health tips",

@@ -7,7 +7,7 @@ import { useLocale, useTranslations } from "next-intl"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Spinner } from "@/components/ui/spinner"
-import { fetchKnowledgeDrugDetail, type DrugDetailResponse } from "@/lib/api"
+import { fetchKnowledgeDrugDetail, fetchWithRetry, type DrugDetailResponse } from "@/lib/api"
 
 export default function KnowledgeDrugDetailPage() {
   const t = useTranslations("Knowledge")
@@ -25,7 +25,7 @@ export default function KnowledgeDrugDetailPage() {
     if (!key) return
     let cancelled = false
     setLoading(true)
-    fetchKnowledgeDrugDetail(key, locale)
+    fetchWithRetry(() => fetchKnowledgeDrugDetail(key, locale))
       .then((d) => {
         if (!cancelled) setData(d)
       })
