@@ -8,7 +8,6 @@ import {
   ArrowLeft,
   Clock,
   Expand,
-  ImagePlus,
   Pill,
   QrCode,
   Send,
@@ -19,8 +18,7 @@ import { useLocale, useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { AppLogo } from "@/components/app-logo"
-import { Input } from "@/components/ui/input"
-import { Spinner } from "@/components/ui/spinner"
+import { Textarea } from "@/components/ui/textarea"
 import { Skeleton } from "@/components/ui/skeleton"
 import { QRTicket } from "@/components/qr-ticket"
 import { ChatMarkdown } from "@/components/chat-markdown"
@@ -36,8 +34,6 @@ import {
   type UserProfile,
 } from "@/lib/api"
 import { getStoredToken } from "@/lib/auth-token"
-import { uploadImage } from "@/lib/upload-image"
-import { isSupabaseConfigured } from "@/lib/supabase"
 
 interface Message {
   id: string
@@ -233,16 +229,11 @@ function ChatPageInner() {
   const [chatSessionId, setChatSessionId] = useState<string | null>(null)
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [userCtx, setUserCtx] = useState<UserProfile | null>(null)
-  const [pendingImage, setPendingImage] = useState<{ url: string; previewUrl: string } | null>(
-    null
-  )
-  const [isUploading, setIsUploading] = useState(false)
   const [keyboardInset, setKeyboardInset] = useState(0)
   const [drugById, setDrugById] = useState<Record<string, DrugDto>>({})
   const [activeFullscreenTicket, setActiveFullscreenTicket] =
     useState<NonNullable<Message["qrTicket"]> | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (sessionIdFromUrl) return
@@ -295,12 +286,6 @@ function ChatPageInner() {
   }, [])
 
   useEffect(() => {
-    return () => {
-      if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl)
-    }
-  }, [pendingImage])
-
-  useEffect(() => {
     const sid = sessionIdFromUrl
     if (!sid || !getStoredToken()) {
       setHistoryLoaded(true)
@@ -351,8 +336,7 @@ function ChatPageInner() {
   }, [])
 
   const handleSendMessage = async (content: string) => {
-    const imageUrl = pendingImage?.url ?? null
-    if (!content.trim() && !imageUrl) return
+    if (!content.trim()) return
     if (!getStoredToken()) {
       toast.error(t("loginRequired"))
       return
@@ -363,18 +347,15 @@ function ChatPageInner() {
       {
         id: Date.now().toString(),
         content,
-        imageUrl,
         sender: "user",
         timestamp: new Date(),
       },
     ])
     setInputValue("")
-    if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl)
-    setPendingImage(null)
     setIsTyping(true)
 
     try {
-      const res = await sendChatMessage(content.trim(), chatSessionId, imageUrl)
+      const res = await sendChatMessage(content.trim(), chatSessionId, null)
       setChatSessionId(res.sessionId)
       const mentioned = res.safetyCheck?.mentionedDrugIds ?? []
       const recommendedId = mentioned.find((id) => !!drugById[id]) ?? null
@@ -414,46 +395,6 @@ function ChatPageInner() {
     } finally {
       setIsTyping(false)
     }
-  }
-
-  const handleFileSelected = async (file: File) => {
-    if (!file.type.startsWith("image/")) {
-      toast.error(t("imageInvalid"))
-      return
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error(t("imageTooLarge"))
-      return
-    }
-    if (!isSupabaseConfigured()) {
-      toast.error(t("imageNotConfigured"))
-      return
-    }
-    if (!getStoredToken()) {
-      toast.error(t("loginRequired"))
-      return
-    }
-
-    const previewUrl = URL.createObjectURL(file)
-    setIsUploading(true)
-    try {
-      const { url } = await uploadImage(file, "chat")
-      setPendingImage((prev) => {
-        if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl)
-        return { url, previewUrl }
-      })
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : t("imageUploadFail")
-      toast.error(msg)
-      URL.revokeObjectURL(previewUrl)
-    } finally {
-      setIsUploading(false)
-    }
-  }
-
-  const clearPendingImage = () => {
-    if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl)
-    setPendingImage(null)
   }
 
   const formatTime = (date: Date) =>
@@ -617,66 +558,19 @@ function ChatPageInner() {
               paddingBottom: `calc(env(safe-area-inset-bottom, 0px) + ${keyboardInset}px + 0.5rem)`,
             }}
           >
-            {pendingImage ? (
-              <div className="mb-2 flex items-center gap-2 rounded-lg border bg-muted/50 p-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={pendingImage.previewUrl}
-                  alt="preview"
-                  className="h-14 w-14 rounded object-cover"
-                />
-                <p className="flex-1 text-xs text-muted-foreground">{t("imageAttached")}</p>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={clearPendingImage}
-                  className="text-destructive hover:text-destructive"
-                >
-                  {t("imageRemove")}
-                </Button>
-              </div>
-            ) : null}
-
-            <div className="flex items-center gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  e.target.value = ""
-                  if (file) void handleFileSelected(file)
-                }}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="flex-shrink-0"
-                disabled={isUploading}
-                onClick={() => fileInputRef.current?.click()}
-                aria-label={t("attachImage")}
-              >
-                {isUploading ? <Spinner className="h-4 w-4" /> : <ImagePlus className="h-5 w-5" />}
-              </Button>
-              <Input
+            <div className="flex items-end gap-2">
+              <Textarea
                 placeholder={t("inputPh")}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault()
-                    handleSendMessage(inputValue)
-                  }
-                }}
-                className="flex-1"
+                rows={1}
+                enterKeyHint="enter"
+                className="flex-1 max-h-40 min-h-[2.5rem] resize-none py-2"
               />
               <Button
                 size="icon"
                 onClick={() => handleSendMessage(inputValue)}
-                disabled={(!inputValue.trim() && !pendingImage) || isUploading}
+                disabled={!inputValue.trim()}
               >
                 <Send className="h-5 w-5" />
               </Button>
