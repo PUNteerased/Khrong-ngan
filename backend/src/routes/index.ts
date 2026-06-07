@@ -13,7 +13,8 @@ import * as adminUsersController from "../controllers/adminUsers.controller.js"
 import * as knowledgeController from "../controllers/knowledge.controller.js"
 import * as healthTipsController from "../controllers/healthTips.controller.js"
 import * as i18nController from "../controllers/i18n.controller.js"
-import { authMiddleware } from "../middleware/auth.js"
+import * as contactController from "../controllers/contact.controller.js"
+import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth.js"
 import { adminAuthMiddleware, adminOrKeyMiddleware } from "../middleware/adminAuth.js"
 
 export const router = Router()
@@ -35,6 +36,13 @@ const adminLoginLimiter = rateLimit({
 const chatLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+const contactLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
 })
@@ -87,6 +95,13 @@ router.get("/api/knowledge/drugs/:idOrSlug", knowledgeController.getKnowledgeDru
 router.get("/api/health-tips/search", healthTipsController.searchHealthTips)
 router.get("/api/health-tips/:slug", healthTipsController.getHealthTipDetail)
 router.get("/api/i18n/ui", i18nController.listUiTranslations)
+
+router.post(
+  "/api/contact",
+  contactLimiter,
+  optionalAuthMiddleware,
+  contactController.createIssueReport
+)
 
 router.post("/api/chat", chatLimiter, authMiddleware, chatController.postChat)
 router.get(
@@ -157,4 +172,14 @@ router.get(
   "/api/admin/knowledge/sync/status",
   adminAuthMiddleware,
   knowledgeController.getKnowledgeSyncStatus
+)
+router.get(
+  "/api/admin/issue-reports",
+  adminAuthMiddleware,
+  contactController.listIssueReports
+)
+router.patch(
+  "/api/admin/issue-reports/:id",
+  adminAuthMiddleware,
+  contactController.updateIssueReportStatus
 )

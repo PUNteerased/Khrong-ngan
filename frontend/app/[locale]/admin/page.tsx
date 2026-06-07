@@ -21,6 +21,7 @@ import {
   Database,
   Cloud,
   BookOpen,
+  Flag,
 } from "lucide-react"
 import {
   LineChart,
@@ -81,6 +82,10 @@ import {
   type AdminUserRow,
   type AdminKnowledgeSyncResult,
   type AdminKnowledgeSyncStatus,
+  fetchAdminIssueReports,
+  updateAdminIssueReportStatus,
+  type IssueReportDto,
+  type IssueReportStatus,
   ApiError,
 } from "@/lib/api"
 import {
@@ -101,6 +106,7 @@ function stockStatus(q: number, threshold: number): "normal" | "low" | "empty" {
 export default function AdminPage() {
   const locale = useLocale()
   const t = useTranslations("Admin")
+  const tr = useTranslations("AdminReports")
   const [authReady, setAuthReady] = useState(false)
   const [unlocked, setUnlocked] = useState(false)
   const [adminUsername, setAdminUsername] = useState("")
@@ -136,6 +142,11 @@ export default function AdminPage() {
     useState<AdminKnowledgeSyncResult | null>(null)
   const [knowledgeStatus, setKnowledgeStatus] =
     useState<AdminKnowledgeSyncStatus | null>(null)
+  const [issueReports, setIssueReports] = useState<IssueReportDto[]>([])
+  const [issueReportFilter, setIssueReportFilter] = useState<
+    "ALL" | IssueReportStatus
+  >("ALL")
+  const [reportsLoading, setReportsLoading] = useState(false)
 
   useEffect(() => {
     setUnlocked(!!getStoredAdminToken())
@@ -168,6 +179,21 @@ export default function AdminPage() {
       /* ignore */
     }
   }, [userQuery])
+
+  const loadIssueReports = useCallback(async () => {
+    setReportsLoading(true)
+    try {
+      const rows = await fetchAdminIssueReports(
+        issueReportFilter === "ALL" ? undefined : issueReportFilter
+      )
+      setIssueReports(rows)
+    } catch {
+      toast.error(tr("loadFail"))
+      setIssueReports([])
+    } finally {
+      setReportsLoading(false)
+    }
+  }, [issueReportFilter, tr])
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -228,6 +254,35 @@ export default function AdminPage() {
     }, 300)
     return () => clearTimeout(tmr)
   }, [unlocked, userQuery, loadUsers])
+
+  useEffect(() => {
+    if (!unlocked || mainTab !== "reports") return
+    void loadIssueReports()
+  }, [unlocked, mainTab, issueReportFilter, loadIssueReports])
+
+  const categoryLabel = (cat: string) => {
+    switch (cat) {
+      case "dispenser":
+        return tr("catDispenser")
+      case "qr":
+        return tr("catQr")
+      case "ai":
+        return tr("catAi")
+      default:
+        return tr("catOther")
+    }
+  }
+
+  const toggleReportStatus = async (row: IssueReportDto) => {
+    const next: IssueReportStatus = row.status === "OPEN" ? "RESOLVED" : "OPEN"
+    try {
+      const updated = await updateAdminIssueReportStatus(row.id, next)
+      setIssueReports((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
+      toast.success(tr("updateOk"))
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : tr("updateFail"))
+    }
+  }
 
   const handleAdminLogin = async (e: FormEvent) => {
     e.preventDefault()
@@ -544,7 +599,7 @@ export default function AdminPage() {
             </div>
 
             <Tabs value={mainTab} onValueChange={setMainTab}>
-              <TabsList className="grid h-auto w-full min-w-0 grid-cols-2 gap-1 sm:grid-cols-6">
+              <TabsList className="grid h-auto w-full min-w-0 grid-cols-2 gap-1 sm:grid-cols-4 lg:grid-cols-7">
                 <TabsTrigger value="overview" className="text-xs sm:text-sm">
                   <LayoutDashboard className="h-4 w-4 mr-1 hidden sm:inline" />
                   {t("tabOverview")}
@@ -568,6 +623,10 @@ export default function AdminPage() {
                 <TabsTrigger value="knowledge" className="text-xs sm:text-sm">
                   <BookOpen className="h-4 w-4 mr-1 hidden sm:inline" />
                   {t("tabKnowledge")}
+                </TabsTrigger>
+                <TabsTrigger value="reports" className="text-xs sm:text-sm">
+                  <Flag className="h-4 w-4 mr-1 hidden sm:inline" />
+                  {tr("tabTitle")}
                 </TabsTrigger>
               </TabsList>
 
@@ -1216,6 +1275,127 @@ export default function AdminPage() {
                         </Table>
                       </div>
                     </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="reports" className="space-y-4 mt-4">
+                <Card>
+                  <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <CardTitle className="text-base">{tr("tabTitle")}</CardTitle>
+                    <div className="flex flex-wrap gap-2">
+                      {(["ALL", "OPEN", "RESOLVED"] as const).map((f) => (
+                        <Button
+                          key={f}
+                          size="sm"
+                          variant={issueReportFilter === f ? "default" : "outline"}
+                          onClick={() => setIssueReportFilter(f)}
+                        >
+                          {f === "ALL"
+                            ? tr("filterAll")
+                            : f === "OPEN"
+                              ? tr("filterOpen")
+                              : tr("filterResolved")}
+                        </Button>
+                      ))}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void loadIssueReports()}
+                        disabled={reportsLoading}
+                      >
+                        <RefreshCw
+                          className={`h-4 w-4 ${reportsLoading ? "animate-spin" : ""}`}
+                        />
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {reportsLoading ? (
+                      <div className="flex justify-center py-12">
+                        <Spinner className="h-8 w-8" />
+                      </div>
+                    ) : issueReports.length === 0 ? (
+                      <p className="py-8 text-center text-sm text-muted-foreground">
+                        {tr("empty")}
+                      </p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>{tr("colDate")}</TableHead>
+                              <TableHead>{tr("colCategory")}</TableHead>
+                              <TableHead>{tr("colDetails")}</TableHead>
+                              <TableHead>{tr("colReporter")}</TableHead>
+                              <TableHead>{tr("colPhoto")}</TableHead>
+                              <TableHead>{tr("colStatus")}</TableHead>
+                              <TableHead className="text-right">—</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {issueReports.map((row) => (
+                              <TableRow key={row.id}>
+                                <TableCell className="whitespace-nowrap text-xs">
+                                  {new Date(row.createdAt).toLocaleString(
+                                    locale === "en" ? "en-GB" : "th-TH"
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  <Badge variant="secondary">
+                                    {categoryLabel(row.category)}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="max-w-[220px] text-xs">
+                                  <p className="line-clamp-3">{row.description}</p>
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  {row.reporter
+                                    ? row.reporter.fullName || row.reporter.username
+                                    : tr("anonymous")}
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  {row.imageUrl ? (
+                                    <a
+                                      href={row.imageUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-primary hover:underline"
+                                    >
+                                      {tr("viewPhoto")}
+                                    </a>
+                                  ) : (
+                                    "—"
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  <Badge
+                                    variant={
+                                      row.status === "RESOLVED" ? "outline" : "destructive"
+                                    }
+                                  >
+                                    {row.status === "RESOLVED"
+                                      ? tr("statusResolved")
+                                      : tr("statusOpen")}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => void toggleReportStatus(row)}
+                                  >
+                                    {row.status === "OPEN"
+                                      ? tr("markResolved")
+                                      : tr("markOpen")}
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>

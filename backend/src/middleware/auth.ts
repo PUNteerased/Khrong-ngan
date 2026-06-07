@@ -14,6 +14,26 @@ declare global {
   }
 }
 
+/** Best-effort JWT parse; never blocks the request. */
+export function optionalAuthMiddleware(
+  req: Request,
+  _res: Response,
+  next: NextFunction
+) {
+  const header = req.headers.authorization
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : null
+  const secret = process.env.JWT_SECRET
+  if (token && secret) {
+    try {
+      const decoded = jwt.verify(token, secret) as AuthPayload
+      req.auth = decoded
+    } catch {
+      // ignore invalid token for public endpoints
+    }
+  }
+  next()
+}
+
 export function authMiddleware(
   req: Request,
   res: Response,

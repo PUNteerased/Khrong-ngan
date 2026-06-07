@@ -1113,6 +1113,59 @@ export async function fetchKnowledgeDrugDetail(idOrSlug: string, locale?: string
   )
 }
 
+// --- Contact / issue reports ---
+
+export type IssueReportStatus = "OPEN" | "RESOLVED"
+
+export type IssueReportDto = {
+  id: string
+  category: string
+  description: string
+  imageUrl: string | null
+  status: IssueReportStatus
+  userId: string | null
+  reporter: {
+    id: string
+    username: string
+    fullName: string
+    email: string | null
+  } | null
+  createdAt: string
+  updatedAt: string
+}
+
+export async function submitIssueReport(payload: {
+  category: string
+  description: string
+  imageUrl?: string | null
+}) {
+  return apiJson<IssueReportDto>("/api/contact", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function fetchAdminIssueReports(status?: IssueReportStatus) {
+  const sp = new URLSearchParams()
+  if (status) sp.set("status", status)
+  const q = sp.toString()
+  return apiJson<IssueReportDto[]>(
+    `/api/admin/issue-reports${q ? `?${q}` : ""}`,
+    { adminAuth: true }
+  )
+}
+
+export async function updateAdminIssueReportStatus(
+  id: string,
+  status: IssueReportStatus
+) {
+  return apiJson<IssueReportDto>(`/api/admin/issue-reports/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+    adminAuth: true,
+  })
+}
+
 function adminNum(v: unknown, fallback = 0): number {
   const n = typeof v === "number" ? v : Number(v)
   return Number.isFinite(n) ? n : fallback

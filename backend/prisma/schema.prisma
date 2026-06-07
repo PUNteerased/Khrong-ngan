@@ -44,6 +44,28 @@ model User {
   adminReviews   AdminSessionReview[] @relation("AdminReviewer")
   auditLogsAsAdmin AdminAuditLog[]   @relation("AuditAdmin")
   auditLogsAsTarget AdminAuditLog[]  @relation("AuditTarget")
+  issueReports     IssueReport[]
+}
+
+enum IssueStatus {
+  OPEN
+  RESOLVED
+}
+
+/// User-submitted issue report from the contact page (kiosk / app).
+model IssueReport {
+  id          String       @id @default(cuid())
+  category    String
+  description String
+  imageUrl    String?
+  status      IssueStatus  @default(OPEN)
+  userId      String?
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([userId])
 }
 
 /// Medicine row in the cabinet; `imageUrl` is optional public URL for UI (Supabase Storage).
