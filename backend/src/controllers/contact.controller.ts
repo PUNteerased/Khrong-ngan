@@ -1,10 +1,14 @@
 import type { Request, Response } from "express"
 import type { IssueStatus } from "@prisma/client"
+import { randomUUID } from "crypto"
 import { prisma } from "../lib/prisma.js"
+import {
+  appendIssueReportRow,
+  uploadIssueImage,
+} from "../services/issueReportGoogle.service.js"
 
 const ISSUE_CATEGORIES = new Set(["dispenser", "qr", "ai", "other"])
 const MAX_DESCRIPTION_LEN = 4000
-const MAX_IMAGE_URL_LEN = 2048
 
 function serializeIssueReport(row: {
   id: string
@@ -42,16 +46,23 @@ function serializeIssueReport(row: {
   }
 }
 
+async function loadReporter(userId: string | null) {
+  if (!userId) return null
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, username: true, fullName: true, email: true },
+  })
+}
+
 export async function createIssueReport(req: Request, res: Response) {
   const body = req.body as {
     category?: string
     description?: string
-    imageUrl?: string | null
   }
 
   const category = String(body.category || "").trim()
   const description = String(body.description || "").trim()
-  const imageUrlRaw = body.imageUrl == null ? null : String(body.imageUrl).trim()
+  const file = req.file
 
   if (!ISSUE_CATEGORIES.has(category)) {
     res.status(400).json({ error: "หมวดหมู่ปัญหาไม่ถูกต้อง" })
@@ -66,33 +77,44 @@ export async function createIssueReport(req: Request, res: Response) {
     return
   }
 
-  let imageUrl: string | null = null
-  if (imageUrlRaw) {
-    if (imageUrlRaw.length > MAX_IMAGE_URL_LEN) {
-      res.status(400).json({ error: "URL รูปภาพไม่ถูกต้อง" })
-      return
-    }
-    try {
-      const parsed = new URL(imageUrlRaw)
-      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        res.status(400).json({ error: "URL รูปภาพไม่ถูกต้อง" })
-        return
-      }
-      imageUrl = imageUrlRaw
-    } catch {
-      res.status(400).json({ error: "URL รูปภาพไม่ถูกต้อง" })
-      return
-    }
-  }
-
   const userId = req.auth?.userId ?? null
+  const reporter = await loadReporter(userId)
+  const reportId = randomUUID()
+  const createdAt = new Date()
+
+  let imageUrl: string | null = null
+
+  try {
+    if (file) {
+      imageUrl = await uploadIssueImage(file.buffer, file.mimetype, createdAt)
+    }
+
+    await appendIssueReportRow({
+      id: reportId,
+      createdAt: createdAt.toISOString(),
+      category,
+      description,
+      imageUrl,
+      reporterName: reporter?.fullName ?? "",
+      reporterUsername: reporter?.username ?? "",
+      userId,
+      status: "OPEN",
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "ส่งรายงานไป Google ไม่สำเร็จ"
+    console.error("[contact] Google sync failed:", err)
+    res.status(503).json({ error: msg })
+    return
+  }
 
   const row = await prisma.issueReport.create({
     data: {
+      id: reportId,
       category,
       description,
       imageUrl,
       userId,
+      createdAt,
     },
     include: {
       user: {

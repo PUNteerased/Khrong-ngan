@@ -15,6 +15,7 @@ import * as healthTipsController from "../controllers/healthTips.controller.js"
 import * as i18nController from "../controllers/i18n.controller.js"
 import * as contactController from "../controllers/contact.controller.js"
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth.js"
+import { issueReportUpload } from "../middleware/issueReportUpload.js"
 import { adminAuthMiddleware, adminOrKeyMiddleware } from "../middleware/adminAuth.js"
 
 export const router = Router()
@@ -100,6 +101,16 @@ router.post(
   "/api/contact",
   contactLimiter,
   optionalAuthMiddleware,
+  (req, res, next) => {
+    issueReportUpload.single("image")(req, res, (err: unknown) => {
+      if (err) {
+        const msg = err instanceof Error ? err.message : "อัปโหลดไฟล์ไม่สำเร็จ"
+        res.status(400).json({ error: msg })
+        return
+      }
+      next()
+    })
+  },
   contactController.createIssueReport
 )
 

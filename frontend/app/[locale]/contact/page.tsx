@@ -29,8 +29,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ApiError, submitIssueReport } from "@/lib/api"
-import { uploadImage } from "@/lib/upload-image"
-import { isSupabaseConfigured } from "@/lib/supabase"
 
 export default function ContactPage() {
   const t = useTranslations("Contact")
@@ -40,10 +38,9 @@ export default function ContactPage() {
     description: "",
   })
   const [pendingImage, setPendingImage] = useState<{
-    url: string
+    file: File
     previewUrl: string
   } | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const issueCategories = useMemo(
@@ -67,7 +64,7 @@ export default function ContactPage() {
     setPendingImage(null)
   }
 
-  const handleFileSelected = async (file: File) => {
+  const handleFileSelected = (file: File) => {
     if (!file.type.startsWith("image/")) {
       toast.error(t("imageInvalid"))
       return
@@ -76,26 +73,12 @@ export default function ContactPage() {
       toast.error(t("imageTooLarge"))
       return
     }
-    if (!isSupabaseConfigured()) {
-      toast.error(t("imageNotConfigured"))
-      return
-    }
 
     const previewUrl = URL.createObjectURL(file)
-    setIsUploading(true)
-    try {
-      const { url } = await uploadImage(file, "reports")
-      setPendingImage((prev) => {
-        if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl)
-        return { url, previewUrl }
-      })
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : t("imageUploadFail")
-      toast.error(msg)
-      URL.revokeObjectURL(previewUrl)
-    } finally {
-      setIsUploading(false)
-    }
+    setPendingImage((prev) => {
+      if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl)
+      return { file, previewUrl }
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -114,7 +97,7 @@ export default function ContactPage() {
       await submitIssueReport({
         category: formData.category,
         description: formData.description.trim(),
-        imageUrl: pendingImage?.url ?? null,
+        imageFile: pendingImage?.file ?? null,
       })
       toast.success(t("submitSuccess"))
       setFormData({ category: "", description: "" })
@@ -206,7 +189,7 @@ export default function ContactPage() {
                 onChange={(e) => {
                   const file = e.target.files?.[0]
                   e.target.value = ""
-                  if (file) void handleFileSelected(file)
+                  if (file) handleFileSelected(file)
                 }}
               />
 
@@ -237,14 +220,10 @@ export default function ContactPage() {
                 variant="outline"
                 type="button"
                 className="w-full"
-                disabled={isUploading || isSubmitting}
+                disabled={isSubmitting}
                 onClick={() => fileInputRef.current?.click()}
               >
-                {isUploading ? (
-                  <Spinner className="h-4 w-4 mr-2" />
-                ) : (
-                  <Upload className="h-4 w-4 mr-2" />
-                )}
+                <Upload className="h-4 w-4 mr-2" />
                 {t("attachPhoto")}
               </Button>
 
@@ -252,7 +231,7 @@ export default function ContactPage() {
                 type="submit"
                 className="w-full"
                 size="lg"
-                disabled={isSubmitting || isUploading}
+                disabled={isSubmitting}
               >
                 {isSubmitting ? (
                   <Spinner className="h-4 w-4 mr-2" />

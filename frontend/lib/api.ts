@@ -1137,12 +1137,44 @@ export type IssueReportDto = {
 export async function submitIssueReport(payload: {
   category: string
   description: string
-  imageUrl?: string | null
+  imageFile?: File | null
 }) {
-  return apiJson<IssueReportDto>("/api/contact", {
+  const form = new FormData()
+  form.append("category", payload.category)
+  form.append("description", payload.description)
+  if (payload.imageFile) {
+    form.append("image", payload.imageFile)
+  }
+
+  const headers = new Headers()
+  const token = getStoredToken()
+  if (token) headers.set("Authorization", `Bearer ${token}`)
+
+  const res = await fetch(`${getApiBase()}/api/contact`, {
     method: "POST",
-    body: JSON.stringify(payload),
+    headers,
+    body: form,
   })
+
+  const text = await res.text()
+  let data: unknown = null
+  if (text) {
+    try {
+      data = JSON.parse(text) as unknown
+    } catch {
+      data = text
+    }
+  }
+
+  if (!res.ok) {
+    let msg =
+      typeof data === "object" && data !== null && "error" in data
+        ? String((data as { error: string }).error)
+        : res.statusText
+    throw new ApiError(msg || "คำขอล้มเหลว", res.status, data)
+  }
+
+  return data as IssueReportDto
 }
 
 export async function fetchAdminIssueReports(status?: IssueReportStatus) {

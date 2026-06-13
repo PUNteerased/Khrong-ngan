@@ -337,9 +337,6 @@ export const thMessages = {
     imageRemove: "เอาออก",
     imageInvalid: "รองรับเฉพาะไฟล์รูปภาพเท่านั้น",
     imageTooLarge: "ไฟล์ใหญ่เกิน 5MB",
-    imageUploadFail: "อัปโหลดรูปไม่สำเร็จ",
-    imageNotConfigured:
-      "ยังไม่ได้ตั้งค่า Supabase — ตรวจสอบ NEXT_PUBLIC_SUPABASE_URL",
   },
   AdminReports: {
     tabTitle: "แจ้งปัญหา",
@@ -979,9 +976,6 @@ export const enMessages = {
     imageRemove: "Remove",
     imageInvalid: "Only image files are allowed",
     imageTooLarge: "File exceeds 5MB",
-    imageUploadFail: "Image upload failed",
-    imageNotConfigured:
-      "Supabase is not configured — check NEXT_PUBLIC_SUPABASE_URL",
   },
   AdminReports: {
     tabTitle: "Reports",
