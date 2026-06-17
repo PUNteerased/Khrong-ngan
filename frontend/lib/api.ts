@@ -1121,7 +1121,10 @@ export type IssueReportDto = {
   id: string
   category: string
   description: string
+<<<<<<< HEAD
   reporterEmail: string
+=======
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
   imageUrl: string | null
   status: IssueReportStatus
   userId: string | null
@@ -1138,13 +1141,19 @@ export type IssueReportDto = {
 export async function submitIssueReport(payload: {
   category: string
   description: string
+<<<<<<< HEAD
   email: string
+=======
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
   imageFile?: File | null
 }) {
   const form = new FormData()
   form.append("category", payload.category)
   form.append("description", payload.description)
+<<<<<<< HEAD
   form.append("email", payload.email)
+=======
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
   if (payload.imageFile) {
     form.append("image", payload.imageFile)
   }

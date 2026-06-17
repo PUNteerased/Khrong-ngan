@@ -9,8 +9,14 @@ import {
   Mail,
   Users,
   Upload,
+<<<<<<< HEAD
   Bot,
   Bug,
+=======
+  Box,
+  QrCode,
+  Bot,
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
   Lightbulb,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
@@ -18,6 +24,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
+<<<<<<< HEAD
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
@@ -27,6 +34,18 @@ import { getStoredToken } from "@/lib/auth-token"
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/jpg", "image/png"])
+=======
+import { Spinner } from "@/components/ui/spinner"
+import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { ApiError, submitIssueReport } from "@/lib/api"
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
 
 export default function ContactPage() {
   const t = useTranslations("Contact")
@@ -34,7 +53,10 @@ export default function ContactPage() {
   const [formData, setFormData] = useState({
     category: "",
     description: "",
+<<<<<<< HEAD
     email: "",
+=======
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
   })
   const [pendingImage, setPendingImage] = useState<{
     file: File
@@ -44,14 +66,22 @@ export default function ContactPage() {
 
   const issueCategories = useMemo(
     () => [
+<<<<<<< HEAD
       { value: "medical_logic", label: t("catMedicalLogic"), icon: Bot },
       { value: "technical_bug", label: t("catTechnicalBug"), icon: Bug },
       { value: "feedback", label: t("catFeedback"), icon: Lightbulb },
+=======
+      { value: "dispenser", label: t("catDispenser"), icon: Box },
+      { value: "qr", label: t("catQr"), icon: QrCode },
+      { value: "ai", label: t("catAi"), icon: Bot },
+      { value: "other", label: t("catOther"), icon: Lightbulb },
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
     ],
     [t]
   )
 
   useEffect(() => {
+<<<<<<< HEAD
     if (!getStoredToken()) return
     void fetchMe()
       .then((me) => {
@@ -65,6 +95,8 @@ export default function ContactPage() {
   }, [])
 
   useEffect(() => {
+=======
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
     return () => {
       if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl)
     }
@@ -76,7 +108,11 @@ export default function ContactPage() {
   }
 
   const handleFileSelected = (file: File) => {
+<<<<<<< HEAD
     if (!ALLOWED_IMAGE_TYPES.has(file.type.toLowerCase())) {
+=======
+    if (!file.type.startsWith("image/")) {
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
       toast.error(t("imageInvalid"))
       return
     }
@@ -102,6 +138,7 @@ export default function ContactPage() {
       toast.error(t("detailsRequired"))
       return
     }
+<<<<<<< HEAD
     const email = formData.email.trim()
     if (!email) {
       toast.error(t("emailRequired"))
@@ -111,17 +148,26 @@ export default function ContactPage() {
       toast.error(t("emailInvalid"))
       return
     }
+=======
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
 
     setIsSubmitting(true)
     try {
       await submitIssueReport({
         category: formData.category,
         description: formData.description.trim(),
+<<<<<<< HEAD
         email,
         imageFile: pendingImage?.file ?? null,
       })
       toast.success(t("submitSuccess"))
       setFormData({ category: "", description: "", email })
+=======
+        imageFile: pendingImage?.file ?? null,
+      })
+      toast.success(t("submitSuccess"))
+      setFormData({ category: "", description: "" })
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
       clearPendingImage()
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : t("submitFail")
@@ -163,15 +209,24 @@ export default function ContactPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+<<<<<<< HEAD
             <form onSubmit={(e) => void handleSubmit(e)} className="space-y-5">
               <FieldGroup>
                 <Field>
                   <FieldLabel>{t("category")} *</FieldLabel>
                   <RadioGroup
+=======
+            <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+              <FieldGroup>
+                <Field>
+                  <FieldLabel>{t("category")}</FieldLabel>
+                  <Select
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
                     value={formData.category}
                     onValueChange={(value) =>
                       setFormData({ ...formData, category: value })
                     }
+<<<<<<< HEAD
                     className="gap-3"
                   >
                     {issueCategories.map((cat) => (
@@ -199,12 +254,37 @@ export default function ContactPage() {
                   <Textarea
                     placeholder={t("detailsPh")}
                     rows={5}
+=======
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t("categoryPh")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {issueCategories.map((cat) => (
+                        <SelectItem key={cat.value} value={cat.value}>
+                          <div className="flex items-center gap-2">
+                            <cat.icon className="h-4 w-4" />
+                            {cat.label}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <Field>
+                  <FieldLabel>{t("details")}</FieldLabel>
+                  <Textarea
+                    placeholder={t("detailsPh")}
+                    rows={4}
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
                     value={formData.description}
                     onChange={(e) =>
                       setFormData({ ...formData, description: e.target.value })
                     }
                   />
                 </Field>
+<<<<<<< HEAD
 
                 <Field>
                   <FieldLabel>{t("contactEmail")} *</FieldLabel>
@@ -222,12 +302,18 @@ export default function ContactPage() {
                     />
                   </div>
                 </Field>
+=======
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
               </FieldGroup>
 
               <input
                 ref={fileInputRef}
                 type="file"
+<<<<<<< HEAD
                 accept="image/png,image/jpeg"
+=======
+                accept="image/*"
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0]
@@ -259,6 +345,7 @@ export default function ContactPage() {
                 </div>
               ) : null}
 
+<<<<<<< HEAD
               <div className="space-y-1">
                 <Button
                   variant="outline"
@@ -274,6 +361,18 @@ export default function ContactPage() {
                   {t("attachPhotoHint")}
                 </p>
               </div>
+=======
+              <Button
+                variant="outline"
+                type="button"
+                className="w-full"
+                disabled={isSubmitting}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                {t("attachPhoto")}
+              </Button>
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
 
               <Button
                 type="submit"

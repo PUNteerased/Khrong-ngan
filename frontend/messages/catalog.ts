@@ -308,6 +308,7 @@ export const thMessages = {
   Contact: {
     emergencyTitle: "อาการรุนแรง หรือเจ็บป่วยฉุกเฉิน",
     emergencyLine: "โทรสายด่วน 1669",
+<<<<<<< HEAD
     formTitle: "แจ้งปัญหาและข้อเสนอแนะ",
     category: "เลือกประเภทปัญหา",
     catMedicalLogic:
@@ -322,12 +323,29 @@ export const thMessages = {
     attachPhoto: "แนบภาพหน้าจอที่พบปัญหา (ถ้ามี)",
     attachPhotoHint: "รองรับ PNG, JPG ไม่เกิน 5MB",
     submitReport: "ส่งข้อมูลแจ้งปัญหา",
+=======
+    formTitle: "แจ้งปัญหาการใช้งาน",
+    category: "หมวดหมู่ปัญหา",
+    categoryPh: "เลือกหมวดหมู่ปัญหา",
+    catDispenser: "ตู้ไม่จ่ายยา / ยาติดขัด",
+    catQr: "สแกน QR Code ไม่ผ่าน",
+    catAi: "แชทบอท AI มีปัญหา / ประเมินผลผิดพลาด",
+    catOther: "อื่นๆ (เสนอแนะ)",
+    details: "รายละเอียด",
+    detailsPh: "อธิบายปัญหาที่พบ...",
+    submit: "ส่งคำร้อง",
+    addressTitle: "ที่อยู่บริการ",
+    emailTitle: "อีเมล",
+    attachPhoto: "แนบรูปภาพ (ไม่บังคับ)",
+    submitReport: "ส่งข้อความแจ้งปัญหา",
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
     devTeamTitle: "ข้อมูลติดต่อทีมผู้จัดทำ",
     locationTitle: "สถานที่ตั้งตู้จ่ายยา",
     locationBody: "ตู้ต้นแบบตั้งอยู่ที่: หน้าห้องพยาบาล อาคาร 1",
     adminEmailTitle: "อีเมลผู้ดูแลระบบ",
     teamTitle: "ทีมผู้จัดทำโครงงาน",
     teamBody: "โครงงานคอมพิวเตอร์ โรงเรียน LaneYa School",
+<<<<<<< HEAD
     categoryRequired: "กรุณาเลือกประเภทปัญหา",
     detailsRequired: "กรุณากรอกรายละเอียดปัญหา",
     emailRequired: "กรุณากรอกอีเมลสำหรับติดต่อกลับ",
@@ -338,6 +356,16 @@ export const thMessages = {
     imageAttached: "แนบรูปแล้ว",
     imageRemove: "เอาออก",
     imageInvalid: "รองรับเฉพาะไฟล์ PNG หรือ JPG เท่านั้น",
+=======
+    categoryRequired: "กรุณาเลือกหมวดหมู่ปัญหา",
+    detailsRequired: "กรุณากรอกรายละเอียดปัญหา",
+    submitting: "กำลังส่ง…",
+    submitSuccess: "ส่งรายงานปัญหาเรียบร้อยแล้ว ขอบคุณครับ/ค่ะ",
+    submitFail: "ส่งรายงานไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
+    imageAttached: "แนบรูปแล้ว",
+    imageRemove: "เอาออก",
+    imageInvalid: "รองรับเฉพาะไฟล์รูปภาพเท่านั้น",
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
     imageTooLarge: "ไฟล์ใหญ่เกิน 5MB",
   },
   AdminReports: {
@@ -348,7 +376,10 @@ export const thMessages = {
     colCategory: "หมวดหมู่",
     colDetails: "รายละเอียด",
     colReporter: "ผู้แจ้ง",
+<<<<<<< HEAD
     colEmail: "อีเมล",
+=======
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
     colDate: "วันที่",
     colStatus: "สถานะ",
     colPhoto: "รูป",
@@ -361,6 +392,7 @@ export const thMessages = {
     updateOk: "อัปเดตสถานะแล้ว",
     updateFail: "อัปเดตสถานะไม่สำเร็จ",
     anonymous: "ผู้ใช้ทั่วไป",
+<<<<<<< HEAD
     catMedicalLogic: "AI ผิดพลาด",
     catTechnicalBug: "ระบบพัง / Error",
     catFeedback: "ข้อเสนอแนะ",
@@ -368,6 +400,12 @@ export const thMessages = {
     catQr: "QR Code (เก่า)",
     catAi: "AI แชท (เก่า)",
     catOther: "อื่นๆ (เก่า)",
+=======
+    catDispenser: "ตู้จ่ายยา",
+    catQr: "QR Code",
+    catAi: "AI แชท",
+    catOther: "อื่นๆ",
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
     viewPhoto: "ดูรูป",
   },
   Cookies: {
@@ -953,6 +991,7 @@ export const enMessages = {
   Contact: {
     emergencyTitle: "Severe symptoms or emergency",
     emergencyLine: "Hotline 1669",
+<<<<<<< HEAD
     formTitle: "Report issues & feedback",
     category: "Issue type",
     catMedicalLogic: "AI gave wrong drug or symptom advice (Medical Logic Error)",
@@ -966,22 +1005,47 @@ export const enMessages = {
     attachPhoto: "Attach a screenshot (optional)",
     attachPhotoHint: "PNG or JPG, max 5MB",
     submitReport: "Submit report",
+=======
+    formTitle: "Report an issue",
+    category: "Issue category",
+    categoryPh: "Select a category",
+    catDispenser: "Dispenser jam / no dispense",
+    catQr: "QR scan fails",
+    catAi: "AI chat issue / wrong guidance",
+    catOther: "Other feedback",
+    details: "Details",
+    detailsPh: "Describe what happened…",
+    submit: "Send report",
+    addressTitle: "Service address",
+    emailTitle: "Email",
+    attachPhoto: "Attach image (optional)",
+    submitReport: "Send report",
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
     devTeamTitle: "Team contact",
     locationTitle: "Kiosk location",
     locationBody: "Prototype kiosk: in front of the school infirmary, Building 1",
     adminEmailTitle: "System admin email",
     teamTitle: "Project team",
     teamBody: "Computer project — LaneYa School",
+<<<<<<< HEAD
     categoryRequired: "Please select an issue type",
     detailsRequired: "Please describe the issue",
     emailRequired: "Please enter your email for follow-up",
     emailInvalid: "Invalid email address",
+=======
+    categoryRequired: "Please select an issue category",
+    detailsRequired: "Please describe the issue",
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
     submitting: "Sending…",
     submitSuccess: "Your report was submitted. Thank you.",
     submitFail: "Could not submit the report. Please try again.",
     imageAttached: "Image attached",
     imageRemove: "Remove",
+<<<<<<< HEAD
     imageInvalid: "Only PNG or JPG files are allowed",
+=======
+    imageInvalid: "Only image files are allowed",
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
     imageTooLarge: "File exceeds 5MB",
   },
   AdminReports: {
@@ -992,7 +1056,10 @@ export const enMessages = {
     colCategory: "Category",
     colDetails: "Details",
     colReporter: "Reporter",
+<<<<<<< HEAD
     colEmail: "Email",
+=======
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
     colDate: "Date",
     colStatus: "Status",
     colPhoto: "Photo",
@@ -1005,6 +1072,7 @@ export const enMessages = {
     updateOk: "Status updated",
     updateFail: "Could not update status",
     anonymous: "Anonymous",
+<<<<<<< HEAD
     catMedicalLogic: "Medical logic",
     catTechnicalBug: "Technical bug",
     catFeedback: "Feedback",
@@ -1012,6 +1080,12 @@ export const enMessages = {
     catQr: "QR code (legacy)",
     catAi: "AI chat (legacy)",
     catOther: "Other (legacy)",
+=======
+    catDispenser: "Dispenser",
+    catQr: "QR code",
+    catAi: "AI chat",
+    catOther: "Other",
+>>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
     viewPhoto: "View photo",
   },
   Cookies: {
