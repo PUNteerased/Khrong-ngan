@@ -68,6 +68,8 @@
     "@parcel/watcher-linux-x64-musl": "2.5.6",
     "@swc/core-linux-x64-gnu": "^1.15.41",
     "@swc/core-linux-x64-musl": "^1.15.41",
+    "@tailwindcss/oxide-linux-x64-gnu": "4.2.3",
+    "@tailwindcss/oxide-linux-x64-musl": "4.2.3",
     "lightningcss-linux-x64-gnu": "1.32.0",
     "lightningcss-linux-x64-musl": "1.32.0"
   },
