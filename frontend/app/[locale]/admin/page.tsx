@@ -262,15 +262,12 @@ export default function AdminPage() {
 
   const categoryLabel = (cat: string) => {
     switch (cat) {
-<<<<<<< HEAD
       case "medical_logic":
         return tr("catMedicalLogic")
       case "technical_bug":
         return tr("catTechnicalBug")
       case "feedback":
         return tr("catFeedback")
-=======
->>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
       case "dispenser":
         return tr("catDispenser")
       case "qr":
@@ -1337,10 +1334,7 @@ export default function AdminPage() {
                               <TableHead>{tr("colCategory")}</TableHead>
                               <TableHead>{tr("colDetails")}</TableHead>
                               <TableHead>{tr("colReporter")}</TableHead>
-<<<<<<< HEAD
                               <TableHead>{tr("colEmail")}</TableHead>
-=======
->>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
                               <TableHead>{tr("colPhoto")}</TableHead>
                               <TableHead>{tr("colStatus")}</TableHead>
                               <TableHead className="text-right">—</TableHead>
@@ -1368,7 +1362,6 @@ export default function AdminPage() {
                                     : tr("anonymous")}
                                 </TableCell>
                                 <TableCell className="text-xs">
-<<<<<<< HEAD
                                   {row.reporterEmail ? (
                                     <a
                                       href={`mailto:${row.reporterEmail}`}
@@ -1381,8 +1374,6 @@ export default function AdminPage() {
                                   )}
                                 </TableCell>
                                 <TableCell className="text-xs">
-=======
->>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
                                   {row.imageUrl ? (
                                     <a
                                       href={row.imageUrl}

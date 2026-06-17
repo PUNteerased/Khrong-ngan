@@ -50,8 +50,6 @@ import {
   fetchMe,
   patchMe,
   deleteMe,
-  requestMyPhoneOtp,
-  verifyMyPhoneOtp,
   changeMyPassword,
   ApiError,
 } from "@/lib/api"
@@ -102,11 +100,6 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState("")
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [sendingPhoneOtp, setSendingPhoneOtp] = useState(false)
-  const [verifyingPhoneOtp, setVerifyingPhoneOtp] = useState(false)
-  const [phoneOtpSent, setPhoneOtpSent] = useState(false)
-  const [phoneOtpCode, setPhoneOtpCode] = useState("")
-  const [phoneVerifyToken, setPhoneVerifyToken] = useState("")
   const [pwdCurrent, setPwdCurrent] = useState("")
   const [pwdNext, setPwdNext] = useState("")
   const [pwdConfirm, setPwdConfirm] = useState("")
@@ -276,11 +269,6 @@ export default function ProfilePage() {
           toast.error("เบอร์โทรต้องเป็นตัวเลข 10 หลัก")
           return
         }
-        if (!phoneVerifyToken) {
-          toast.error("กรุณายืนยัน OTP เบอร์โทรก่อนบันทึก")
-          return
-        }
-        payload.phoneVerifyToken = phoneVerifyToken
       }
       await patchMe(payload)
       toast.success(t("saveOk"))
@@ -300,9 +288,6 @@ export default function ProfilePage() {
       })
       if (phoneChanged) {
         setPhone(phoneDigits)
-        setPhoneOtpSent(false)
-        setPhoneOtpCode("")
-        setPhoneVerifyToken("")
       }
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : t("saveFail")
@@ -320,44 +305,6 @@ export default function ProfilePage() {
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : t("saveFail")
       toast.error(msg)
-    }
-  }
-
-  const sendPhoneOtp = async () => {
-    const phoneDigits = phoneInput.replace(/\D/g, "")
-    if (phoneDigits.length !== 10) {
-      toast.error("เบอร์โทรต้องเป็นตัวเลข 10 หลัก")
-      return
-    }
-    setSendingPhoneOtp(true)
-    try {
-      const res = await requestMyPhoneOtp(phoneDigits)
-      setPhoneOtpSent(true)
-      setPhoneVerifyToken("")
-      toast.success(res.message)
-      if (res.devCode) toast.info(`โค้ดทดสอบ: ${res.devCode}`)
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "ส่ง OTP ไม่สำเร็จ")
-    } finally {
-      setSendingPhoneOtp(false)
-    }
-  }
-
-  const verifyPhone = async () => {
-    const phoneDigits = phoneInput.replace(/\D/g, "")
-    if (phoneDigits.length !== 10 || phoneOtpCode.length !== 6) {
-      toast.error("กรุณากรอก OTP 6 หลักให้ถูกต้อง")
-      return
-    }
-    setVerifyingPhoneOtp(true)
-    try {
-      const res = await verifyMyPhoneOtp(phoneDigits, phoneOtpCode)
-      setPhoneVerifyToken(res.verifyToken)
-      toast.success("ยืนยัน OTP สำเร็จ")
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "ยืนยัน OTP ไม่สำเร็จ")
-    } finally {
-      setVerifyingPhoneOtp(false)
     }
   }
 
@@ -506,50 +453,10 @@ export default function ProfilePage() {
                   <Input
                     type="tel"
                     value={phoneInput}
-                    onChange={(e) => {
-                      setPhoneInput(formatThaiMobileInput(e.target.value))
-                      setPhoneOtpSent(false)
-                      setPhoneOtpCode("")
-                      setPhoneVerifyToken("")
-                    }}
+                    onChange={(e) => setPhoneInput(formatThaiMobileInput(e.target.value))}
                     placeholder="081-234-5678"
                     className="tabular-nums"
                   />
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void sendPhoneOtp()}
-                      disabled={sendingPhoneOtp}
-                    >
-                      {sendingPhoneOtp ? "กำลังส่ง OTP…" : "ส่ง OTP"}
-                    </Button>
-                    {phoneVerifyToken ? (
-                      <span className="text-xs text-green-600">ยืนยัน OTP แล้ว</span>
-                    ) : null}
-                  </div>
-                  {phoneOtpSent ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <Input
-                        inputMode="numeric"
-                        maxLength={6}
-                        placeholder="กรอกรหัส OTP 6 หลัก"
-                        value={phoneOtpCode}
-                        onChange={(e) =>
-                          setPhoneOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
-                        }
-                      />
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => void verifyPhone()}
-                        disabled={verifyingPhoneOtp}
-                      >
-                        {verifyingPhoneOtp ? "กำลังยืนยัน…" : "ยืนยัน OTP"}
-                      </Button>
-                    </div>
-                  ) : null}
                 </Field>
               </div>
 

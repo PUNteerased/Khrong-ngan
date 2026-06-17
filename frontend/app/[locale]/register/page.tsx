@@ -34,8 +34,6 @@ import { Pill } from "lucide-react"
 import { GoogleLoginButton } from "@/components/google-login-button"
 import {
   registerUser,
-  requestPhoneOtp,
-  verifyPhoneOtp,
   ApiError,
 } from "@/lib/api"
 import { setStoredToken } from "@/lib/auth-token"
@@ -49,12 +47,6 @@ export default function RegisterPage() {
   const [step, setStep] = useState(1)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [sendingPhoneOtp, setSendingPhoneOtp] = useState(false)
-  const [verifyingPhoneOtp, setVerifyingPhoneOtp] = useState(false)
-  const [phoneOtpSent, setPhoneOtpSent] = useState(false)
-  const [phoneOtpCode, setPhoneOtpCode] = useState("")
-  const [phoneOtpVerified, setPhoneOtpVerified] = useState(false)
-  const [phoneVerifyToken, setPhoneVerifyToken] = useState("")
   const [formData, setFormData] = useState({
     name: "",
     username: "",
@@ -89,7 +81,6 @@ export default function RegisterPage() {
         username: normalizeUsername(formData.username),
         email: formData.email.trim().toLowerCase(),
         phone: phoneDigits.length === 10 ? phoneDigits : null,
-        phoneVerifyToken: phoneDigits.length === 10 ? phoneVerifyToken : undefined,
         password: formData.password,
         fullName: formData.name.trim(),
         age: formData.age ? Number(formData.age) : null,
@@ -205,105 +196,14 @@ export default function RegisterPage() {
                         maxLength={12}
                         className="pl-10 tabular-nums"
                         value={formData.phone}
-                        disabled={phoneOtpVerified}
-                        onChange={(e) => {
+                        onChange={(e) =>
                           setFormData({
                             ...formData,
                             phone: formatThaiMobileInput(e.target.value),
                           })
-                          setPhoneOtpSent(false)
-                          setPhoneOtpVerified(false)
-                          setPhoneVerifyToken("")
-                          setPhoneOtpCode("")
-                        }}
+                        }
                       />
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={sendingPhoneOtp || phoneOtpVerified}
-                        onClick={async () => {
-                          const phoneDigits = phoneDigitsOnly(formData.phone)
-                          if (phoneDigits.length !== 10) {
-                            toast.error(t("phoneRule"))
-                            return
-                          }
-                          setSendingPhoneOtp(true)
-                          try {
-                            const res = await requestPhoneOtp(phoneDigits)
-                            setPhoneOtpSent(true)
-                            setPhoneOtpVerified(false)
-                            setPhoneVerifyToken("")
-                            toast.success(res.message)
-                            if (res.devCode) {
-                              toast.info(`${t("otpDevCode")}: ${res.devCode}`)
-                            }
-                          } catch (err) {
-                            const msg =
-                              err instanceof ApiError ? err.message : t("otpSendFail")
-                            toast.error(msg)
-                          } finally {
-                            setSendingPhoneOtp(false)
-                          }
-                        }}
-                      >
-                        {sendingPhoneOtp ? t("otpSending") : t("otpSend")}
-                      </Button>
-                      {phoneOtpVerified ? (
-                        <span className="text-xs text-green-600 dark:text-green-500">
-                          {t("otpVerified")}
-                        </span>
-                      ) : phoneOtpSent ? (
-                        <span className="text-xs text-muted-foreground">
-                          {t("otpSentHint")}
-                        </span>
-                      ) : null}
-                    </div>
-                    {phoneOtpSent ? (
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <Input
-                          inputMode="numeric"
-                          maxLength={6}
-                          placeholder={t("otpCodePh")}
-                          value={phoneOtpCode}
-                          disabled={phoneOtpVerified}
-                          onChange={(e) =>
-                            setPhoneOtpCode(
-                              e.target.value.replace(/\D/g, "").slice(0, 6)
-                            )
-                          }
-                        />
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={verifyingPhoneOtp || phoneOtpVerified}
-                          onClick={async () => {
-                            const phoneDigits = phoneDigitsOnly(formData.phone)
-                            if (phoneDigits.length !== 10 || phoneOtpCode.length !== 6) {
-                              toast.error(t("otpInvalid"))
-                              return
-                            }
-                            setVerifyingPhoneOtp(true)
-                            try {
-                              const res = await verifyPhoneOtp(phoneDigits, phoneOtpCode)
-                              setPhoneOtpVerified(true)
-                              setPhoneVerifyToken(res.verifyToken)
-                              toast.success(t("otpVerifyOk"))
-                            } catch (err) {
-                              const msg =
-                                err instanceof ApiError ? err.message : t("otpVerifyFail")
-                              toast.error(msg)
-                            } finally {
-                              setVerifyingPhoneOtp(false)
-                            }
-                          }}
-                        >
-                          {verifyingPhoneOtp ? t("otpVerifying") : t("otpVerify")}
-                        </Button>
-                      </div>
-                    ) : null}
                   </Field>
 
                   <Field>
@@ -376,10 +276,6 @@ export default function RegisterPage() {
                     }
                     if (phoneDigits.length > 0 && phoneDigits.length !== 10) {
                       toast.error(t("phoneRule"))
-                      return
-                    }
-                    if (phoneDigits.length === 10 && (!phoneOtpVerified || !phoneVerifyToken)) {
-                      toast.error(t("otpRequire"))
                       return
                     }
                     if (formData.password !== formData.confirmPassword) {

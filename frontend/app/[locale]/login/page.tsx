@@ -111,15 +111,6 @@ export default function LoginPage() {
                 </Field>
               </FieldGroup>
 
-              <div className="text-right">
-                <Link
-                  href="/forgot-password"
-                  className="text-sm text-primary hover:underline"
-                >
-                  {t("forgot")}
-                </Link>
-              </div>
-
               <Button
                 type="submit"
                 className="w-full"

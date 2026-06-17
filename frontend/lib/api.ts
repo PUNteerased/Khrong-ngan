@@ -169,74 +169,6 @@ export async function registerUser(payload: {
   )
 }
 
-export async function requestEmailOtp(email: string) {
-  return apiJson<{ message: string; expiresInSec: number; devCode?: string }>(
-    "/api/auth/email-otp/request",
-    {
-      method: "POST",
-      body: JSON.stringify({ email }),
-      auth: false,
-    }
-  )
-}
-
-export async function verifyEmailOtp(email: string, code: string) {
-  return apiJson<{ message: string; verifyToken: string }>(
-    "/api/auth/email-otp/verify",
-    {
-      method: "POST",
-      body: JSON.stringify({ email, code }),
-      auth: false,
-    }
-  )
-}
-
-export async function requestPasswordReset(username: string, email: string) {
-  return apiJson<{ message: string; expiresInSec: number; devCode?: string }>(
-    "/api/auth/password-reset/request",
-    {
-      method: "POST",
-      body: JSON.stringify({ username, email }),
-      auth: false,
-    }
-  )
-}
-
-export async function confirmPasswordReset(
-  username: string,
-  email: string,
-  code: string,
-  newPassword: string
-) {
-  return apiJson<{ message: string }>("/api/auth/password-reset/confirm", {
-    method: "POST",
-    body: JSON.stringify({ username, email, code, newPassword }),
-    auth: false,
-  })
-}
-
-export async function requestPhoneOtp(phone: string) {
-  return apiJson<{ message: string; expiresInSec: number; devCode?: string }>(
-    "/api/auth/otp/request",
-    {
-      method: "POST",
-      body: JSON.stringify({ phone }),
-      auth: false,
-    }
-  )
-}
-
-export async function verifyPhoneOtp(phone: string, code: string) {
-  return apiJson<{ message: string; verifyToken: string }>(
-    "/api/auth/otp/verify",
-    {
-      method: "POST",
-      body: JSON.stringify({ phone, code }),
-      auth: false,
-    }
-  )
-}
-
 export async function loginUser(username: string, password: string) {
   return apiJson<{ accessToken: string; user: UserProfile }>(
     "/api/auth/login",
@@ -281,32 +213,12 @@ export async function patchMe(
       | "noDiseases"
       | "currentMedications"
     >
-  > & { phoneVerifyToken?: string }
+  >
 ) {
   return apiJson<UserProfile>("/api/users/me", {
     method: "PATCH",
     body: JSON.stringify(body),
   })
-}
-
-export async function requestMyPhoneOtp(phone: string) {
-  return apiJson<{ message: string; expiresInSec: number; devCode?: string }>(
-    "/api/users/me/phone-otp/request",
-    {
-      method: "POST",
-      body: JSON.stringify({ phone }),
-    }
-  )
-}
-
-export async function verifyMyPhoneOtp(phone: string, code: string) {
-  return apiJson<{ message: string; verifyToken: string }>(
-    "/api/users/me/phone-otp/verify",
-    {
-      method: "POST",
-      body: JSON.stringify({ phone, code }),
-    }
-  )
 }
 
 export async function changeMyPassword(currentPassword: string, newPassword: string) {
@@ -1121,10 +1033,7 @@ export type IssueReportDto = {
   id: string
   category: string
   description: string
-<<<<<<< HEAD
   reporterEmail: string
-=======
->>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
   imageUrl: string | null
   status: IssueReportStatus
   userId: string | null
@@ -1141,19 +1050,13 @@ export type IssueReportDto = {
 export async function submitIssueReport(payload: {
   category: string
   description: string
-<<<<<<< HEAD
   email: string
-=======
->>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
   imageFile?: File | null
 }) {
   const form = new FormData()
   form.append("category", payload.category)
   form.append("description", payload.description)
-<<<<<<< HEAD
   form.append("email", payload.email)
-=======
->>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
   if (payload.imageFile) {
     form.append("image", payload.imageFile)
   }

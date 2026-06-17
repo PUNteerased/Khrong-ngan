@@ -223,10 +223,7 @@ export type IssueReportSheetRow = {
   createdAt: string
   category: string
   description: string
-<<<<<<< HEAD
   reporterEmail: string
-=======
->>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
   imageUrl: string | null
   reporterName: string
   reporterUsername: string
@@ -242,11 +239,7 @@ export async function appendIssueReportRow(row: IssueReportSheetRow): Promise<vo
 
   const tab = process.env.ISSUE_REPORT_SHEET_TAB?.trim() || "IssueReports"
   const accessToken = await getGoogleAccessToken()
-<<<<<<< HEAD
   const range = `${tab}!A:J`
-=======
-  const range = `${tab}!A:I`
->>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
     spreadsheetId
   )}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`
@@ -260,10 +253,7 @@ export async function appendIssueReportRow(row: IssueReportSheetRow): Promise<vo
           row.createdAt,
           row.category,
           row.description,
-<<<<<<< HEAD
           row.reporterEmail,
-=======
->>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
           row.imageUrl ?? "",
           row.reporterName,
           row.reporterUsername,

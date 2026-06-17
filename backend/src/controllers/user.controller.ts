@@ -1,12 +1,7 @@
 import type { Request, Response } from "express"
 import type { Prisma } from "@prisma/client"
 import { prisma } from "../lib/prisma.js"
-import jwt from "jsonwebtoken"
 import { verifyPassword, hashPassword } from "../services/auth.service.js"
-import {
-  requestPhoneOtpViaThaiBulkSms,
-  verifyPhoneOtpViaThaiBulkSms,
-} from "../lib/phoneOtp.js"
 
 export async function getMe(req: Request, res: Response) {
   if (!req.auth) {
@@ -43,7 +38,6 @@ export async function patchMe(req: Request, res: Response) {
     currentMedications,
     email,
     phone,
-    phoneVerifyToken,
   } = req.body as Record<string, unknown>
 
   const data: Prisma.UserUpdateInput = {}
@@ -91,14 +85,6 @@ export async function patchMe(req: Request, res: Response) {
       res.status(400).json({ error: "เบอร์โทรต้องเป็นตัวเลข 10 หลัก" })
       return
     }
-    if (!phoneVerifyToken || typeof phoneVerifyToken !== "string") {
-      res.status(400).json({ error: "กรุณายืนยัน OTP เบอร์โทรก่อนบันทึก" })
-      return
-    }
-    if (!verifyPhoneChangeToken(phoneVerifyToken, req.auth.userId, normalizedPhone)) {
-      res.status(400).json({ error: "โทเค็นยืนยันเบอร์ไม่ถูกต้องหรือหมดอายุ" })
-      return
-    }
     const phoneTaken = await prisma.user.findFirst({
       where: {
         phone: normalizedPhone,
@@ -119,145 +105,6 @@ export async function patchMe(req: Request, res: Response) {
   })
 
   res.json(serializeUser(user))
-}
-
-export async function requestPhoneChangeOtp(req: Request, res: Response) {
-  if (!req.auth) {
-    res.status(401).json({ error: "Unauthorized" })
-    return
-  }
-  const phone = normalizePhone((req.body as { phone?: unknown })?.phone)
-  if (!phone || phone.length !== 10) {
-    res.status(400).json({ error: "เบอร์โทรต้องเป็นตัวเลข 10 หลัก" })
-    return
-  }
-  const me = await prisma.user.findUnique({
-    where: { id: req.auth.userId },
-    select: { phone: true },
-  })
-  if (!me) {
-    res.status(404).json({ error: "ไม่พบผู้ใช้" })
-    return
-  }
-  if (me.phone === phone) {
-    res.status(400).json({ error: "เบอร์ใหม่นี้ตรงกับเบอร์ปัจจุบัน" })
-    return
-  }
-  const existing = await prisma.user.findFirst({
-    where: { phone, id: { not: req.auth.userId } },
-    select: { id: true },
-  })
-  if (existing) {
-    res.status(409).json({ error: "เบอร์นี้ถูกใช้งานแล้ว" })
-    return
-  }
-
-  const now = Date.now()
-  const key = phoneOtpKey(req.auth.userId, phone)
-  const current = phoneOtpTokenStore.get(key)
-  if (current && now - current.lastSentAt < OTP_RESEND_COOLDOWN_MS) {
-    res.status(429).json({ error: "ส่งรหัสถี่เกินไป กรุณารอสักครู่" })
-    return
-  }
-
-  const result = await requestPhoneOtpViaThaiBulkSms(phone)
-  if (!result.sent) {
-    if (process.env.NODE_ENV === "production") {
-      res.status(503).json({
-        error: "ระบบส่ง OTP เบอร์โทรยังไม่พร้อม",
-        hint: result.skippedReason,
-      })
-      return
-    }
-    const code = createOtpCode()
-    otpStore.set(key, {
-      code,
-      expiresAt: now + OTP_TTL_MS,
-      attempts: 0,
-      lastSentAt: now,
-    })
-    res.json({
-      message: "สร้างรหัสแล้ว (โหมดทดสอบ — ยังไม่ได้ส่ง SMS)",
-      expiresInSec: Math.floor(OTP_TTL_MS / 1000),
-      devCode: code,
-    })
-    return
-  }
-
-  phoneOtpTokenStore.set(key, {
-    token: result.token,
-    expiresAt: now + OTP_TTL_MS,
-    attempts: 0,
-    lastSentAt: now,
-  })
-  res.json({
-    message: "ส่งรหัส OTP แล้ว",
-    expiresInSec: Math.floor(OTP_TTL_MS / 1000),
-  })
-}
-
-export async function verifyPhoneChangeOtp(req: Request, res: Response) {
-  if (!req.auth) {
-    res.status(401).json({ error: "Unauthorized" })
-    return
-  }
-  const { phone: phoneRaw, code } = req.body as { phone?: unknown; code?: unknown }
-  const phone = normalizePhone(phoneRaw)
-  const otpCode = String(code ?? "").trim()
-  if (!phone || phone.length !== 10 || otpCode.length !== 6) {
-    res.status(400).json({ error: "ข้อมูล OTP ไม่ถูกต้อง" })
-    return
-  }
-  const key = phoneOtpKey(req.auth.userId, phone)
-  const providerRec = phoneOtpTokenStore.get(key)
-  if (providerRec) {
-    if (Date.now() > providerRec.expiresAt) {
-      phoneOtpTokenStore.delete(key)
-      res.status(400).json({ error: "OTP หมดอายุ กรุณาขอรหัสใหม่" })
-      return
-    }
-    providerRec.attempts += 1
-    if (providerRec.attempts > MAX_VERIFY_ATTEMPTS) {
-      phoneOtpTokenStore.delete(key)
-      res.status(429).json({ error: "ลองผิดหลายครั้งเกินไป กรุณาขอ OTP ใหม่" })
-      return
-    }
-    const verify = await verifyPhoneOtpViaThaiBulkSms(providerRec.token, otpCode)
-    if (!verify.verified) {
-      phoneOtpTokenStore.set(key, providerRec)
-      res.status(400).json({ error: verify.message || "OTP ไม่ถูกต้อง" })
-      return
-    }
-    phoneOtpTokenStore.delete(key)
-    const verifyToken = signPhoneChangeToken(req.auth.userId, phone)
-    res.json({ message: "ยืนยันเบอร์สำเร็จ", verifyToken })
-    return
-  }
-
-  const rec = otpStore.get(key)
-  if (!rec) {
-    res.status(400).json({ error: "ไม่พบ OTP สำหรับเบอร์นี้ กรุณาขอรหัสใหม่" })
-    return
-  }
-  if (Date.now() > rec.expiresAt) {
-    otpStore.delete(key)
-    res.status(400).json({ error: "OTP หมดอายุ กรุณาขอรหัสใหม่" })
-    return
-  }
-  rec.attempts += 1
-  if (rec.attempts > MAX_VERIFY_ATTEMPTS) {
-    otpStore.delete(key)
-    res.status(429).json({ error: "ลองผิดหลายครั้งเกินไป กรุณาขอ OTP ใหม่" })
-    return
-  }
-  if (rec.code !== otpCode) {
-    otpStore.set(key, rec)
-    res.status(400).json({ error: "OTP ไม่ถูกต้อง" })
-    return
-  }
-  otpStore.delete(key)
-  const verifyToken = signPhoneChangeToken(req.auth.userId, phone)
-  res.json({ message: "ยืนยันเบอร์สำเร็จ", verifyToken })
 }
 
 export async function changeMyPassword(req: Request, res: Response) {
@@ -351,22 +198,6 @@ function serializeUser(user: {
   }
 }
 
-type OtpRecord = {
-  code: string
-  expiresAt: number
-  attempts: number
-  lastSentAt: number
-}
-
-const OTP_TTL_MS = 5 * 60 * 1000
-const OTP_RESEND_COOLDOWN_MS = 45 * 1000
-const MAX_VERIFY_ATTEMPTS = 5
-const otpStore = new Map<string, OtpRecord>()
-const phoneOtpTokenStore = new Map<
-  string,
-  { token: string; expiresAt: number; attempts: number; lastSentAt: number }
->()
-
 function normalizePhone(phoneRaw: unknown): string | null {
   if (phoneRaw == null) return null
   const digits = String(phoneRaw).replace(/\D/g, "")
@@ -378,39 +209,4 @@ function normalizeEmail(raw: unknown): string | null {
   const s = String(raw).trim().toLowerCase()
   if (!s) return null
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) ? s : null
-}
-
-function createOtpCode(): string {
-  return String(Math.floor(100000 + Math.random() * 900000))
-}
-
-function phoneOtpKey(userId: string, phone: string): string {
-  return `${userId}:${phone}`
-}
-
-function signPhoneChangeToken(userId: string, phone: string): string {
-  const secret = process.env.JWT_SECRET
-  if (!secret) throw new Error("JWT_SECRET is not set")
-  return jwt.sign({ purpose: "phone_change", userId, phone }, secret, {
-    expiresIn: "10m",
-  })
-}
-
-function verifyPhoneChangeToken(token: string, expectedUserId: string, expectedPhone: string): boolean {
-  const secret = process.env.JWT_SECRET
-  if (!secret) throw new Error("JWT_SECRET is not set")
-  try {
-    const decoded = jwt.verify(token, secret) as {
-      purpose?: string
-      userId?: string
-      phone?: string
-    }
-    return (
-      decoded.purpose === "phone_change" &&
-      decoded.userId === expectedUserId &&
-      decoded.phone === expectedPhone
-    )
-  } catch {
-    return false
-  }
 }

@@ -7,7 +7,6 @@ import {
   uploadIssueImage,
 } from "../services/issueReportGoogle.service.js"
 
-<<<<<<< HEAD
 const ISSUE_CATEGORIES = new Set(["medical_logic", "technical_bug", "feedback"])
 const MAX_DESCRIPTION_LEN = 4000
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -15,19 +14,12 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 function isValidEmail(value: string): boolean {
   return EMAIL_RE.test(value) && value.length <= 254
 }
-=======
-const ISSUE_CATEGORIES = new Set(["dispenser", "qr", "ai", "other"])
-const MAX_DESCRIPTION_LEN = 4000
->>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
 
 function serializeIssueReport(row: {
   id: string
   category: string
   description: string
-<<<<<<< HEAD
   reporterEmail: string
-=======
->>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
   imageUrl: string | null
   status: IssueStatus
   userId: string | null
@@ -44,10 +36,7 @@ function serializeIssueReport(row: {
     id: row.id,
     category: row.category,
     description: row.description,
-<<<<<<< HEAD
     reporterEmail: row.reporterEmail,
-=======
->>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
     imageUrl: row.imageUrl,
     status: row.status,
     userId: row.userId,
@@ -76,21 +65,15 @@ export async function createIssueReport(req: Request, res: Response) {
   const body = req.body as {
     category?: string
     description?: string
-<<<<<<< HEAD
     email?: string
     reporterEmail?: string
-=======
->>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
   }
 
   const category = String(body.category || "").trim()
   const description = String(body.description || "").trim()
-<<<<<<< HEAD
   const reporterEmail = String(body.email || body.reporterEmail || "")
     .trim()
     .toLowerCase()
-=======
->>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
   const file = req.file
 
   if (!ISSUE_CATEGORIES.has(category)) {
@@ -101,7 +84,6 @@ export async function createIssueReport(req: Request, res: Response) {
     res.status(400).json({ error: "กรุณากรอกรายละเอียดปัญหา" })
     return
   }
-<<<<<<< HEAD
   if (!reporterEmail) {
     res.status(400).json({ error: "กรุณากรอกอีเมลสำหรับติดต่อกลับ" })
     return
@@ -110,8 +92,6 @@ export async function createIssueReport(req: Request, res: Response) {
     res.status(400).json({ error: "รูปแบบอีเมลไม่ถูกต้อง" })
     return
   }
-=======
->>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
   if (description.length > MAX_DESCRIPTION_LEN) {
     res.status(400).json({ error: `รายละเอียดยาวเกิน ${MAX_DESCRIPTION_LEN} ตัวอักษร` })
     return
@@ -134,10 +114,7 @@ export async function createIssueReport(req: Request, res: Response) {
       createdAt: createdAt.toISOString(),
       category,
       description,
-<<<<<<< HEAD
       reporterEmail,
-=======
->>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
       imageUrl,
       reporterName: reporter?.fullName ?? "",
       reporterUsername: reporter?.username ?? "",
@@ -156,10 +133,7 @@ export async function createIssueReport(req: Request, res: Response) {
       id: reportId,
       category,
       description,
-<<<<<<< HEAD
       reporterEmail,
-=======
->>>>>>> 61d7091de1b9bac3545ffb074da53557375756e1
       imageUrl,
       userId,
       createdAt,
