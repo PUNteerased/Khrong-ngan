@@ -63,6 +63,10 @@
     "vaul": "^1.1.2",
     "zod": "^3.24.1"
   },
+  "optionalDependencies": {
+    "@parcel/watcher-linux-x64-glibc": "2.5.6",
+    "@parcel/watcher-linux-x64-musl": "2.5.6"
+  },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.0",
     "@types/node": "^22",
