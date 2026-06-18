@@ -69,6 +69,14 @@ export function loadGoogleServiceAccountCreds(): GoogleServiceAccountCreds {
   }
 }
 
+export function getGoogleServiceAccountEmail(): string | null {
+  try {
+    return loadGoogleServiceAccountCreds().clientEmail
+  } catch {
+    return null
+  }
+}
+
 export function createGoogleJwtClient(scopes: string[] = [SHEETS_SCOPE, DRIVE_SCOPE]): JWT {
   const { clientEmail, privateKey } = loadGoogleServiceAccountCreds()
   return new JWT({

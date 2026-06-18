@@ -1,6 +1,7 @@
 import type { Request, Response } from "express"
 import axios from "axios"
 import { prisma } from "../lib/prisma.js"
+import { probeIssueReportGoogleAccess } from "../services/issueReportGoogle.service.js"
 
 export async function getAdminHealth(_req: Request, res: Response) {
   let database = false
@@ -48,10 +49,13 @@ export async function getAdminHealth(_req: Request, res: Response) {
     }
   }
 
+  const googleIssueReport = await probeIssueReportGoogleAccess()
+
   res.json({
     database,
     dify,
     cabinet,
+    googleIssueReport,
     timestamp: new Date().toISOString(),
   })
 }

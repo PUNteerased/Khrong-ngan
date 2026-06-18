@@ -1,5 +1,5 @@
 import axios from "axios"
-import { getGoogleAccessToken } from "../lib/googleServiceAccount.js"
+import { getGoogleAccessToken, getGoogleServiceAccountEmail } from "../lib/googleServiceAccount.js"
 
 const BANGKOK_TZ = "Asia/Bangkok"
 const FOLDER_MIME = "application/vnd.google-apps.folder"
@@ -253,9 +253,13 @@ function googleApiErrorMessage(err: unknown): string | null {
 export function formatIssueReportGoogleError(err: unknown): string {
   const apiMsg = googleApiErrorMessage(err)
   const status = axios.isAxiosError(err) ? err.response?.status : undefined
+  const sheetId = process.env.GOOGLE_SHEETS_ID?.trim() || "(ไม่ได้ตั้งค่า)"
+  const saEmail = getGoogleServiceAccountEmail() || "(ไม่พบ Service Account)"
+  const shareHint = `แชร์ Sheet ${sheetId} ให้ ${saEmail} เป็น Editor`
 
   if (status === 403 || apiMsg?.toLowerCase().includes("permission")) {
-    return "บันทึกรายงานแล้ว แต่ซิงก์ Google Sheet ไม่สำเร็จ — แชร์ Sheet ให้ Service Account เป็น Editor และเปิด Google Sheets API"
+    const detail = apiMsg ? ` (${apiMsg})` : ""
+    return `บันทึกรายงานแล้ว แต่ซิงก์ Google Sheet ไม่สำเร็จ — ${shareHint}${detail}`
   }
   if (status === 404 || apiMsg?.toLowerCase().includes("not found")) {
     return "บันทึกรายงานแล้ว แต่ซิงก์ Google Sheet ไม่สำเร็จ — ตรวจสอบ GOOGLE_SHEETS_ID บน Render"
@@ -347,6 +351,56 @@ async function ensureIssueReportSheetReady(
   }
 
   readySheetKeys.add(cacheKey)
+}
+
+/** ทดสอบว่า Service Account เข้าถึง spreadsheet ได้หรือไม่ */
+export async function probeIssueReportGoogleAccess(): Promise<{
+  ok: boolean
+  serviceAccountEmail: string | null
+  spreadsheetId: string | null
+  tab: string
+  error: string | null
+}> {
+  const spreadsheetId = process.env.GOOGLE_SHEETS_ID?.trim() || null
+  const tab = process.env.ISSUE_REPORT_SHEET_TAB?.trim() || "IssueReports"
+  const serviceAccountEmail = getGoogleServiceAccountEmail()
+
+  if (!spreadsheetId) {
+    return {
+      ok: false,
+      serviceAccountEmail,
+      spreadsheetId,
+      tab,
+      error: "GOOGLE_SHEETS_ID ไม่ได้ตั้งค่า",
+    }
+  }
+  if (!serviceAccountEmail) {
+    return {
+      ok: false,
+      serviceAccountEmail,
+      spreadsheetId,
+      tab,
+      error: "Service Account ไม่ครบ — ตั้ง GOOGLE_SERVICE_ACCOUNT_JSON",
+    }
+  }
+
+  try {
+    const accessToken = await getGoogleAccessToken()
+    await sheetsRequest<{ sheets?: { properties?: { title?: string } }[] }>(
+      "GET",
+      `${encodeURIComponent(spreadsheetId)}?fields=properties.title,sheets.properties.title`,
+      accessToken
+    )
+    return { ok: true, serviceAccountEmail, spreadsheetId, tab, error: null }
+  } catch (err) {
+    return {
+      ok: false,
+      serviceAccountEmail,
+      spreadsheetId,
+      tab,
+      error: formatIssueReportGoogleError(err),
+    }
+  }
 }
 
 export async function appendIssueReportRow(row: IssueReportSheetRow): Promise<void> {
