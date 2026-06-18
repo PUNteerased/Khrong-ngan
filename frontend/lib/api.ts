@@ -1070,12 +1070,18 @@ export type IssueReportDto = {
 
 export async function submitIssueReport(payload: {
   category: string
+  subCategory: string
+  subCategoryOther?: string
   description: string
   email: string
   imageFile?: File | null
 }): Promise<IssueReportDto & { warning?: string }> {
   const form = new FormData()
   form.append("category", payload.category)
+  form.append("subCategory", payload.subCategory)
+  if (payload.subCategoryOther?.trim()) {
+    form.append("subCategoryOther", payload.subCategoryOther.trim())
+  }
   form.append("description", payload.description)
   form.append("email", payload.email)
   if (payload.imageFile) {

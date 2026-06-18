@@ -34,3 +34,26 @@ export function normalizeIssueCategory(raw: string): string | null {
   if (rest.length > 0) return null
   return `${main}:${sub}`
 }
+
+export function resolveIssueCategory(body: {
+  category?: string
+  subCategory?: string
+  subCategoryOther?: string
+}): string | null {
+  const raw = String(body.category || "").trim()
+  const sub = String(body.subCategory || "").trim()
+  const subOther = String(body.subCategoryOther || "").trim()
+
+  if (raw.includes(":")) {
+    return normalizeIssueCategory(raw)
+  }
+
+  if (!raw || !sub) return null
+
+  const combined =
+    sub === "other" && subOther
+      ? `${raw}:other:${subOther}`
+      : `${raw}:${sub}`
+
+  return normalizeIssueCategory(combined)
+}

@@ -32,7 +32,6 @@ import {
 import { ApiError, fetchMe, submitIssueReport } from "@/lib/api"
 import { getStoredToken } from "@/lib/auth-token"
 import {
-  buildIssueCategory,
   ISSUE_SUB_CATEGORIES,
   type IssueMainCategory,
 } from "@/lib/issue-categories"
@@ -142,16 +141,12 @@ export default function ContactPage() {
       return
     }
 
-    const category = buildIssueCategory(
-      formData.category,
-      formData.subCategory,
-      formData.subCategoryOther
-    )
-
     setIsSubmitting(true)
     try {
       const result = await submitIssueReport({
-        category,
+        category: formData.category,
+        subCategory: formData.subCategory,
+        subCategoryOther: formData.subCategoryOther,
         description: formData.description.trim(),
         email,
         imageFile: pendingImage?.file ?? null,
@@ -246,7 +241,8 @@ export default function ContactPage() {
                                 {t("subCategory")} *
                               </FieldLabel>
                               <Select
-                                value={formData.subCategory || undefined}
+                                key={`${cat.value}-sub`}
+                                value={formData.subCategory}
                                 onValueChange={(value) =>
                                   setFormData({
                                     ...formData,

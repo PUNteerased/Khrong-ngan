@@ -6,7 +6,7 @@ import {
   appendIssueReportRow,
   uploadIssueImage,
 } from "../services/issueReportGoogle.service.js"
-import { normalizeIssueCategory } from "../lib/issueCategories.js"
+import { resolveIssueCategory } from "../lib/issueCategories.js"
 
 const MAX_DESCRIPTION_LEN = 4000
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -64,12 +64,14 @@ async function loadReporter(userId: string | null) {
 export async function createIssueReport(req: Request, res: Response) {
   const body = req.body as {
     category?: string
+    subCategory?: string
+    subCategoryOther?: string
     description?: string
     email?: string
     reporterEmail?: string
   }
 
-  const category = normalizeIssueCategory(String(body.category || ""))
+  const category = resolveIssueCategory(body)
   const description = String(body.description || "").trim()
   const reporterEmail = String(body.email || body.reporterEmail || "")
     .trim()
@@ -77,6 +79,10 @@ export async function createIssueReport(req: Request, res: Response) {
   const file = req.file
 
   if (!category) {
+    console.warn("[contact] invalid category payload", {
+      category: body.category,
+      subCategory: body.subCategory,
+    })
     res.status(400).json({ error: "หมวดหมู่ปัญหาไม่ถูกต้อง" })
     return
   }
