@@ -1,21 +1,42 @@
 import { getStoredToken } from "./auth-token"
 import { getStoredAdminToken } from "./admin-token"
 
+const PRODUCTION_API_URL = "https://khrong-ngan.onrender.com"
+
+function isLocalHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1"
+}
+
+function isVercelHostname(hostname: string): boolean {
+  return hostname === "khrong-ngan.vercel.app" || hostname.endsWith(".vercel.app")
+}
+
 export function getApiBase(): string {
   const configured = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "")
-  if (configured) return configured
+  const deployedOnVercel = Boolean(process.env.VERCEL)
 
-  // Production fallback for this deployment when env is missing.
-  if (typeof window !== "undefined" && window.location.hostname === "khrong-ngan.vercel.app") {
-    return "https://khrong-ngan.onrender.com"
-  }
-
-  // Local dev convenience fallback only.
   if (typeof window !== "undefined") {
     const host = window.location.hostname
-    if (host === "localhost" || host === "127.0.0.1") {
-      return "http://localhost:4000"
+
+    if (isVercelHostname(host) || (host && !isLocalHostname(host))) {
+      return PRODUCTION_API_URL
     }
+
+    if (isLocalHostname(host)) {
+      return configured || "http://localhost:4000"
+    }
+  }
+
+  if (deployedOnVercel || process.env.NODE_ENV === "production") {
+    return PRODUCTION_API_URL
+  }
+
+  if (configured && !configured.includes("localhost")) {
+    return configured
+  }
+
+  if (configured) {
+    return configured
   }
 
   throw new Error(
