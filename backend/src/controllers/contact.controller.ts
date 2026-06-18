@@ -4,6 +4,7 @@ import { randomUUID } from "crypto"
 import { prisma } from "../lib/prisma.js"
 import {
   appendIssueReportRow,
+  formatIssueReportGoogleError,
   uploadIssueImage,
 } from "../services/issueReportGoogle.service.js"
 import { resolveIssueCategory } from "../lib/issueCategories.js"
@@ -116,8 +117,12 @@ export async function createIssueReport(req: Request, res: Response) {
       imageUrl = await uploadIssueImage(file.buffer, file.mimetype, createdAt)
     } catch (err) {
       console.error("[contact] image upload failed:", err)
+      const apiMsg = err instanceof Error ? err.message : null
       googleSyncWarning =
-        "บันทึกรายงานแล้ว แต่อัปโหลดรูปไม่สำเร็จ — ตรวจสอบสิทธิ์ Google Drive"
+        apiMsg?.includes("GOOGLE_DRIVE_ISSUE_FOLDER_ID") ||
+        apiMsg?.includes("Service Account")
+          ? `บันทึกรายงานแล้ว แต่อัปโหลดรูปไม่สำเร็จ — ${apiMsg}`
+          : "บันทึกรายงานแล้ว แต่อัปโหลดรูปไม่สำเร็จ — แชร์โฟลเดอร์ Drive ให้ Service Account เป็น Editor"
     }
   }
 
@@ -153,9 +158,7 @@ export async function createIssueReport(req: Request, res: Response) {
     })
   } catch (err) {
     console.error("[contact] Google Sheet sync failed:", err)
-    googleSyncWarning =
-      googleSyncWarning ??
-      "บันทึกรายงานแล้ว แต่ซิงก์ Google Sheet ไม่สำเร็จ — ตรวจสอบ GOOGLE_SHEETS_ID และสิทธิ์ Service Account"
+    googleSyncWarning = googleSyncWarning ?? formatIssueReportGoogleError(err)
   }
 
   res.status(201).json({

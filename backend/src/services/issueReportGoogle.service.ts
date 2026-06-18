@@ -7,14 +7,10 @@ const FOLDER_MIME = "application/vnd.google-apps.folder"
 type BangkokDateTime = {
   day: string
   month: string
-  yearBe2: string
+  yearCe: string
   hour: string
   minute: string
   second: string
-}
-
-function pad2(n: number): string {
-  return String(n).padStart(2, "0")
 }
 
 function bangkokDateTime(at = new Date()): BangkokDateTime {
@@ -32,13 +28,12 @@ function bangkokDateTime(at = new Date()): BangkokDateTime {
   const get = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((p) => p.type === type)?.value ?? "00"
 
-  const gregorianYear = Number(get("year"))
-  const beYear2 = pad2((gregorianYear + 543) % 100)
+  const gregorianYear = get("year")
 
   return {
     day: get("day"),
     month: get("month"),
-    yearBe2: beYear2,
+    yearCe: gregorianYear,
     hour: get("hour"),
     minute: get("minute"),
     second: get("second"),
@@ -123,16 +118,17 @@ async function ensureChildFolder(
   return createFolder(accessToken, parentId, name)
 }
 
+/** โฟลเดอร์ย่อยตามวันที่ (เวลา Bangkok): DD/MM/YYYY ค.ศ. เช่น 18/06/2026 */
 export async function ensureDateSubfolders(
   rootFolderId: string,
   at = new Date()
 ): Promise<string> {
   const accessToken = await getGoogleAccessToken()
-  const { day, month, yearBe2 } = bangkokDateTime(at)
+  const { day, month, yearCe } = bangkokDateTime(at)
 
   const dayFolderId = await ensureChildFolder(accessToken, rootFolderId, day)
   const monthFolderId = await ensureChildFolder(accessToken, dayFolderId, month)
-  const yearFolderId = await ensureChildFolder(accessToken, monthFolderId, yearBe2)
+  const yearFolderId = await ensureChildFolder(accessToken, monthFolderId, yearCe)
   return yearFolderId
 }
 
@@ -177,9 +173,9 @@ export async function uploadIssueImage(
 
   const accessToken = await getGoogleAccessToken()
   const leafFolderId = await ensureDateSubfolders(rootFolderId, at)
-  const { hour, minute, second } = bangkokDateTime(at)
+  const { hour, minute } = bangkokDateTime(at)
   const ext = mimeToExt(mimeType)
-  const baseName = `${hour}${minute}${second}`
+  const baseName = `${hour}${minute}`
   const filename = await pickUniqueFilename(accessToken, leafFolderId, baseName, ext)
 
   const metadata = JSON.stringify({
@@ -231,6 +227,128 @@ export type IssueReportSheetRow = {
   status: string
 }
 
+const ISSUE_REPORT_HEADERS = [
+  "id",
+  "created_at",
+  "category",
+  "description",
+  "reporter_email",
+  "image_url",
+  "reporter_name",
+  "reporter_username",
+  "user_id",
+  "status",
+] as const
+
+const readySheetKeys = new Set<string>()
+
+function googleApiErrorMessage(err: unknown): string | null {
+  if (!axios.isAxiosError(err)) return null
+  const data = err.response?.data as
+    | { error?: { message?: string; status?: string } }
+    | undefined
+  return data?.error?.message ?? null
+}
+
+export function formatIssueReportGoogleError(err: unknown): string {
+  const apiMsg = googleApiErrorMessage(err)
+  const status = axios.isAxiosError(err) ? err.response?.status : undefined
+
+  if (status === 403 || apiMsg?.toLowerCase().includes("permission")) {
+    return "บันทึกรายงานแล้ว แต่ซิงก์ Google Sheet ไม่สำเร็จ — แชร์ Sheet ให้ Service Account เป็น Editor และเปิด Google Sheets API"
+  }
+  if (status === 404 || apiMsg?.toLowerCase().includes("not found")) {
+    return "บันทึกรายงานแล้ว แต่ซิงก์ Google Sheet ไม่สำเร็จ — ตรวจสอบ GOOGLE_SHEETS_ID บน Render"
+  }
+  if (apiMsg?.toLowerCase().includes("unable to parse range")) {
+    return "บันทึกรายงานแล้ว แต่ซิงก์ Google Sheet ไม่สำเร็จ — ไม่พบแท็บ IssueReports (ระบบจะสร้างให้อัตโนมัติหลัง deploy ล่าสุด)"
+  }
+  if (apiMsg) {
+    return `บันทึกรายงานแล้ว แต่ซิงก์ Google Sheet ไม่สำเร็จ — ${apiMsg}`
+  }
+  if (err instanceof Error && err.message) {
+    return `บันทึกรายงานแล้ว แต่ซิงก์ Google Sheet ไม่สำเร็จ — ${err.message}`
+  }
+  return "บันทึกรายงานแล้ว แต่ซิงก์ Google Sheet ไม่สำเร็จ — ตรวจสอบ GOOGLE_SHEETS_ID และสิทธิ์ Service Account"
+}
+
+async function sheetsRequest<T>(
+  method: "GET" | "POST" | "PUT",
+  path: string,
+  accessToken: string,
+  data?: unknown
+): Promise<T> {
+  const url = path.startsWith("http")
+    ? path
+    : `https://sheets.googleapis.com/v4/spreadsheets/${path}`
+  const res = await axios.request<T>({
+    method,
+    url,
+    data,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    timeout: 20000,
+  })
+  return res.data
+}
+
+async function ensureIssueReportSheetReady(
+  spreadsheetId: string,
+  tab: string,
+  accessToken: string
+): Promise<void> {
+  const cacheKey = `${spreadsheetId}:${tab}`
+  if (readySheetKeys.has(cacheKey)) return
+
+  const meta = await sheetsRequest<{
+    sheets?: { properties?: { title?: string } }[]
+  }>(
+    "GET",
+    `${encodeURIComponent(spreadsheetId)}?fields=sheets.properties.title`,
+    accessToken
+  )
+
+  const titles = new Set(
+    (meta.sheets ?? [])
+      .map((sheet) => sheet.properties?.title?.trim())
+      .filter((title): title is string => Boolean(title))
+  )
+
+  if (!titles.has(tab)) {
+    await sheetsRequest(
+      "POST",
+      `${encodeURIComponent(spreadsheetId)}:batchUpdate`,
+      accessToken,
+      {
+        requests: [{ addSheet: { properties: { title: tab } } }],
+      }
+    )
+  }
+
+  const headerRange = `${tab}!A1:J1`
+  const headerData = await sheetsRequest<{ values?: string[][] }>(
+    "GET",
+    `${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(headerRange)}`,
+    accessToken
+  )
+
+  const firstCell = headerData.values?.[0]?.[0]?.trim() ?? ""
+  if (firstCell !== ISSUE_REPORT_HEADERS[0]) {
+    await sheetsRequest(
+      "PUT",
+      `${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(
+        headerRange
+      )}?valueInputOption=USER_ENTERED`,
+      accessToken,
+      { values: [Array.from(ISSUE_REPORT_HEADERS)] }
+    )
+  }
+
+  readySheetKeys.add(cacheKey)
+}
+
 export async function appendIssueReportRow(row: IssueReportSheetRow): Promise<void> {
   const spreadsheetId = process.env.GOOGLE_SHEETS_ID?.trim()
   if (!spreadsheetId) {
@@ -239,6 +357,8 @@ export async function appendIssueReportRow(row: IssueReportSheetRow): Promise<vo
 
   const tab = process.env.ISSUE_REPORT_SHEET_TAB?.trim() || "IssueReports"
   const accessToken = await getGoogleAccessToken()
+  await ensureIssueReportSheetReady(spreadsheetId, tab, accessToken)
+
   const range = `${tab}!A:J`
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
     spreadsheetId

@@ -1,11 +1,42 @@
 import { JWT } from "google-auth-library"
 
 const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
-const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
+const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive"
 
 export type GoogleServiceAccountCreds = {
   clientEmail: string
   privateKey: string
+}
+
+function normalizeServiceAccountJson(raw: string): string {
+  let value = raw.trim()
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    value = value.slice(1, -1).trim()
+  }
+  return value
+}
+
+function parseServiceAccountJson(raw: string): {
+  client_email?: string
+  private_key?: string
+} {
+  const normalized = normalizeServiceAccountJson(raw)
+  try {
+    return JSON.parse(normalized) as {
+      client_email?: string
+      private_key?: string
+    }
+  } catch {
+    // Render บางครั้งเก็บเป็น literal \n ทั้งก้อน — ลองแปลงเป็น newline จริงก่อน parse อีกครั้ง
+    const unescaped = normalized.replace(/\\n/g, "\n").replace(/\\"/g, '"')
+    return JSON.parse(unescaped) as {
+      client_email?: string
+      private_key?: string
+    }
+  }
 }
 
 export function loadGoogleServiceAccountCreds(): GoogleServiceAccountCreds {
@@ -18,10 +49,7 @@ export function loadGoogleServiceAccountCreds(): GoogleServiceAccountCreds {
 
   if (serviceAccountJson) {
     try {
-      const parsed = JSON.parse(serviceAccountJson) as {
-        client_email?: string
-        private_key?: string
-      }
+      const parsed = parseServiceAccountJson(serviceAccountJson)
       clientEmail = parsed.client_email || clientEmail
       privateKey = parsed.private_key || privateKey
     } catch {
