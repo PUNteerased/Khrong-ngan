@@ -22,8 +22,20 @@ import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { ApiError, fetchMe, submitIssueReport } from "@/lib/api"
 import { getStoredToken } from "@/lib/auth-token"
+import {
+  buildIssueCategory,
+  ISSUE_SUB_CATEGORIES,
+  type IssueMainCategory,
+} from "@/lib/issue-categories"
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/jpg", "image/png"])
@@ -32,7 +44,9 @@ export default function ContactPage() {
   const t = useTranslations("Contact")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState({
-    category: "",
+    category: "" as IssueMainCategory | "",
+    subCategory: "",
+    subCategoryOther: "",
     description: "",
     email: "",
   })
@@ -44,12 +58,20 @@ export default function ContactPage() {
 
   const issueCategories = useMemo(
     () => [
-      { value: "medical_logic", label: t("catMedicalLogic"), icon: Bot },
-      { value: "technical_bug", label: t("catTechnicalBug"), icon: Bug },
-      { value: "feedback", label: t("catFeedback"), icon: Lightbulb },
+      { value: "medical_logic" as const, label: t("catMedicalLogic"), icon: Bot },
+      { value: "technical_bug" as const, label: t("catTechnicalBug"), icon: Bug },
+      { value: "feedback" as const, label: t("catFeedback"), icon: Lightbulb },
     ],
     [t]
   )
+
+  const subOptions = useMemo(() => {
+    if (!formData.category) return []
+    return ISSUE_SUB_CATEGORIES[formData.category].map((item) => ({
+      value: item.value,
+      label: t(item.labelKey),
+    }))
+  }, [formData.category, t])
 
   useEffect(() => {
     if (!getStoredToken()) return
@@ -98,6 +120,14 @@ export default function ContactPage() {
       toast.error(t("categoryRequired"))
       return
     }
+    if (!formData.subCategory) {
+      toast.error(t("subCategoryRequired"))
+      return
+    }
+    if (formData.subCategory === "other" && !formData.subCategoryOther.trim()) {
+      toast.error(t("subOtherRequired"))
+      return
+    }
     if (!formData.description.trim()) {
       toast.error(t("detailsRequired"))
       return
@@ -112,16 +142,29 @@ export default function ContactPage() {
       return
     }
 
+    const category = buildIssueCategory(
+      formData.category,
+      formData.subCategory,
+      formData.subCategoryOther
+    )
+
     setIsSubmitting(true)
     try {
-      await submitIssueReport({
-        category: formData.category,
+      const result = await submitIssueReport({
+        category,
         description: formData.description.trim(),
         email,
         imageFile: pendingImage?.file ?? null,
       })
       toast.success(t("submitSuccess"))
-      setFormData({ category: "", description: "", email })
+      if (result.warning) toast.warning(result.warning)
+      setFormData({
+        category: "",
+        subCategory: "",
+        subCategoryOther: "",
+        description: "",
+        email,
+      })
       clearPendingImage()
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : t("submitFail")
@@ -170,26 +213,82 @@ export default function ContactPage() {
                   <RadioGroup
                     value={formData.category}
                     onValueChange={(value) =>
-                      setFormData({ ...formData, category: value })
+                      setFormData({
+                        ...formData,
+                        category: value as IssueMainCategory,
+                        subCategory: "",
+                        subCategoryOther: "",
+                      })
                     }
                     className="gap-3"
                   >
                     {issueCategories.map((cat) => (
-                      <label
-                        key={cat.value}
-                        htmlFor={`issue-${cat.value}`}
-                        className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50 has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5"
-                      >
-                        <RadioGroupItem
-                          id={`issue-${cat.value}`}
-                          value={cat.value}
-                          className="mt-0.5"
-                        />
-                        <div className="flex items-start gap-2">
-                          <cat.icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                          <span className="text-sm leading-snug">{cat.label}</span>
-                        </div>
-                      </label>
+                      <div key={cat.value} className="space-y-2">
+                        <label
+                          htmlFor={`issue-${cat.value}`}
+                          className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50 has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5"
+                        >
+                          <RadioGroupItem
+                            id={`issue-${cat.value}`}
+                            value={cat.value}
+                            className="mt-0.5"
+                          />
+                          <div className="flex items-start gap-2">
+                            <cat.icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                            <span className="text-sm leading-snug">{cat.label}</span>
+                          </div>
+                        </label>
+
+                        {formData.category === cat.value ? (
+                          <div className="ml-7 space-y-2 border-l-2 border-primary/20 pl-4">
+                            <Field>
+                              <FieldLabel className="text-xs text-muted-foreground">
+                                {t("subCategory")} *
+                              </FieldLabel>
+                              <Select
+                                value={formData.subCategory || undefined}
+                                onValueChange={(value) =>
+                                  setFormData({
+                                    ...formData,
+                                    subCategory: value,
+                                    subCategoryOther:
+                                      value === "other"
+                                        ? formData.subCategoryOther
+                                        : "",
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder={t("subCategoryPh")} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {subOptions.map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </Field>
+
+                            {formData.subCategory === "other" ? (
+                              <Field>
+                                <Input
+                                  placeholder={t("subOtherPh")}
+                                  value={formData.subCategoryOther}
+                                  onChange={(e) =>
+                                    setFormData({
+                                      ...formData,
+                                      subCategoryOther: e.target.value,
+                                    })
+                                  }
+                                  maxLength={120}
+                                />
+                              </Field>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
                     ))}
                   </RadioGroup>
                 </Field>

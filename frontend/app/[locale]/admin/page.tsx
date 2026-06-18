@@ -261,22 +261,52 @@ export default function AdminPage() {
   }, [unlocked, mainTab, issueReportFilter, loadIssueReports])
 
   const categoryLabel = (cat: string) => {
-    switch (cat) {
-      case "medical_logic":
-        return tr("catMedicalLogic")
-      case "technical_bug":
-        return tr("catTechnicalBug")
-      case "feedback":
-        return tr("catFeedback")
-      case "dispenser":
-        return tr("catDispenser")
-      case "qr":
-        return tr("catQr")
-      case "ai":
-        return tr("catAi")
-      default:
-        return tr("catOther")
+    const subLabelKeys: Record<string, Record<string, string>> = {
+      medical_logic: {
+        unsafe_age_allergy: "subMedicalUnsafeAge",
+        wrong_drug_info: "subMedicalWrongDrug",
+        off_topic_thai: "subMedicalOffTopic",
+        other: "subOther",
+      },
+      technical_bug: {
+        chat_stuck: "subTechChatStuck",
+        mobile_layout: "subTechMobileLayout",
+        slow_timeout: "subTechSlow",
+        other: "subOther",
+      },
+      feedback: {
+        new_feature: "subFeedbackFeature",
+        more_drugs: "subFeedbackDrugs",
+        other: "subOther",
+      },
     }
+
+    const parts = cat.split(":")
+    const main = parts[0]
+    const sub = parts[1]
+    const otherDetail = parts.slice(2).join(":")
+
+    const mainLabels: Record<string, string> = {
+      medical_logic: tr("catMedicalLogic"),
+      technical_bug: tr("catTechnicalBug"),
+      feedback: tr("catFeedback"),
+      dispenser: tr("catDispenser"),
+      qr: tr("catQr"),
+      ai: tr("catAi"),
+    }
+
+    const mainLabel = mainLabels[main] ?? tr("catOther")
+    if (!sub) return mainLabel
+
+    const subKey = subLabelKeys[main]?.[sub]
+    const subLabel =
+      sub === "other" && otherDetail
+        ? otherDetail
+        : subKey
+          ? tr(subKey)
+          : sub
+
+    return `${mainLabel} — ${subLabel}`
   }
 
   const toggleReportStatus = async (row: IssueReportDto) => {

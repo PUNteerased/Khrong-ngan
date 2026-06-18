@@ -6,8 +6,8 @@ import {
   appendIssueReportRow,
   uploadIssueImage,
 } from "../services/issueReportGoogle.service.js"
+import { normalizeIssueCategory } from "../lib/issueCategories.js"
 
-const ISSUE_CATEGORIES = new Set(["medical_logic", "technical_bug", "feedback"])
 const MAX_DESCRIPTION_LEN = 4000
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -69,14 +69,14 @@ export async function createIssueReport(req: Request, res: Response) {
     reporterEmail?: string
   }
 
-  const category = String(body.category || "").trim()
+  const category = normalizeIssueCategory(String(body.category || ""))
   const description = String(body.description || "").trim()
   const reporterEmail = String(body.email || body.reporterEmail || "")
     .trim()
     .toLowerCase()
   const file = req.file
 
-  if (!ISSUE_CATEGORIES.has(category)) {
+  if (!category) {
     res.status(400).json({ error: "หมวดหมู่ปัญหาไม่ถูกต้อง" })
     return
   }
@@ -103,29 +103,16 @@ export async function createIssueReport(req: Request, res: Response) {
   const createdAt = new Date()
 
   let imageUrl: string | null = null
+  let googleSyncWarning: string | null = null
 
-  try {
-    if (file) {
+  if (file) {
+    try {
       imageUrl = await uploadIssueImage(file.buffer, file.mimetype, createdAt)
+    } catch (err) {
+      console.error("[contact] image upload failed:", err)
+      googleSyncWarning =
+        "บันทึกรายงานแล้ว แต่อัปโหลดรูปไม่สำเร็จ — ตรวจสอบสิทธิ์ Google Drive"
     }
-
-    await appendIssueReportRow({
-      id: reportId,
-      createdAt: createdAt.toISOString(),
-      category,
-      description,
-      reporterEmail,
-      imageUrl,
-      reporterName: reporter?.fullName ?? "",
-      reporterUsername: reporter?.username ?? "",
-      userId,
-      status: "OPEN",
-    })
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "ส่งรายงานไป Google ไม่สำเร็จ"
-    console.error("[contact] Google sync failed:", err)
-    res.status(503).json({ error: msg })
-    return
   }
 
   const row = await prisma.issueReport.create({
@@ -145,7 +132,30 @@ export async function createIssueReport(req: Request, res: Response) {
     },
   })
 
-  res.status(201).json(serializeIssueReport(row))
+  try {
+    await appendIssueReportRow({
+      id: reportId,
+      createdAt: createdAt.toISOString(),
+      category,
+      description,
+      reporterEmail,
+      imageUrl,
+      reporterName: reporter?.fullName ?? "",
+      reporterUsername: reporter?.username ?? "",
+      userId,
+      status: "OPEN",
+    })
+  } catch (err) {
+    console.error("[contact] Google Sheet sync failed:", err)
+    googleSyncWarning =
+      googleSyncWarning ??
+      "บันทึกรายงานแล้ว แต่ซิงก์ Google Sheet ไม่สำเร็จ — ตรวจสอบ GOOGLE_SHEETS_ID และสิทธิ์ Service Account"
+  }
+
+  res.status(201).json({
+    ...serializeIssueReport(row),
+    ...(googleSyncWarning ? { warning: googleSyncWarning } : {}),
+  })
 }
 
 export async function listIssueReports(req: Request, res: Response) {

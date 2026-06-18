@@ -1073,7 +1073,7 @@ export async function submitIssueReport(payload: {
   description: string
   email: string
   imageFile?: File | null
-}) {
+}): Promise<IssueReportDto & { warning?: string }> {
   const form = new FormData()
   form.append("category", payload.category)
   form.append("description", payload.description)
@@ -1110,7 +1110,7 @@ export async function submitIssueReport(payload: {
     throw new ApiError(msg || "คำขอล้มเหลว", res.status, data)
   }
 
-  return data as IssueReportDto
+  return data as IssueReportDto & { warning?: string }
 }
 
 export async function fetchAdminIssueReports(status?: IssueReportStatus) {
