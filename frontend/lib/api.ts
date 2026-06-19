@@ -403,6 +403,22 @@ export type AdminHealth = {
   timestamp: string
 }
 
+export type KioskStatus = {
+  online: boolean
+  lat: number
+  lng: number
+  name: string
+  device: string
+  firmwareVersion: string | null
+  rssi: number | null
+  lastSeen: string | null
+  source: "heartbeat" | "health_url" | "default"
+}
+
+export async function fetchKioskStatus() {
+  return apiJson<KioskStatus>("/api/kiosk/status", { auth: false })
+}
+
 export async function fetchAdminHealth() {
   return apiJson<AdminHealth>("/api/admin/health", {
     auth: false,

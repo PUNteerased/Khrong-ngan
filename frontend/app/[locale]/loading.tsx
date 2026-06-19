@@ -36,7 +36,6 @@ export default function LocaleLoading() {
           <div>
             <p className="text-sm text-muted-foreground">Loading LaneYa</p>
             <p className="text-xl font-bold tabular-nums text-foreground">{percent}%</p>
-            <p className="text-xs text-muted-foreground">minimum 1.5s</p>
           </div>
         </div>
         <Progress value={percent} className="h-2.5" />

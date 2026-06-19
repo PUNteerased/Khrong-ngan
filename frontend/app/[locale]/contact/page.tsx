@@ -5,7 +5,6 @@ import {
   Phone,
   AlertTriangle,
   Send,
-  MapPin,
   Mail,
   Users,
   Upload,
@@ -31,6 +30,8 @@ import {
 } from "@/components/ui/select"
 import { ApiError, fetchMe, submitIssueReport } from "@/lib/api"
 import { getStoredToken } from "@/lib/auth-token"
+import { UD_SCHOOL_URL } from "@/lib/contact-location"
+import { KioskLocationMap } from "@/components/kiosk-location-map"
 import {
   ISSUE_SUB_CATEGORIES,
   type IssueMainCategory,
@@ -395,13 +396,7 @@ export default function ContactPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-start gap-3">
-              <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
-              <div>
-                <p className="font-medium text-foreground">{t("locationTitle")}</p>
-                <p className="text-sm text-muted-foreground">{t("locationBody")}</p>
-              </div>
-            </div>
+            <KioskLocationMap />
 
             <div className="flex items-start gap-3">
               <Mail className="h-5 w-5 text-muted-foreground mt-0.5" />
@@ -417,10 +412,20 @@ export default function ContactPage() {
             </div>
 
             <div className="flex items-start gap-3">
-              <Users className="h-5 w-5 text-muted-foreground mt-0.5" />
+              <Users className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
               <div>
                 <p className="font-medium text-foreground">{t("teamTitle")}</p>
-                <p className="text-sm text-muted-foreground">{t("teamBody")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("teamBodyPrefix")}
+                  <a
+                    href={UD_SCHOOL_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    {t("teamSchoolName")}
+                  </a>
+                </p>
               </div>
             </div>
           </CardContent>

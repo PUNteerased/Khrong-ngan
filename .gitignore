@@ -28,3 +28,7 @@ dist/
 *.tsbuildinfo
 .cursor/
 agent-tools/
+
+# ESP32 secrets (copy from config.example.h)
+hardware/**/config.h
+hardware/**/.pio/

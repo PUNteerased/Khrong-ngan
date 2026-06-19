@@ -14,6 +14,7 @@ import * as knowledgeController from "../controllers/knowledge.controller.js"
 import * as healthTipsController from "../controllers/healthTips.controller.js"
 import * as i18nController from "../controllers/i18n.controller.js"
 import * as contactController from "../controllers/contact.controller.js"
+import * as kioskController from "../controllers/kiosk.controller.js"
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth.js"
 import { issueReportUpload } from "../middleware/issueReportUpload.js"
 import { adminAuthMiddleware, adminOrKeyMiddleware } from "../middleware/adminAuth.js"
@@ -80,6 +81,9 @@ router.get("/api/knowledge/drugs/:idOrSlug", knowledgeController.getKnowledgeDru
 router.get("/api/health-tips/search", healthTipsController.searchHealthTips)
 router.get("/api/health-tips/:slug", healthTipsController.getHealthTipDetail)
 router.get("/api/i18n/ui", i18nController.listUiTranslations)
+
+router.get("/api/kiosk/status", kioskController.getPublicKioskStatus)
+router.post("/api/kiosk/heartbeat", kioskController.postKioskHeartbeat)
 
 router.post(
   "/api/contact",
