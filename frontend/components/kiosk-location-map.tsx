@@ -75,14 +75,6 @@ export function KioskLocationMap() {
               </Badge>
             )}
           </div>
-          <p className="text-sm text-muted-foreground">{t("locationBody")}</p>
-          {status?.name ? (
-            <p className="text-xs text-muted-foreground">
-              {status.name}
-              {status.device ? ` · ${status.device}` : ""}
-              {status.firmwareVersion ? ` v${status.firmwareVersion}` : ""}
-            </p>
-          ) : null}
           <a
             href={openUrl}
             target="_blank"
