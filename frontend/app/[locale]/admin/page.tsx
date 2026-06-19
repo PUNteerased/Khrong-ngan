@@ -1409,9 +1409,15 @@ export default function AdminPage() {
                                       href={row.imageUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="text-primary hover:underline"
+                                      className="inline-block"
+                                      title={tr("viewPhoto")}
                                     >
-                                      {tr("viewPhoto")}
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img
+                                        src={row.imageUrl}
+                                        alt=""
+                                        className="h-14 w-14 rounded-md border object-cover hover:opacity-90"
+                                      />
                                     </a>
                                   ) : (
                                     "—"

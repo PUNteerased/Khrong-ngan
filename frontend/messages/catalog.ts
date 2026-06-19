@@ -336,6 +336,7 @@ export const thMessages = {
     imageRemove: "เอาออก",
     imageInvalid: "รองรับเฉพาะไฟล์ PNG หรือ JPG เท่านั้น",
     imageTooLarge: "ไฟล์ใหญ่เกิน 5MB",
+    imageUploadUnavailable: "ระบบอัปโหลดรูปยังไม่พร้อม — ส่งรายงานโดยไม่แนบรูปหรือติดต่อผู้ดูแล",
   },
   AdminReports: {
     tabTitle: "แจ้งปัญหา",
@@ -986,6 +987,7 @@ export const enMessages = {
     imageRemove: "Remove",
     imageInvalid: "Only PNG or JPG files are allowed",
     imageTooLarge: "File exceeds 5MB",
+    imageUploadUnavailable: "Image upload is unavailable — submit without a photo or contact admin",
   },
   AdminReports: {
     tabTitle: "Reports",

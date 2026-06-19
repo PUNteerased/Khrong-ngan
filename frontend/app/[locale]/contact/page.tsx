@@ -32,6 +32,8 @@ import { ApiError, fetchMe, submitIssueReport } from "@/lib/api"
 import { getStoredToken } from "@/lib/auth-token"
 import { UD_SCHOOL_URL } from "@/lib/contact-location"
 import { KioskLocationMap } from "@/components/kiosk-location-map"
+import { uploadImage } from "@/lib/upload-image"
+import { isSupabaseConfigured } from "@/lib/supabase"
 import {
   ISSUE_SUB_CATEGORIES,
   type IssueMainCategory,
@@ -144,16 +146,25 @@ export default function ContactPage() {
 
     setIsSubmitting(true)
     try {
-      const result = await submitIssueReport({
+      let imageUrl: string | undefined
+      if (pendingImage?.file) {
+        if (!isSupabaseConfigured()) {
+          toast.error(t("imageUploadUnavailable"))
+          return
+        }
+        const uploaded = await uploadImage(pendingImage.file, "issue-reports")
+        imageUrl = uploaded.url
+      }
+
+      await submitIssueReport({
         category: formData.category,
         subCategory: formData.subCategory,
         subCategoryOther: formData.subCategoryOther,
         description: formData.description.trim(),
         email,
-        imageFile: pendingImage?.file ?? null,
+        imageUrl,
       })
       toast.success(t("submitSuccess"))
-      if (result.warning) toast.warning(result.warning)
       setFormData({
         category: "",
         subCategory: "",

@@ -2,18 +2,21 @@ import type { Request, Response } from "express"
 import type { IssueStatus } from "@prisma/client"
 import { randomUUID } from "crypto"
 import { prisma } from "../lib/prisma.js"
-import {
-  appendIssueReportRow,
-  formatIssueReportGoogleError,
-  uploadIssueImage,
-} from "../services/issueReportGoogle.service.js"
 import { resolveIssueCategory } from "../lib/issueCategories.js"
 
 const MAX_DESCRIPTION_LEN = 4000
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const IMAGE_URL_RE = /^https?:\/\/.+/i
 
 function isValidEmail(value: string): boolean {
   return EMAIL_RE.test(value) && value.length <= 254
+}
+
+function normalizeImageUrl(raw: unknown): string | null {
+  const value = String(raw || "").trim()
+  if (!value) return null
+  if (!IMAGE_URL_RE.test(value) || value.length > 2048) return null
+  return value
 }
 
 function serializeIssueReport(row: {
@@ -54,14 +57,6 @@ function serializeIssueReport(row: {
   }
 }
 
-async function loadReporter(userId: string | null) {
-  if (!userId) return null
-  return prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, username: true, fullName: true, email: true },
-  })
-}
-
 export async function createIssueReport(req: Request, res: Response) {
   const body = req.body as {
     category?: string
@@ -70,6 +65,7 @@ export async function createIssueReport(req: Request, res: Response) {
     description?: string
     email?: string
     reporterEmail?: string
+    imageUrl?: string
   }
 
   const category = resolveIssueCategory(body)
@@ -77,13 +73,9 @@ export async function createIssueReport(req: Request, res: Response) {
   const reporterEmail = String(body.email || body.reporterEmail || "")
     .trim()
     .toLowerCase()
-  const file = req.file
+  const imageUrl = normalizeImageUrl(body.imageUrl)
 
   if (!category) {
-    console.warn("[contact] invalid category payload", {
-      category: body.category,
-      subCategory: body.subCategory,
-    })
     res.status(400).json({ error: "หมวดหมู่ปัญหาไม่ถูกต้อง" })
     return
   }
@@ -103,28 +95,13 @@ export async function createIssueReport(req: Request, res: Response) {
     res.status(400).json({ error: `รายละเอียดยาวเกิน ${MAX_DESCRIPTION_LEN} ตัวอักษร` })
     return
   }
+  if (body.imageUrl && !imageUrl) {
+    res.status(400).json({ error: "URL รูปภาพไม่ถูกต้อง" })
+    return
+  }
 
   const userId = req.auth?.userId ?? null
-  const reporter = await loadReporter(userId)
   const reportId = randomUUID()
-  const createdAt = new Date()
-
-  let imageUrl: string | null = null
-  let googleSyncWarning: string | null = null
-
-  if (file) {
-    try {
-      imageUrl = await uploadIssueImage(file.buffer, file.mimetype, createdAt)
-    } catch (err) {
-      console.error("[contact] image upload failed:", err)
-      const apiMsg = err instanceof Error ? err.message : null
-      googleSyncWarning =
-        apiMsg?.includes("GOOGLE_DRIVE_ISSUE_FOLDER_ID") ||
-        apiMsg?.includes("Service Account")
-          ? `บันทึกรายงานแล้ว แต่อัปโหลดรูปไม่สำเร็จ — ${apiMsg}`
-          : "บันทึกรายงานแล้ว แต่อัปโหลดรูปไม่สำเร็จ — แชร์โฟลเดอร์ Drive ให้ Service Account เป็น Editor"
-    }
-  }
 
   const row = await prisma.issueReport.create({
     data: {
@@ -134,7 +111,6 @@ export async function createIssueReport(req: Request, res: Response) {
       reporterEmail,
       imageUrl,
       userId,
-      createdAt,
     },
     include: {
       user: {
@@ -143,28 +119,7 @@ export async function createIssueReport(req: Request, res: Response) {
     },
   })
 
-  try {
-    await appendIssueReportRow({
-      id: reportId,
-      createdAt: createdAt.toISOString(),
-      category,
-      description,
-      reporterEmail,
-      imageUrl,
-      reporterName: reporter?.fullName ?? "",
-      reporterUsername: reporter?.username ?? "",
-      userId,
-      status: "OPEN",
-    })
-  } catch (err) {
-    console.error("[contact] Google Sheet sync failed:", err)
-    googleSyncWarning = googleSyncWarning ?? formatIssueReportGoogleError(err)
-  }
-
-  res.status(201).json({
-    ...serializeIssueReport(row),
-    ...(googleSyncWarning ? { warning: googleSyncWarning } : {}),
-  })
+  res.status(201).json(serializeIssueReport(row))
 }
 
 export async function listIssueReports(req: Request, res: Response) {

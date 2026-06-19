@@ -1090,49 +1090,25 @@ export async function submitIssueReport(payload: {
   subCategoryOther?: string
   description: string
   email: string
-  imageFile?: File | null
-}): Promise<IssueReportDto & { warning?: string }> {
-  const form = new FormData()
-  form.append("category", payload.category)
-  form.append("subCategory", payload.subCategory)
-  if (payload.subCategoryOther?.trim()) {
-    form.append("subCategoryOther", payload.subCategoryOther.trim())
-  }
-  form.append("description", payload.description)
-  form.append("email", payload.email)
-  if (payload.imageFile) {
-    form.append("image", payload.imageFile)
-  }
-
-  const headers = new Headers()
+  imageUrl?: string | null
+}): Promise<IssueReportDto> {
+  const headers = new Headers({ "Content-Type": "application/json" })
   const token = getStoredToken()
   if (token) headers.set("Authorization", `Bearer ${token}`)
 
-  const res = await fetch(`${getApiBase()}/api/contact`, {
+  return apiJson<IssueReportDto>("/api/contact", {
     method: "POST",
+    auth: false,
     headers,
-    body: form,
+    body: JSON.stringify({
+      category: payload.category,
+      subCategory: payload.subCategory,
+      subCategoryOther: payload.subCategoryOther?.trim() || undefined,
+      description: payload.description,
+      email: payload.email,
+      imageUrl: payload.imageUrl?.trim() || undefined,
+    }),
   })
-
-  const text = await res.text()
-  let data: unknown = null
-  if (text) {
-    try {
-      data = JSON.parse(text) as unknown
-    } catch {
-      data = text
-    }
-  }
-
-  if (!res.ok) {
-    let msg =
-      typeof data === "object" && data !== null && "error" in data
-        ? String((data as { error: string }).error)
-        : res.statusText
-    throw new ApiError(msg || "คำขอล้มเหลว", res.status, data)
-  }
-
-  return data as IssueReportDto & { warning?: string }
 }
 
 export async function fetchAdminIssueReports(status?: IssueReportStatus) {
