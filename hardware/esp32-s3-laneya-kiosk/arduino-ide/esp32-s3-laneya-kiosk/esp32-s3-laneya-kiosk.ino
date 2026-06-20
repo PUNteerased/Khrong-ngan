@@ -112,6 +112,12 @@ void writeServoPulse(uint8_t channel, uint16_t pulseUs) {
   Serial.printf("[dispenser] ch=%u pulse=%uus tick=%lu\n", channel, pulseUs, tick);
 }
 
+// ปิด PWM ช่องนั้น — MG90S 360° มัก drift ที่ 1500μs แต่หยุดเมื่อไม่มีสัญญาณ
+void writeServoStop(uint8_t channel) {
+  if (!pwmReady) return;
+  pwm.setPWM(channel, 0, 4096);
+}
+
 bool probeI2cDevice(uint8_t addr) {
   Wire.beginTransmission(addr);
   return Wire.endTransmission() == 0;
@@ -136,7 +142,7 @@ void spinChannel(uint8_t slotIndex, uint16_t pulseUs, uint16_t durationMs) {
   Serial.printf("[diag] spin ch=%u pulse=%uus for %ums\n", slotIndex, pulseUs, durationMs);
   writeServoPulse(slotIndex, pulseUs);
   delay(durationMs);
-  writeServoPulse(slotIndex, SERVO_STOP_US);
+  writeServoStop(slotIndex);
 }
 
 void runBootServoTest() {
@@ -219,7 +225,7 @@ void dispenserSetup() {
   pwm.setPWMFreq(PCA9685_PWM_FREQ);
   pwmReady = true;
   for (uint8_t ch = 0; ch < DISPENSER_SLOT_COUNT; ch++) {
-    writeServoPulse(ch, SERVO_STOP_US);
+    writeServoStop(ch);
   }
   Serial.println("[dispenser] PCA9685 ready (channels 0-9)");
   Serial.println("[dispenser] ⚠ servo ต้องมีไฟ 5V ที่ขั้ว V+ ของ PCA9685 (ไม่ใช่แค่ 3.3V logic)");
@@ -235,11 +241,11 @@ bool dispenserDispenseSlot(uint8_t slotIndex) {
   }
   if (slotIndex >= DISPENSER_SLOT_COUNT) return false;
   Serial.printf("[web-cmd] spinning PCA9685 channel %u\n", slotIndex);
-  Serial.printf("[dispenser] spin slot %u (MG90S 360)\n", slotIndex);
+  Serial.printf("[dispenser] spin slot %u\n", slotIndex);
 
   writeServoPulse(slotIndex, SERVO_SPIN_US);
   delay(SERVO_SPIN_MS);
-  writeServoPulse(slotIndex, SERVO_STOP_US);
+  writeServoStop(slotIndex);
   return true;
 }
 
@@ -282,6 +288,8 @@ String buildHeartbeatBody() {
   return out;
 }
 
+void sendHeartbeat();
+
 void handleCommandFromResponse(const String& response) {
   JsonDocument doc;
   if (deserializeJson(doc, response)) {
@@ -304,6 +312,9 @@ void handleCommandFromResponse(const String& response) {
   Serial.printf("[web-cmd] received dispense slot=%d id=%s\n", slot, id);
   const bool ok = dispenserDispenseSlot(static_cast<uint8_t>(slot));
   queueAck(id, ok, ok ? nullptr : "dispense failed");
+  // ส่ง ack ทันที — ไม่รอ heartbeat รอบถัดไป (ลด "รอมอเตอร์หมุน" บนเว็บ)
+  sendHeartbeat();
+  lastHeartbeatMs = millis();
 }
 
 void handleHealth() {

@@ -62,6 +62,8 @@ static String buildHeartbeatBody() {
   return out;
 }
 
+static void sendHeartbeat();
+
 static void handleCommandFromResponse(const String& response) {
   JsonDocument doc;
   if (deserializeJson(doc, response)) {
@@ -84,6 +86,8 @@ static void handleCommandFromResponse(const String& response) {
   Serial.printf("[web-cmd] received dispense slot=%d id=%s\n", slot, id);
   const bool ok = dispenserDispenseSlot(static_cast<uint8_t>(slot));
   queueAck(id, ok, ok ? nullptr : "dispense failed");
+  sendHeartbeat();
+  lastHeartbeatMs = millis();
 }
 
 static void sendHeartbeat() {

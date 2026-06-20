@@ -291,7 +291,7 @@ export default function AdminPage() {
 
     const interval = setInterval(() => {
       void loadServoStatus()
-    }, 3000)
+    }, 1000)
     return () => clearInterval(interval)
   }, [unlocked, mainTab, servoStatus?.command, loadServoStatus])
 
