@@ -9,7 +9,7 @@ export type KioskCommandStatus =
 
 export type KioskCommandRecord = {
   id: string
-  action: "dispense"
+  action: "dispense" | "dispense_all"
   slot: number
   status: KioskCommandStatus
   createdAt: string
@@ -52,6 +52,31 @@ export function queueServoTest(slot: number): KioskCommandRecord {
     id: randomUUID(),
     action: "dispense",
     slot,
+    status: "pending",
+    createdAt: new Date().toISOString(),
+    deliveredAt: null,
+    ackAt: null,
+    result: null,
+    error: null,
+  }
+
+  return activeCommand
+}
+
+export function queueServoTestAll(): KioskCommandRecord {
+  expireIfNeeded()
+
+  if (
+    activeCommand &&
+    (activeCommand.status === "pending" || activeCommand.status === "delivered")
+  ) {
+    throw new Error("COMMAND_IN_PROGRESS")
+  }
+
+  activeCommand = {
+    id: randomUUID(),
+    action: "dispense_all",
+    slot: -1,
     status: "pending",
     createdAt: new Date().toISOString(),
     deliveredAt: null,

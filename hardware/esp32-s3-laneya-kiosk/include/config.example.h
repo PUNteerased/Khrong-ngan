@@ -27,6 +27,7 @@
 #define SERVO_SPIN_US 1800
 #define SERVO_SPIN_US_REV 1200
 #define SERVO_SPIN_MS 3000
+#define SERVO_ALL_GAP_MS 400
 
 // --- IR Barrier — ตรวจยาร่วง ---
 #define IR_DROP_LEFT_PIN 4

@@ -8,6 +8,10 @@
 #include "config.example.h"
 #endif
 
+#ifndef SERVO_ALL_GAP_MS
+#define SERVO_ALL_GAP_MS 400
+#endif
+
 #if __has_include(<Adafruit_PWMServoDriver.h>)
 #include <Adafruit_PWMServoDriver.h>
 #define DISPENSER_HAS_PCA9685 1
@@ -70,4 +74,18 @@ bool dispenserDispenseSlot(uint8_t slotIndex) {
   delay(SERVO_SPIN_MS);
   return true;
 #endif
+}
+
+bool dispenserDispenseAll() {
+#if DISPENSER_HAS_PCA9685
+  if (!pwmReady) return false;
+#endif
+  Serial.println("[web-cmd] dispense_all — spinning channels 0-9");
+  bool allOk = true;
+  for (uint8_t ch = 0; ch < DISPENSER_SLOT_COUNT; ch++) {
+    if (!dispenserDispenseSlot(ch)) allOk = false;
+    if (ch + 1 < DISPENSER_SLOT_COUNT) delay(SERVO_ALL_GAP_MS);
+  }
+  Serial.printf("[web-cmd] dispense_all done ok=%s\n", allOk ? "true" : "false");
+  return allOk;
 }

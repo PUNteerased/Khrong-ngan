@@ -3,13 +3,20 @@ import { isCabinetOnline } from "../services/kioskStatus.service.js"
 import {
   getCommandStatus,
   queueServoTest,
+  queueServoTestAll,
 } from "../services/kioskCommand.service.js"
 
 export async function postAdminServoTest(req: Request, res: Response) {
-  const body = req.body as { slot?: number }
-  const slot = Number(body.slot)
+  const body = req.body as { slot?: number; all?: boolean }
 
   try {
+    if (body.all === true) {
+      const command = queueServoTestAll()
+      res.status(201).json({ command })
+      return
+    }
+
+    const slot = Number(body.slot)
     const command = queueServoTest(slot)
     res.status(201).json({ command })
   } catch (err) {

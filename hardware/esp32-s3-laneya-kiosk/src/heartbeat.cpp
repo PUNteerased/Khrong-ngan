@@ -78,13 +78,23 @@ static void handleCommandFromResponse(const String& response) {
   const char* action = cmd["action"] | "";
   const int slot = cmd["slot"] | -1;
 
-  if (!id[0] || strcmp(action, "dispense") != 0 || slot < 0 || slot > 9) {
+  if (!id[0]) {
     Serial.println("[web-cmd] ignored invalid command");
     return;
   }
 
-  Serial.printf("[web-cmd] received dispense slot=%d id=%s\n", slot, id);
-  const bool ok = dispenserDispenseSlot(static_cast<uint8_t>(slot));
+  bool ok = false;
+  if (strcmp(action, "dispense_all") == 0) {
+    Serial.printf("[web-cmd] received dispense_all id=%s\n", id);
+    ok = dispenserDispenseAll();
+  } else if (strcmp(action, "dispense") == 0 && slot >= 0 && slot <= 9) {
+    Serial.printf("[web-cmd] received dispense slot=%d id=%s\n", slot, id);
+    ok = dispenserDispenseSlot(static_cast<uint8_t>(slot));
+  } else {
+    Serial.println("[web-cmd] ignored invalid command");
+    return;
+  }
+
   queueAck(id, ok, ok ? nullptr : "dispense failed");
   sendHeartbeat();
   lastHeartbeatMs = millis();

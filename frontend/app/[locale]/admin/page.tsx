@@ -15,6 +15,7 @@ import {
   Wifi,
   WifiOff,
   Play,
+  RotateCw,
   Pencil,
   Trash2,
   UserPlus,
@@ -85,6 +86,7 @@ import {
   fetchAdminIssueReports,
   updateAdminIssueReportStatus,
   postAdminServoTest,
+  postAdminServoTestAll,
   fetchAdminServoTestStatus,
   type IssueReportDto,
   type IssueReportStatus,
@@ -313,6 +315,24 @@ export default function AdminPage() {
     }
   }
 
+  const handleServoTestAll = async () => {
+    if (health?.cabinet !== true) {
+      toast.error(t("servoOffline"))
+      return
+    }
+    setServoSubmitting(true)
+    try {
+      await postAdminServoTestAll()
+      toast.success(t("servoQueued"))
+      await loadServoStatus()
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : t("servoFailed")
+      toast.error(msg)
+    } finally {
+      setServoSubmitting(false)
+    }
+  }
+
   const servoCommand = servoStatus?.command
   const servoBusy =
     servoCommand?.status === "pending" || servoCommand?.status === "delivered"
@@ -326,9 +346,13 @@ export default function AdminPage() {
       case "delivered":
         return t("servoWaiting")
       case "acked":
-        return servoCommand.result
-          ? t("servoSuccess", { slot: servoCommand.slot })
-          : t("servoFailed")
+        return servoCommand.action === "dispense_all"
+          ? servoCommand.result
+            ? t("servoSuccessAll")
+            : t("servoFailed")
+          : servoCommand.result
+            ? t("servoSuccess", { slot: servoCommand.slot })
+            : t("servoFailed")
       case "failed":
         return servoCommand.error || t("servoFailed")
       case "expired":
@@ -1184,6 +1208,22 @@ export default function AdminPage() {
                         <Badge variant="outline" className="text-xs">
                           {servoStatusMessage()}
                         </Badge>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          type="button"
+                          disabled={
+                            !kioskOnline || servoBusy || servoSubmitting
+                          }
+                          onClick={() => void handleServoTestAll()}
+                        >
+                          {servoSubmitting ? (
+                            <Spinner className="h-4 w-4 mr-1" />
+                          ) : (
+                            <RotateCw className="h-4 w-4 mr-1" />
+                          )}
+                          {t("servoTestAll")}
+                        </Button>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                         {Array.from({ length: 10 }, (_, slot) => (

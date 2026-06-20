@@ -435,7 +435,7 @@ export type KioskCommandStatus =
 
 export type AdminKioskCommand = {
   id: string
-  action: "dispense"
+  action: "dispense" | "dispense_all"
   slot: number
   status: KioskCommandStatus
   createdAt: string
@@ -454,6 +454,15 @@ export async function postAdminServoTest(slot: number) {
   return apiJson<{ command: AdminKioskCommand }>("/api/admin/kiosk/servo-test", {
     method: "POST",
     body: JSON.stringify({ slot }),
+    auth: false,
+    adminAuth: true,
+  })
+}
+
+export async function postAdminServoTestAll() {
+  return apiJson<{ command: AdminKioskCommand }>("/api/admin/kiosk/servo-test", {
+    method: "POST",
+    body: JSON.stringify({ all: true }),
     auth: false,
     adminAuth: true,
   })

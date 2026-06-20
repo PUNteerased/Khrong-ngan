@@ -6,3 +6,4 @@
 void dispenserSetup();
 void dispenserLoop();
 bool dispenserDispenseSlot(uint8_t slotIndex);
+bool dispenserDispenseAll();

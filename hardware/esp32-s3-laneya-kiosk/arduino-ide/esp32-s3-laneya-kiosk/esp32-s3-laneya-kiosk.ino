@@ -37,6 +37,7 @@
 #define SERVO_SPIN_US 2000
 #define SERVO_SPIN_US_REV 1200
 #define SERVO_SPIN_MS 3000
+#define SERVO_ALL_GAP_MS 400   // หน่วงระหว่างช่องตอน dispense_all
 
 // 1 = หมุนช่อง 0 ตอน boot | 0 = ปิด (แนะนำเมื่อใช้งานจริง)
 #define BOOT_SERVO_TEST 0
@@ -249,6 +250,21 @@ bool dispenserDispenseSlot(uint8_t slotIndex) {
   return true;
 }
 
+bool dispenserDispenseAll() {
+  if (!pwmReady) {
+    Serial.println("[dispenser] ERROR: PCA9685 not ready — ไม่หมุน servo");
+    return false;
+  }
+  Serial.println("[web-cmd] dispense_all — spinning channels 0-9");
+  bool allOk = true;
+  for (uint8_t ch = 0; ch < DISPENSER_SLOT_COUNT; ch++) {
+    if (!dispenserDispenseSlot(ch)) allOk = false;
+    if (ch + 1 < DISPENSER_SLOT_COUNT) delay(SERVO_ALL_GAP_MS);
+  }
+  Serial.printf("[web-cmd] dispense_all done ok=%s\n", allOk ? "true" : "false");
+  return allOk;
+}
+
 void queueAck(const char* id, bool ok, const char* errMsg = nullptr) {
   pendingAck.pending = true;
   strncpy(pendingAck.id, id, sizeof(pendingAck.id) - 1);
@@ -304,13 +320,23 @@ void handleCommandFromResponse(const String& response) {
   const char* action = cmd["action"] | "";
   const int slot = cmd["slot"] | -1;
 
-  if (!id[0] || strcmp(action, "dispense") != 0 || slot < 0 || slot > 9) {
+  if (!id[0]) {
     Serial.println("[web-cmd] ignored invalid command");
     return;
   }
 
-  Serial.printf("[web-cmd] received dispense slot=%d id=%s\n", slot, id);
-  const bool ok = dispenserDispenseSlot(static_cast<uint8_t>(slot));
+  bool ok = false;
+  if (strcmp(action, "dispense_all") == 0) {
+    Serial.printf("[web-cmd] received dispense_all id=%s\n", id);
+    ok = dispenserDispenseAll();
+  } else if (strcmp(action, "dispense") == 0 && slot >= 0 && slot <= 9) {
+    Serial.printf("[web-cmd] received dispense slot=%d id=%s\n", slot, id);
+    ok = dispenserDispenseSlot(static_cast<uint8_t>(slot));
+  } else {
+    Serial.println("[web-cmd] ignored invalid command");
+    return;
+  }
+
   queueAck(id, ok, ok ? nullptr : "dispense failed");
   // ส่ง ack ทันที — ไม่รอ heartbeat รอบถัดไป (ลด "รอมอเตอร์หมุน" บนเว็บ)
   sendHeartbeat();
