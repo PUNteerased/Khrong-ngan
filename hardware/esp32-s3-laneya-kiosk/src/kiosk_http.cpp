@@ -69,6 +69,7 @@ static void handleDispense() {
     return;
   }
 
+  Serial.printf("[web-cmd] LAN POST /dispense slot=%d\n", slot);
   const bool ok = dispenserDispenseSlot(static_cast<uint8_t>(slot));
   if (ok) {
     server.send(200, "application/json", "{\"ok\":true,\"slot\":" + String(slot) + "}");

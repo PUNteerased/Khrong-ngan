@@ -51,6 +51,7 @@ void dispenserLoop() {
 
 bool dispenserDispenseSlot(uint8_t slotIndex) {
   if (slotIndex >= DISPENSER_SLOT_COUNT) return false;
+  Serial.printf("[web-cmd] spinning PCA9685 channel %u\n", slotIndex);
   Serial.printf("[dispenser] spin slot %u (MG90S 360)\n", slotIndex);
 
 #if DISPENSER_HAS_PCA9685

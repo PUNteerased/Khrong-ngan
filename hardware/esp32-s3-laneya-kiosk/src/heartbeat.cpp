@@ -32,6 +32,7 @@ static void queueAck(const char* id, bool ok, const char* errMsg = nullptr) {
   } else {
     pendingAck.error[0] = '\0';
   }
+  Serial.printf("[web-cmd] done %s — ack queued id=%s\n", ok ? "ok" : "fail", id);
 }
 
 static String buildHeartbeatBody() {
@@ -51,6 +52,8 @@ static String buildHeartbeatBody() {
     if (pendingAck.error[0]) {
       ack["error"] = pendingAck.error;
     }
+    Serial.printf("[web-cmd] ack sent id=%s ok=%s\n",
+                  pendingAck.id, pendingAck.ok ? "true" : "false");
     pendingAck.pending = false;
   }
 
@@ -74,11 +77,11 @@ static void handleCommandFromResponse(const String& response) {
   const int slot = cmd["slot"] | -1;
 
   if (!id[0] || strcmp(action, "dispense") != 0 || slot < 0 || slot > 9) {
-    Serial.println("[heartbeat] ignored command");
+    Serial.println("[web-cmd] ignored invalid command");
     return;
   }
 
-  Serial.printf("[heartbeat] command dispense slot %d id=%s\n", slot, id);
+  Serial.printf("[web-cmd] received dispense slot=%d id=%s\n", slot, id);
   const bool ok = dispenserDispenseSlot(static_cast<uint8_t>(slot));
   queueAck(id, ok, ok ? nullptr : "dispense failed");
 }
