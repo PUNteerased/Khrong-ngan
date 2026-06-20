@@ -1,5 +1,32 @@
 import type { Request, Response } from "express"
+import { PickupTicketStatus } from "@prisma/client"
 import { prisma } from "../lib/prisma.js"
+
+function mapQrTicket(ticket: {
+  code: string
+  signature: string
+  expiresAt: Date
+  quantity: number
+  riskLevel: string
+  status: PickupTicketStatus
+  drugId: string
+  slotId: string
+  channel: number
+  drug: { name: string }
+}) {
+  return {
+    code: ticket.code,
+    signature: ticket.signature,
+    expiresAt: ticket.expiresAt.toISOString(),
+    quantity: ticket.quantity,
+    riskLevel: ticket.riskLevel,
+    status: ticket.status,
+    drugId: ticket.drugId,
+    slotId: ticket.slotId,
+    drugName: ticket.drug.name,
+    channel: ticket.channel,
+  }
+}
 
 /** รายการแชทของผู้ใช้ที่ล็อกอินเท่านั้น */
 export async function listMySessions(req: Request, res: Response) {
@@ -52,12 +79,12 @@ export async function getSessionMessages(req: Request, res: Response) {
     include: {
       messages: {
         orderBy: { createdAt: "asc" },
-        select: {
-          id: true,
-          role: true,
-          content: true,
-          imageUrl: true,
-          createdAt: true,
+        include: {
+          pickupTicket: {
+            include: {
+              drug: { select: { id: true, name: true, slotId: true, imageUrl: true } },
+            },
+          },
         },
       },
     },
@@ -71,12 +98,17 @@ export async function getSessionMessages(req: Request, res: Response) {
   res.json({
     sessionId: session.id,
     createdAt: session.createdAt.toISOString(),
-    messages: session.messages.map((m) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-      imageUrl: m.imageUrl,
-      createdAt: m.createdAt.toISOString(),
-    })),
+    messages: session.messages.map((m) => {
+      const ticket = m.pickupTicket
+      return {
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        imageUrl: m.imageUrl,
+        createdAt: m.createdAt.toISOString(),
+        riskLevel: ticket?.riskLevel ?? null,
+        qrTicket: ticket ? mapQrTicket(ticket) : null,
+      }
+    }),
   })
 }

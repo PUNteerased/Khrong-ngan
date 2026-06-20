@@ -300,6 +300,8 @@ model PickupTicket {
   code        String             @unique
   sessionId   String
   session     ChatSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  messageId   String?            @unique
+  message     ChatMessage?       @relation(fields: [messageId], references: [id], onDelete: SetNull)
   drugId      String
   drug        Drug               @relation(fields: [drugId], references: [id])
   slotId      String
@@ -317,13 +319,14 @@ model PickupTicket {
 }
 
 model ChatMessage {
-  id        String      @id @default(cuid())
-  sessionId String
-  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  role      String
-  content   String
-  imageUrl  String?
-  createdAt DateTime    @default(now())
+  id           String         @id @default(cuid())
+  sessionId    String
+  session      ChatSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role         String
+  content      String
+  imageUrl     String?
+  createdAt    DateTime       @default(now())
+  pickupTicket PickupTicket?
 }
 
 enum AdminFeedbackRating {

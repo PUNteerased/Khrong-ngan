@@ -769,6 +769,8 @@ export type ChatHistoryMessage = {
   content: string
   imageUrl: string | null
   createdAt: string
+  riskLevel?: string | null
+  qrTicket?: ChatQrTicket | null
 }
 
 export async function fetchChatSessionMessages(sessionId: string) {
@@ -791,6 +793,7 @@ export type ChatQrTicket = {
   expiresAt: string
   riskLevel: string
   drugName: string
+  status?: string
 }
 
 export type ChatResponse = {

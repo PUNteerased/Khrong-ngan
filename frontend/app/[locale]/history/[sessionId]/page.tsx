@@ -8,10 +8,25 @@ import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { ChatMarkdown } from "@/components/chat-markdown"
-import { fetchChatSessionMessages, ApiError } from "@/lib/api"
+import {
+  ChatQrCard,
+  mapServerQrTicket,
+  RiskLevelBadge,
+  type ChatQrTicketView,
+} from "@/components/chat-qr-card"
+import { fetchChatSessionMessages, fetchDrugs, ApiError, type DrugDto } from "@/lib/api"
 import { getStoredToken } from "@/lib/auth-token"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+
+type HistoryMessage = {
+  id: string
+  role: string
+  content: string
+  createdAt: string
+  riskLevel?: string
+  qrTicket?: ChatQrTicketView | null
+}
 
 export default function HistoryDetailPage() {
   const params = useParams()
@@ -21,9 +36,7 @@ export default function HistoryDetailPage() {
   const sessionId = typeof params.sessionId === "string" ? params.sessionId : ""
   const [loading, setLoading] = useState(true)
   const [createdAt, setCreatedAt] = useState<string | null>(null)
-  const [messages, setMessages] = useState<
-    { id: string; role: string; content: string; createdAt: string }[]
-  >([])
+  const [messages, setMessages] = useState<HistoryMessage[]>([])
 
   useEffect(() => {
     if (!sessionId || !getStoredToken()) {
@@ -33,10 +46,24 @@ export default function HistoryDetailPage() {
     let cancelled = false
     ;(async () => {
       try {
-        const data = await fetchChatSessionMessages(sessionId)
+        const [data, drugs] = await Promise.all([
+          fetchChatSessionMessages(sessionId),
+          fetchDrugs(),
+        ])
         if (cancelled) return
+        const drugById: Record<string, DrugDto> = {}
+        for (const d of drugs) drugById[d.id] = d
         setCreatedAt(data.createdAt)
-        setMessages(data.messages)
+        setMessages(
+          data.messages.map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            createdAt: m.createdAt,
+            riskLevel: m.riskLevel ?? m.qrTicket?.riskLevel ?? undefined,
+            qrTicket: m.qrTicket ? mapServerQrTicket(m.qrTicket, drugById) : null,
+          }))
+        )
       } catch (e) {
         if (e instanceof ApiError && e.status === 401) {
           router.push("/login")
@@ -122,7 +149,11 @@ export default function HistoryDetailPage() {
                 {m.role === "user" ? (
                   <p className="text-sm whitespace-pre-wrap">{m.content}</p>
                 ) : (
-                  <ChatMarkdown>{m.content}</ChatMarkdown>
+                  <>
+                    <ChatMarkdown>{m.content}</ChatMarkdown>
+                    {m.riskLevel ? <RiskLevelBadge level={m.riskLevel} /> : null}
+                    {m.qrTicket ? <ChatQrCard ticket={m.qrTicket} /> : null}
+                  </>
                 )}
                 <p
                   className={cn(

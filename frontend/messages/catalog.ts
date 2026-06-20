@@ -188,6 +188,7 @@ export const thMessages = {
     qrOpenFullscreen: "ขยายเต็มจอ",
     qrTimeLeft: "เหลือเวลา {time}",
     qrExpired: "หมดอายุแล้ว",
+    qrRedeemed: "ใช้ตั๋วแล้ว",
   },
   History: {
     needLogin: "กรุณาเข้าสู่ระบบเพื่อดูประวัติแชท",
@@ -871,6 +872,7 @@ export const enMessages = {
     qrOpenFullscreen: "Fullscreen",
     qrTimeLeft: "{time} left",
     qrExpired: "Expired",
+    qrRedeemed: "Ticket used",
   },
   History: {
     needLogin: "Please sign in to view chat history.",

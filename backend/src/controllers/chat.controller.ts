@@ -427,6 +427,16 @@ export async function postChat(req: Request, res: Response) {
       inferredSeverity: finalSeverity,
     })
 
+    const summarySlice = (trimmedMessage || "[แนบรูปภาพ]").slice(0, 200)
+
+    const assistantMessage = await prisma.chatMessage.create({
+      data: {
+        sessionId: session.id,
+        role: "assistant",
+        content: finalAnswer,
+      },
+    })
+
     if (qrGate.ok && structured?.recommendation?.drug_slot_id) {
       const slotKey = structured.recommendation.drug_slot_id.toUpperCase()
       if (isValidSlotId(slotKey)) {
@@ -442,6 +452,7 @@ export async function postChat(req: Request, res: Response) {
             try {
               qrTicket = await issuePickupTicket({
                 sessionId: session.id,
+                messageId: assistantMessage.id,
                 drugId: drug.id,
                 slotId: slotKey,
                 quantity: structured.recommendation.quantity ?? 1,
@@ -454,8 +465,6 @@ export async function postChat(req: Request, res: Response) {
         }
       }
     }
-
-    const summarySlice = (trimmedMessage || "[แนบรูปภาพ]").slice(0, 200)
 
     await prisma.chatSession.update({
       where: { id: session.id },
@@ -472,14 +481,6 @@ export async function postChat(req: Request, res: Response) {
           qrTicket?.drugId ??
           session.recommendedDrugId ??
           (mentioned[0]?.id ?? null),
-      },
-    })
-
-    await prisma.chatMessage.create({
-      data: {
-        sessionId: session.id,
-        role: "assistant",
-        content: finalAnswer,
       },
     })
 

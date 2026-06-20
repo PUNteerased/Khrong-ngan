@@ -2,14 +2,10 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import QRCode from "react-qr-code"
 import {
   AlertTriangle,
   ArrowLeft,
   Clock,
-  Expand,
-  Pill,
-  QrCode,
   Send,
   UserCircle2,
 } from "lucide-react"
@@ -22,16 +18,20 @@ import { Textarea } from "@/components/ui/textarea"
 import { Skeleton } from "@/components/ui/skeleton"
 import { QRTicket } from "@/components/qr-ticket"
 import { ChatMarkdown } from "@/components/chat-markdown"
+import {
+  ChatQrCard,
+  mapServerQrTicket,
+  RiskLevelBadge,
+  type ChatQrTicketView,
+} from "@/components/chat-qr-card"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
 import {
   ApiError,
   fetchChatSessionMessages,
   fetchDrugs,
   fetchMe,
   sendChatMessage,
-  type ChatQrTicket,
   type DrugDto,
   type UserProfile,
 } from "@/lib/api"
@@ -41,129 +41,10 @@ interface Message {
   id: string
   content: string
   imageUrl?: string | null
-  recommendedDrug?: DrugDto | null
-  qrTicket?: {
-    code: string
-    signature: string
-    expiresAt: string
-    quantity: number
-    drug: DrugDto
-    riskLevel?: string
-  } | null
+  qrTicket?: ChatQrTicketView | null
   riskLevel?: string
   sender: "user" | "ai"
   timestamp: Date
-}
-
-function riskBadgeClass(level: string) {
-  switch (level) {
-    case "ESCALATE":
-    case "HIGH":
-      return "bg-destructive/10 text-destructive border-destructive/30"
-    case "MEDIUM":
-      return "bg-amber-500/10 text-amber-800 border-amber-500/30"
-    default:
-      return "bg-success/10 text-success border-success/30"
-  }
-}
-
-function mapServerQrTicket(
-  ticket: ChatQrTicket,
-  drugById: Record<string, DrugDto>
-): NonNullable<Message["qrTicket"]> | null {
-  const drug =
-    drugById[ticket.drugId] ??
-    ({
-      id: ticket.drugId,
-      name: ticket.drugName,
-      slotId: ticket.slotId,
-      description: "",
-      quantity: 0,
-      inCabinet: true,
-    } as DrugDto)
-  return {
-    code: ticket.code,
-    signature: ticket.signature,
-    expiresAt: ticket.expiresAt,
-    quantity: ticket.quantity,
-    drug,
-    riskLevel: ticket.riskLevel,
-  }
-}
-
-function formatMMSS(totalSeconds: number): string {
-  const s = Math.max(0, Math.floor(totalSeconds))
-  const m = Math.floor(s / 60)
-  const sec = s % 60
-  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
-}
-
-function riskLevelKey(level: string) {
-  switch (level) {
-    case "ESCALATE":
-      return "riskLevelEscalate" as const
-    case "HIGH":
-      return "riskLevelHigh" as const
-    case "MEDIUM":
-      return "riskLevelMedium" as const
-    default:
-      return "riskLevelLow" as const
-  }
-}
-
-function ChatQrCard({
-  ticket,
-  onOpenFull,
-}: {
-  ticket: NonNullable<Message["qrTicket"]>
-  onOpenFull: () => void
-}) {
-  const t = useTranslations("Chat")
-  const [remainingSeconds, setRemainingSeconds] = useState(() =>
-    Math.max(0, Math.floor((new Date(ticket.expiresAt).getTime() - Date.now()) / 1000))
-  )
-  const expired = remainingSeconds <= 0
-  const qrPayload = ticket.code
-
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      setRemainingSeconds(
-        Math.max(0, Math.floor((new Date(ticket.expiresAt).getTime() - Date.now()) / 1000))
-      )
-    }, 1000)
-    return () => window.clearInterval(id)
-  }, [ticket.expiresAt])
-
-  return (
-    <div className="mt-3 w-full rounded-lg border border-primary/30 bg-primary/5 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <p className="text-xs font-medium text-primary">{t("qrPickupTitle")}</p>
-          <p className="text-xs text-muted-foreground">{t("qrPickupHint")}</p>
-        </div>
-        <Button type="button" variant="secondary" size="sm" onClick={onOpenFull}>
-          <Expand className="h-3.5 w-3.5 mr-1" />
-          {t("qrOpenFullscreen")}
-        </Button>
-      </div>
-      <div className="mt-2 flex items-center justify-between text-xs">
-        <div className="flex items-center gap-1 text-muted-foreground">
-          <QrCode className="h-3.5 w-3.5" />
-          <span>{ticket.drug.name}</span>
-          <span className="text-muted-foreground/70">({ticket.drug.slotId})</span>
-        </div>
-        <span className={expired ? "text-destructive" : "text-primary"}>
-          {expired
-            ? t("qrExpired")
-            : t("qrTimeLeft", { time: formatMMSS(remainingSeconds) })}
-        </span>
-      </div>
-      <div className="mt-3 flex justify-center rounded-lg bg-white p-3">
-        <QRCode value={qrPayload} size={168} level="M" />
-      </div>
-      <p className="mt-2 text-center text-xs text-muted-foreground">{ticket.code}</p>
-    </div>
-  )
 }
 
 function ProfileAvatar({
@@ -197,42 +78,6 @@ function ProfileAvatar({
   )
 }
 
-function DrugRecommendationCard({ drug }: { drug: DrugDto }) {
-  const t = useTranslations("Chat")
-  return (
-    <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
-      <div className="flex items-start gap-3">
-        {drug.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={drug.imageUrl}
-            alt={drug.name}
-            className="h-14 w-14 rounded-md object-cover"
-          />
-        ) : (
-          <div className="flex h-14 w-14 items-center justify-center rounded-md bg-primary/10">
-            <Pill className="h-5 w-5 text-primary" />
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="text-xs text-muted-foreground">{t("drugCardLabel")}</p>
-          <p className="truncate text-sm font-semibold text-foreground">{drug.name}</p>
-          <p className="text-xs text-muted-foreground">
-            {t("drugCardSlot", { slot: drug.slotId })}
-          </p>
-        </div>
-      </div>
-      <div className="mt-3">
-        <Button size="sm" asChild>
-          <Link href={`/tickets?drugId=${encodeURIComponent(drug.id)}`}>
-            {t("drugCardGetTicket")}
-          </Link>
-        </Button>
-      </div>
-    </div>
-  )
-}
-
 function ChatPageInner() {
   const router = useRouter()
   const locale = useLocale()
@@ -254,7 +99,7 @@ function ChatPageInner() {
   const [keyboardInset, setKeyboardInset] = useState(0)
   const [drugById, setDrugById] = useState<Record<string, DrugDto>>({})
   const [activeFullscreenTicket, setActiveFullscreenTicket] =
-    useState<NonNullable<Message["qrTicket"]> | null>(null)
+    useState<ChatQrTicketView | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -316,8 +161,14 @@ function ChatPageInner() {
     let cancelled = false
     ;(async () => {
       try {
-        const data = await fetchChatSessionMessages(sid)
+        const [data, drugs] = await Promise.all([
+          fetchChatSessionMessages(sid),
+          fetchDrugs(),
+        ])
         if (cancelled) return
+        const map: Record<string, DrugDto> = {}
+        for (const d of drugs) map[d.id] = d
+        setDrugById((prev) => ({ ...prev, ...map }))
         setChatSessionId(data.sessionId)
         if (data.messages.length > 0) {
           setMessages(
@@ -325,6 +176,8 @@ function ChatPageInner() {
               id: m.id,
               content: m.content,
               imageUrl: m.imageUrl,
+              qrTicket: m.qrTicket ? mapServerQrTicket(m.qrTicket, map) : null,
+              riskLevel: m.riskLevel ?? m.qrTicket?.riskLevel ?? undefined,
               sender: m.role === "user" ? "user" : "ai",
               timestamp: new Date(m.createdAt),
             }))
@@ -379,17 +232,12 @@ function ChatPageInner() {
     try {
       const res = await sendChatMessage(content.trim(), chatSessionId, null)
       setChatSessionId(res.sessionId)
-      const mentioned = res.safetyCheck?.mentionedDrugIds ?? []
-      const recommendedId = mentioned.find((id) => !!drugById[id]) ?? null
-      const qrTicket = res.qrTicket
-        ? mapServerQrTicket(res.qrTicket, drugById)
-        : null
+      const qrTicket = res.qrTicket ? mapServerQrTicket(res.qrTicket, drugById) : null
       setMessages((prev) => [
         ...prev,
         {
           id: String(Date.now() + 1),
           content: res.answer,
-          recommendedDrug: recommendedId ? drugById[recommendedId] : null,
           qrTicket,
           riskLevel: res.riskLevel,
           sender: "ai",
@@ -467,7 +315,6 @@ function ChatPageInner() {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
-
           <div className="flex-1 space-y-4 overflow-y-auto p-3 sm:p-4">
             {messages.map((message) => (
               <div
@@ -503,21 +350,9 @@ function ChatPageInner() {
                   ) : (
                     <>
                       <ChatMarkdown>{message.content}</ChatMarkdown>
-                      {message.riskLevel ? (
-                        <Badge
-                          variant="outline"
-                          className={cn("mt-2 text-xs", riskBadgeClass(message.riskLevel))}
-                        >
-                          {t("riskLevel", {
-                            level: t(riskLevelKey(message.riskLevel)),
-                          })}
-                        </Badge>
-                      ) : null}
+                      {message.riskLevel ? <RiskLevelBadge level={message.riskLevel} /> : null}
                     </>
                   )}
-                  {message.sender === "ai" && message.recommendedDrug ? (
-                    <DrugRecommendationCard drug={message.recommendedDrug} />
-                  ) : null}
                   {message.sender === "ai" && message.qrTicket ? (
                     <ChatQrCard
                       ticket={message.qrTicket}
@@ -651,4 +486,3 @@ function ChatShell() {
 }
 
 export default ChatShell
-

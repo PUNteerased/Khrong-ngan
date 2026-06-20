@@ -39,6 +39,7 @@ export type IssueTicketInput = {
   slotId: string
   quantity?: number
   riskLevel?: DifyRiskLevel
+  messageId?: string
 }
 
 export async function issuePickupTicket(input: IssueTicketInput) {
@@ -75,6 +76,7 @@ export async function issuePickupTicket(input: IssueTicketInput) {
     data: {
       code,
       sessionId: input.sessionId,
+      messageId: input.messageId ?? null,
       drugId: drug.id,
       slotId: slotKey,
       quantity: qty,
@@ -105,6 +107,7 @@ export async function issuePickupTicket(input: IssueTicketInput) {
     expiresAt: ticket.expiresAt.toISOString(),
     riskLevel: ticket.riskLevel,
     drugName: ticket.drug.name,
+    status: ticket.status,
   }
 }
 
