@@ -123,19 +123,7 @@ function ChatQrCard({
     Math.max(0, Math.floor((new Date(ticket.expiresAt).getTime() - Date.now()) / 1000))
   )
   const expired = remainingSeconds <= 0
-  const qrPayload = useMemo(
-    () =>
-      JSON.stringify({
-        v: 1,
-        code: ticket.code,
-        signature: ticket.signature,
-        drugId: ticket.drug.id,
-        slotId: ticket.drug.slotId,
-        qty: ticket.quantity,
-        expiresAt: ticket.expiresAt,
-      }),
-    [ticket]
-  )
+  const qrPayload = ticket.code
 
   useEffect(() => {
     const id = window.setInterval(() => {

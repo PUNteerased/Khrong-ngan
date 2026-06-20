@@ -22,10 +22,11 @@ bool pickupRedeemAndDispense(const char* code, const char* signature) {
     Serial.println("[pickup] WiFi not connected");
     return false;
   }
-  if (!code || !code[0] || !signature || !signature[0]) {
-    Serial.println("[pickup] missing code/signature");
+  if (!code || !code[0]) {
+    Serial.println("[pickup] missing code");
     return false;
   }
+  (void)signature;
 
   WiFiClientSecure client;
   client.setInsecure();
@@ -38,7 +39,9 @@ bool pickupRedeemAndDispense(const char* code, const char* signature) {
 
   JsonDocument doc;
   doc["code"] = code;
-  doc["signature"] = signature;
+  if (signature && signature[0]) {
+    doc["signature"] = signature;
+  }
   String body;
   serializeJson(doc, body);
 

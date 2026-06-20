@@ -58,16 +58,7 @@ export default function TicketsPage() {
   }, [expiresAt])
 
   const expired = remainingMs <= 0
-  const qrPayload = useMemo(
-    () =>
-      JSON.stringify({
-        ticketCode,
-        drugId: drug?.id ?? null,
-        slotId: drug?.slotId ?? null,
-        expiresAt,
-      }),
-    [ticketCode, drug, expiresAt]
-  )
+  const qrPayload = ticketCode
 
   return (
     <div className="space-y-4 py-2">

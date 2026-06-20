@@ -14,13 +14,13 @@ export async function postKioskRedeemTicket(req: Request, res: Response) {
   const code = String(body.code ?? "").trim()
   const signature = String(body.signature ?? "").trim()
 
-  if (!code || !signature) {
-    res.status(400).json({ error: "code and signature required" })
+  if (!code) {
+    res.status(400).json({ error: "code required" })
     return
   }
 
   try {
-    const result = await redeemPickupTicket(code, signature)
+    const result = await redeemPickupTicket(code, signature || undefined)
     res.json(result)
   } catch (err) {
     const msg = err instanceof Error ? err.message : "UNKNOWN"
@@ -30,6 +30,10 @@ export async function postKioskRedeemTicket(req: Request, res: Response) {
     }
     if (msg === "EXPIRED") {
       res.status(410).json({ error: "ตั๋วหมดอายุ" })
+      return
+    }
+    if (msg === "INVALID_CODE") {
+      res.status(400).json({ error: "รูปแบบรหัสไม่ถูกต้อง" })
       return
     }
     if (msg === "BAD_SIGNATURE") {

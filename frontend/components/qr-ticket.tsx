@@ -68,19 +68,7 @@ export function QRTicket({
   const lowTime = remaining > 0 && remaining <= 60
   const expired = remaining <= 0
 
-  const payload = useMemo(
-    () =>
-      JSON.stringify({
-        v: 1,
-        code: ticketCode,
-        signature,
-        drugId: drug.id,
-        slotId: drug.slotId,
-        qty: quantity,
-        expiresAt: expiresAt.toISOString(),
-      }),
-    [ticketCode, signature, drug.id, drug.slotId, quantity, expiresAt]
-  )
+  const payload = ticketCode
 
   const handleDownload = () => {
     const svg = qrWrapperRef.current?.querySelector("svg")

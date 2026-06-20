@@ -1,13 +1,13 @@
 /*
- * LaneYa — ESP32-CAM + OV3660/OV2640
- * QR scan → ESP-NOW "QR:{code,sig}" → ESP32-S3 dispense
+ * LaneYa — ESP32-CAM + OV3630 (AI-Thinker pin map)
+ * QR scan → ESP-NOW "QR:A1-0001-XYZABC" → ESP32-S3 dispense
  *
  * Library (Arduino IDE): ESP32 QRCode Reader by alvarowolfx
  *   Sketch → Include Library → Manage Libraries → "ESP32 QRCode Reader"
  *
  * Pairing:
  * 1. Upload → Serial shows CAM MAC
- * 2. Put CAM MAC in S3 config.h → CAM_ESPNOW_MAC
+ * 2. Put CAM MAC in S3 .ino → CAM_ESPNOW_MAC
  * 3. Upload S3 → Serial shows S3 MAC
  * 4. Set S3_ESPNOW_MAC below → re-upload CAM
  */
@@ -56,29 +56,69 @@ static void sendToS3(const char* msg) {
   Serial.printf("[espnow] >> %s\n", msg);
 }
 
-static void sendQrCompact(const char* code, const char* signature) {
-  char out[250];
-  snprintf(out, sizeof(out), "%s{\"code\":\"%s\",\"signature\":\"%s\"}",
-           MSG_QR_PREFIX, code, signature);
-  sendToS3(out);
+static bool isTicketCode(const char* code) {
+  if (!code) return false;
+  const size_t len = strlen(code);
+  if (len != 14) return false;
+  if (code[2] != '-' || code[7] != '-') return false;
+  const char row = code[0];
+  const char col = code[1];
+  if (!((row == 'A' || row == 'B') && col >= '1' && col <= '5')) return false;
+  for (int i = 3; i <= 6; i++) {
+    if (code[i] < '0' || code[i] > '9') return false;
+  }
+  for (int i = 8; i < 14; i++) {
+    const char c = code[i];
+    if (c < 'A' || c > 'Z') return false;
+  }
+  return true;
 }
 
-static bool parseAndForwardQr(const char* payload) {
-  JsonDocument doc;
-  if (deserializeJson(doc, payload)) {
-    Serial.println("[qr] invalid JSON in QR payload");
+static void trimPayload(char* s) {
+  if (!s) return;
+  size_t n = strlen(s);
+  while (n > 0 && (s[n - 1] == '\n' || s[n - 1] == '\r' || s[n - 1] == ' ')) {
+    s[--n] = '\0';
+  }
+  size_t start = 0;
+  while (s[start] == ' ') start++;
+  if (start > 0) memmove(s, s + start, strlen(s + start) + 1);
+}
+
+static bool forwardTicketCode(const char* code) {
+  char normalized[20];
+  strncpy(normalized, code, sizeof(normalized) - 1);
+  normalized[sizeof(normalized) - 1] = '\0';
+  trimPayload(normalized);
+  for (char* p = normalized; *p; p++) {
+    if (*p >= 'a' && *p <= 'z') *p = static_cast<char>(*p - 32);
+  }
+  if (!isTicketCode(normalized)) {
+    Serial.printf("[qr] invalid ticket format: %s\n", normalized);
     return false;
   }
-
-  const char* code = doc["code"] | "";
-  const char* signature = doc["signature"] | doc["sig"] | "";
-  if (!code[0] || !signature[0]) {
-    Serial.println("[qr] missing code/signature in payload");
-    return false;
-  }
-
-  sendQrCompact(code, signature);
+  char out[32];
+  snprintf(out, sizeof(out), "%s%s", MSG_QR_PREFIX, normalized);
+  sendToS3(out);
   return true;
+}
+
+static bool handleDecodedQr(const char* payload) {
+  if (!payload || !payload[0]) return false;
+  char buf[180];
+  strncpy(buf, payload, sizeof(buf) - 1);
+  buf[sizeof(buf) - 1] = '\0';
+  trimPayload(buf);
+
+  if (buf[0] == '{') {
+    JsonDocument doc;
+    if (deserializeJson(doc, buf)) return false;
+    const char* code = doc["code"] | "";
+    if (code[0]) return forwardTicketCode(code);
+    return false;
+  }
+
+  return forwardTicketCode(buf);
 }
 
 static void startScan() {
@@ -148,6 +188,7 @@ static bool initCamera() {
   camera_config_t config = {};
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
+  // AI-Thinker ESP32-CAM — OV3630 / OV2640 / OV3660 ใช้ pin map เดียวกัน
   config.pin_d0 = 5;
   config.pin_d1 = 18;
   config.pin_d2 = 19;
@@ -166,17 +207,25 @@ static bool initCamera() {
   config.pin_reset = -1;
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_GRAYSCALE;
-  config.frame_size = FRAMESIZE_QVGA;
+  config.frame_size = FRAMESIZE_VGA;
   config.jpeg_quality = 12;
-  config.fb_count = 1;
-  config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
+  config.fb_count = 2;
+  config.grab_mode = CAMERA_GRAB_LATEST;
 
   const esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
-    Serial.printf("[cam] init failed 0x%x\n", err);
+    Serial.printf("[cam] OV3630 init failed 0x%x\n", err);
     return false;
   }
-  Serial.println("[cam] init ok");
+
+  sensor_t* s = esp_camera_sensor_get();
+  if (s) {
+    s->set_framesize(s, FRAMESIZE_VGA);
+    s->set_vflip(s, 0);
+    s->set_hmirror(s, 0);
+  }
+
+  Serial.println("[cam] OV3630 init ok");
   return true;
 }
 
@@ -189,7 +238,7 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
 
-  Serial.println("[boot] LaneYa ESP32-CAM (QR + ESP-NOW)");
+  Serial.println("[boot] LaneYa ESP32-CAM OV3630 (QR + ESP-NOW)");
   Serial.printf("[cam] MAC %s\n", WiFi.macAddress().c_str());
 
   if (!initCamera()) {
@@ -233,7 +282,7 @@ void loop() {
   if (qrReader.receiveQrCode(&qrCodeData, 100)) {
     if (qrCodeData.valid && !qrSentThisScan) {
       Serial.println("[qr] decoded");
-      if (parseAndForwardQr(reinterpret_cast<const char*>(qrCodeData.payload))) {
+      if (handleDecodedQr(reinterpret_cast<const char*>(qrCodeData.payload))) {
         qrSentThisScan = true;
         stopScan(nullptr);
       }

@@ -21,6 +21,7 @@ static Adafruit_PWMServoDriver pwm(PCA9685_I2C_ADDR);
 #endif
 
 static bool pwmReady = false;
+static bool dispenseBusy = false;
 
 static void writeServoPulse(uint8_t channel, uint16_t pulseUs) {
 #if DISPENSER_HAS_PCA9685
@@ -33,7 +34,18 @@ static void writeServoPulse(uint8_t channel, uint16_t pulseUs) {
 static void writeServoStop(uint8_t channel) {
 #if DISPENSER_HAS_PCA9685
   if (!pwmReady) return;
+  writeServoPulse(channel, SERVO_STOP_US);
+  delay(150);
   pwm.setPWM(channel, 0, 4096);
+#endif
+}
+
+static void stopAllServos() {
+#if DISPENSER_HAS_PCA9685
+  if (!pwmReady) return;
+  for (uint8_t ch = 0; ch < DISPENSER_SLOT_COUNT; ch++) {
+    writeServoStop(ch);
+  }
 #endif
 }
 
@@ -57,7 +69,12 @@ void dispenserSetup() {
 }
 
 void dispenserLoop() {
-  // รอคำสั่งจาก API / backend
+  static unsigned long lastIdleStopMs = 0;
+  const unsigned long now = millis();
+  if (dispenseBusy || !pwmReady) return;
+  if (now - lastIdleStopMs < 2000) return;
+  lastIdleStopMs = now;
+  stopAllServos();
 }
 
 bool dispenserDispenseSlot(uint8_t slotIndex) {
@@ -66,9 +83,11 @@ bool dispenserDispenseSlot(uint8_t slotIndex) {
   Serial.printf("[dispenser] spin slot %u\n", slotIndex);
 
 #if DISPENSER_HAS_PCA9685
+  dispenseBusy = true;
   writeServoPulse(slotIndex, SERVO_SPIN_US);
   delay(SERVO_SPIN_MS);
   writeServoStop(slotIndex);
+  dispenseBusy = false;
   return true;
 #else
   delay(SERVO_SPIN_MS);

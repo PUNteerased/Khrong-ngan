@@ -41,16 +41,18 @@ static void handleCamPayload(const uint8_t* data, int len) {
   } else if (strncmp(buf, CAM_MSG_QR_PREFIX, strlen(CAM_MSG_QR_PREFIX)) == 0) {
     camOnline = true;
     lastCamRxMs = millis();
-    const char* json = buf + strlen(CAM_MSG_QR_PREFIX);
-    JsonDocument doc;
-    if (!deserializeJson(doc, json)) {
-      const char* code = doc["code"] | "";
-      const char* signature = doc["signature"] | doc["sig"] | "";
-      if (code[0] && signature[0]) {
-        pickupRedeemAndDispense(code, signature);
-      } else {
-        Serial.println("[cam] QR payload missing code/signature");
+    const char* payload = buf + strlen(CAM_MSG_QR_PREFIX);
+    if (payload[0] == '{') {
+      JsonDocument doc;
+      if (!deserializeJson(doc, payload)) {
+        const char* code = doc["code"] | "";
+        const char* signature = doc["signature"] | doc["sig"] | "";
+        if (code[0]) {
+          pickupRedeemAndDispense(code, signature);
+        }
       }
+    } else if (payload[0]) {
+      pickupRedeemAndDispense(payload, nullptr);
     }
   }
   Serial.printf("[cam] ESP-NOW << %s\n", buf);

@@ -19,6 +19,7 @@
 #define KIOSK_NAME "LaneYa Kiosk"
 
 #define BACKEND_HEARTBEAT_URL "https://khrong-ngan.onrender.com/api/kiosk/heartbeat"
+#define BACKEND_REDEEM_URL "https://khrong-ngan.onrender.com/api/kiosk/redeem-ticket"
 #define KIOSK_HEARTBEAT_SECRET "ilovevijai"
 
 #define FIRMWARE_VERSION "1.0.0-kiosk"
@@ -41,6 +42,17 @@
 
 // 1 = หมุนช่อง 0 ตอน boot | 0 = ปิด (แนะนำเมื่อใช้งานจริง)
 #define BOOT_SERVO_TEST 0
+
+// ESP-NOW → ESP32-CAM (ใส่ MAC 6 ไบต์จาก Serial Monitor ของกล้อง)
+#define CAM_ESPNOW_MAC {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+#define CAM_ESPNOW_PING_MS 30000
+#define CAM_ESPNOW_TIMEOUT_MS 90000
+
+#define CAM_MSG_PING "PING"
+#define CAM_MSG_PONG "PONG"
+#define CAM_MSG_SCAN "SCAN"
+#define CAM_MSG_OK "OK"
+#define CAM_MSG_QR_PREFIX "QR:"
 // ================================================
 
 #include <WiFi.h>
@@ -48,6 +60,7 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <Wire.h>
+#include <esp_now.h>
 #include <ArduinoJson.h>
 #include <Adafruit_PWMServoDriver.h>
 
@@ -57,6 +70,15 @@ Adafruit_PWMServoDriver pwm(PCA9685_I2C_ADDR);
 unsigned long lastHeartbeatMs = 0;
 unsigned long lastWifiRetryMs = 0;
 bool pwmReady = false;
+bool dispenseBusy = false;
+
+uint8_t camPeerMac[6] = CAM_ESPNOW_MAC;
+bool camOnline = false;
+bool camPeerReady = false;
+unsigned long lastCamRxMs = 0;
+unsigned long lastCamPingMs = 0;
+unsigned long lastScanMs = 0;
+unsigned long lastIdleStopMs = 0;
 
 struct {
   bool pending = false;
@@ -113,10 +135,19 @@ void writeServoPulse(uint8_t channel, uint16_t pulseUs) {
   Serial.printf("[dispenser] ch=%u pulse=%uus tick=%lu\n", channel, pulseUs, tick);
 }
 
-// ปิด PWM ช่องนั้น — MG90S 360° มัก drift ที่ 1500μs แต่หยุดเมื่อไม่มีสัญญาณ
+// ส่ง stop pulse แล้วปิด PWM — ลดอาการ servo ค้างเมื่อ PCA9685 ยังมีไฟ
 void writeServoStop(uint8_t channel) {
   if (!pwmReady) return;
+  writeServoPulse(channel, SERVO_STOP_US);
+  delay(150);
   pwm.setPWM(channel, 0, 4096);
+}
+
+void stopAllServos() {
+  if (!pwmReady) return;
+  for (uint8_t ch = 0; ch < DISPENSER_SLOT_COUNT; ch++) {
+    writeServoStop(ch);
+  }
 }
 
 bool probeI2cDevice(uint8_t addr) {
@@ -244,9 +275,11 @@ bool dispenserDispenseSlot(uint8_t slotIndex) {
   Serial.printf("[web-cmd] spinning PCA9685 channel %u\n", slotIndex);
   Serial.printf("[dispenser] spin slot %u\n", slotIndex);
 
+  dispenseBusy = true;
   writeServoPulse(slotIndex, SERVO_SPIN_US);
   delay(SERVO_SPIN_MS);
   writeServoStop(slotIndex);
+  dispenseBusy = false;
   return true;
 }
 
@@ -263,6 +296,176 @@ bool dispenserDispenseAll() {
   }
   Serial.printf("[web-cmd] dispense_all done ok=%s\n", allOk ? "true" : "false");
   return allOk;
+}
+
+static bool isPlaceholderMac(const uint8_t* mac) {
+  return mac[0] == 0xFF && mac[1] == 0xFF && mac[2] == 0xFF &&
+         mac[3] == 0xFF && mac[4] == 0xFF && mac[5] == 0xFF;
+}
+
+bool pickupRedeemAndDispense(const char* code) {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[pickup] WiFi not connected");
+    return false;
+  }
+  if (!code || !code[0]) {
+    Serial.println("[pickup] missing code");
+    return false;
+  }
+
+  WiFiClientSecure client;
+  client.setInsecure();
+
+  HTTPClient http;
+  http.begin(client, BACKEND_REDEEM_URL);
+  http.setTimeout(30000);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-Kiosk-Secret", KIOSK_HEARTBEAT_SECRET);
+
+  JsonDocument doc;
+  doc["code"] = code;
+  String body;
+  serializeJson(doc, body);
+
+  const int status = http.POST(body);
+  if (status < 200 || status >= 300) {
+    Serial.printf("[pickup] redeem HTTP %d\n", status);
+    http.end();
+    return false;
+  }
+
+  const String response = http.getString();
+  http.end();
+
+  JsonDocument res;
+  if (deserializeJson(res, response)) {
+    Serial.println("[pickup] invalid redeem JSON");
+    return false;
+  }
+
+  if (!res["ok"].as<bool>()) {
+    Serial.println("[pickup] redeem not ok");
+    return false;
+  }
+
+  const int channel = res["channel"] | -1;
+  const char* slotId = res["slotId"] | "?";
+  if (channel < 0 || channel > 9) {
+    Serial.println("[pickup] invalid channel");
+    return false;
+  }
+
+  Serial.printf("[pickup] redeem ok slot=%s ch=%d — dispense\n", slotId, channel);
+  const bool ok = dispenserDispenseSlot(static_cast<uint8_t>(channel));
+  Serial.printf("[pickup] dispense %s\n", ok ? "ok" : "fail");
+  return ok;
+}
+
+static void handleCamPayload(const uint8_t* data, int len) {
+  if (len <= 0) return;
+  char buf[251];
+  const int n = len < 250 ? len : 250;
+  memcpy(buf, data, n);
+  buf[n] = '\0';
+
+  if (strcmp(buf, CAM_MSG_PONG) == 0 || strcmp(buf, CAM_MSG_OK) == 0) {
+    camOnline = true;
+    lastCamRxMs = millis();
+  } else if (strncmp(buf, CAM_MSG_QR_PREFIX, strlen(CAM_MSG_QR_PREFIX)) == 0) {
+    camOnline = true;
+    lastCamRxMs = millis();
+    const char* payload = buf + strlen(CAM_MSG_QR_PREFIX);
+    if (payload[0] == '{') {
+      JsonDocument qrDoc;
+      if (!deserializeJson(qrDoc, payload)) {
+        const char* code = qrDoc["code"] | "";
+        if (code[0]) pickupRedeemAndDispense(code);
+      }
+    } else if (payload[0]) {
+      pickupRedeemAndDispense(payload);
+    }
+  }
+  Serial.printf("[cam] ESP-NOW << %s\n", buf);
+}
+
+#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+void onCamEspNowRecv(const esp_now_recv_info_t* info, const uint8_t* data, int len) {
+  (void)info;
+  handleCamPayload(data, len);
+}
+#else
+void onCamEspNowRecv(const uint8_t* mac, const uint8_t* data, int len) {
+  (void)mac;
+  handleCamPayload(data, len);
+}
+#endif
+
+bool addCamPeer() {
+  if (isPlaceholderMac(camPeerMac)) {
+    Serial.println("[cam] ตั้ง CAM_ESPNOW_MAC จาก MAC บน Serial ของ ESP32-CAM");
+    return false;
+  }
+  if (esp_now_is_peer_exist(camPeerMac)) {
+    camPeerReady = true;
+    return true;
+  }
+
+  esp_now_peer_info_t peer = {};
+  memcpy(peer.peer_addr, camPeerMac, 6);
+  peer.channel = WiFi.channel();
+  peer.encrypt = false;
+  peer.ifidx = WIFI_IF_STA;
+
+  if (esp_now_add_peer(&peer) != ESP_OK) {
+    Serial.println("[cam] esp_now_add_peer failed");
+    return false;
+  }
+
+  camPeerReady = true;
+  Serial.printf("[cam] peer CAM %02X:%02X:%02X:%02X:%02X:%02X ch=%d\n",
+                camPeerMac[0], camPeerMac[1], camPeerMac[2],
+                camPeerMac[3], camPeerMac[4], camPeerMac[5], peer.channel);
+  return true;
+}
+
+void sendCamMessage(const char* msg) {
+  if (!camPeerReady) return;
+  esp_now_send(camPeerMac, reinterpret_cast<const uint8_t*>(msg), strlen(msg));
+}
+
+void camLinkSetup() {
+  Serial.printf("[cam] S3 MAC %s\n", WiFi.macAddress().c_str());
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("[cam] esp_now_init failed");
+    return;
+  }
+  esp_now_register_recv_cb(onCamEspNowRecv);
+  if (addCamPeer()) {
+    sendCamMessage(CAM_MSG_PING);
+    lastCamPingMs = millis();
+  }
+}
+
+void camLinkLoop() {
+  const unsigned long now = millis();
+
+  if (!camPeerReady && !isPlaceholderMac(camPeerMac)) {
+    addCamPeer();
+  }
+
+  if (camPeerReady && now - lastCamPingMs >= CAM_ESPNOW_PING_MS) {
+    sendCamMessage(CAM_MSG_PING);
+    lastCamPingMs = now;
+  }
+
+  if (camPeerReady && camOnline && now - lastScanMs >= 3000) {
+    sendCamMessage(CAM_MSG_SCAN);
+    lastScanMs = now;
+  }
+
+  if (camOnline && now - lastCamRxMs > CAM_ESPNOW_TIMEOUT_MS) {
+    camOnline = false;
+  }
 }
 
 void queueAck(const char* id, bool ok, const char* errMsg = nullptr) {
@@ -423,11 +626,13 @@ void sendHeartbeat() {
 
 void setup() {
   Serial.begin(115200);
-  delay(500);
-  Serial.println("[boot] LaneYa ESP32-S3 Kiosk (web-cmd + PCA9685)");
+  delay(300);
+  Serial.println("[boot] LaneYa ESP32-S3 Kiosk (web-cmd + PCA9685 + ESP-NOW)");
+
+  dispenserSetup();
 
   connectWiFi();
-  dispenserSetup();
+  camLinkSetup();
 
   server.on("/health", HTTP_GET, handleHealth);
   server.on("/status", HTTP_GET, handleStatus);
@@ -446,6 +651,12 @@ void setup() {
 void loop() {
   server.handleClient();
   handleSerialDiag();
+  camLinkLoop();
+
+  if (!dispenseBusy && pwmReady && millis() - lastIdleStopMs >= 2000) {
+    stopAllServos();
+    lastIdleStopMs = millis();
+  }
 
   if (WiFi.status() != WL_CONNECTED &&
       millis() - lastWifiRetryMs >= 15000) {

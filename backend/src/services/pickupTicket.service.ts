@@ -16,9 +16,21 @@ function signPayload(payload: string): string {
   return createHmac("sha256", ticketSecret()).update(payload).digest("hex")
 }
 
-function buildTicketCode(slotId: string): string {
-  const rand = randomBytes(3).toString("hex").toUpperCase()
-  return `LNY-${slotId}-${rand}`
+export const TICKET_CODE_RE = /^[AB][1-5]-\d{4}-[A-Z]{6}$/
+
+function randomLetterToken(length = 6): string {
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  const bytes = randomBytes(length)
+  let out = ""
+  for (let i = 0; i < length; i++) {
+    out += letters[bytes[i]! % 26]
+  }
+  return out
+}
+
+function buildTicketCode(slotId: string, quantity: number): string {
+  const qtyStr = String(quantity).padStart(4, "0")
+  return `${slotId}-${qtyStr}-${randomLetterToken()}`
 }
 
 export type IssueTicketInput = {
@@ -44,7 +56,10 @@ export async function issuePickupTicket(input: IssueTicketInput) {
 
   const qty = Math.max(1, Math.min(input.quantity ?? 1, drug.quantity))
   const expiresAt = new Date(Date.now() + TICKET_TTL_MS)
-  const code = buildTicketCode(slotKey)
+  const code = buildTicketCode(slotKey, qty)
+  if (!TICKET_CODE_RE.test(code)) {
+    throw new Error("INVALID_CODE_FORMAT")
+  }
   const signBase = `${code}|${input.sessionId}|${drug.id}|${qty}|${expiresAt.toISOString()}`
   const signature = signPayload(signBase)
 
@@ -93,9 +108,13 @@ export async function issuePickupTicket(input: IssueTicketInput) {
   }
 }
 
-export async function redeemPickupTicket(code: string, signature: string) {
+export async function redeemPickupTicket(code: string, signature?: string) {
+  const codeKey = code.trim().toUpperCase()
+  if (!TICKET_CODE_RE.test(codeKey)) {
+    throw new Error("INVALID_CODE")
+  }
   const ticket = await prisma.pickupTicket.findUnique({
-    where: { code },
+    where: { code: codeKey },
     include: { drug: true, session: true },
   })
   if (!ticket) throw new Error("NOT_FOUND")
@@ -129,10 +148,12 @@ export async function redeemPickupTicket(code: string, signature: string) {
     throw new Error("EXPIRED")
   }
 
-  const signBase = `${ticket.code}|${ticket.sessionId}|${ticket.drugId}|${ticket.quantity}|${ticket.expiresAt.toISOString()}`
-  const expected = signPayload(signBase)
-  if (signature !== expected && signature !== ticket.signature) {
-    throw new Error("BAD_SIGNATURE")
+  if (signature) {
+    const signBase = `${ticket.code}|${ticket.sessionId}|${ticket.drugId}|${ticket.quantity}|${ticket.expiresAt.toISOString()}`
+    const expected = signPayload(signBase)
+    if (signature !== expected && signature !== ticket.signature) {
+      throw new Error("BAD_SIGNATURE")
+    }
   }
 
   if (ticket.drug.quantity < ticket.quantity) {
