@@ -16,6 +16,8 @@ import * as i18nController from "../controllers/i18n.controller.js"
 import * as contactController from "../controllers/contact.controller.js"
 import * as kioskController from "../controllers/kiosk.controller.js"
 import * as adminKioskController from "../controllers/adminKiosk.controller.js"
+import * as kioskPickupController from "../controllers/kioskPickup.controller.js"
+import * as ticketController from "../controllers/ticket.controller.js"
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth.js"
 import { adminAuthMiddleware, adminOrKeyMiddleware } from "../middleware/adminAuth.js"
 
@@ -84,6 +86,16 @@ router.get("/api/i18n/ui", i18nController.listUiTranslations)
 
 router.get("/api/kiosk/status", kioskController.getPublicKioskStatus)
 router.post("/api/kiosk/heartbeat", kioskController.postKioskHeartbeat)
+router.post(
+  "/api/kiosk/redeem-ticket",
+  kioskPickupController.postKioskRedeemTicket
+)
+
+router.get(
+  "/api/tickets/:code/status",
+  authMiddleware,
+  ticketController.getTicketStatus
+)
 
 router.post(
   "/api/contact",

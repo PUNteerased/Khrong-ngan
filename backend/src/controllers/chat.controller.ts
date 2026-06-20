@@ -1,8 +1,19 @@
 import type { Request, Response } from "express"
 import type { Prisma } from "@prisma/client"
+import { ConsultationSeverity } from "@prisma/client"
 import { prisma } from "../lib/prisma.js"
 import { sendDifyChatMessage } from "../services/dify.service.js"
-import { inferSeverityFromAnswer } from "../lib/consultationSeverity.js"
+import { inferSeverityFromAnswer, canIssueQrFromStructured, severityFromRiskLevel } from "../lib/consultationSeverity.js"
+import {
+  isJailbreakAttempt,
+  jailbreakRefusalReply,
+  sanitizeAssistantOutput,
+  RISK_RUBRIC_INPUT,
+  OFF_KIOSK_EXAMPLES_INPUT,
+} from "../lib/chatGuardrails.js"
+import { extractStructuredJsonBlock, normalizeRiskLevel } from "../lib/difyStructured.js"
+import { isValidSlotId } from "../lib/slotMapping.js"
+import { issuePickupTicket } from "../services/pickupTicket.service.js"
 import {
   checkDrugSafety,
   findMentionedDrugs,
@@ -26,6 +37,13 @@ type SafetyWarning = {
   matchedAllergies: string[]
   checkedIngredients: string[]
 }
+
+const CRITICAL_FIELDS: MissingFieldKey[] = [
+  "age",
+  "weight",
+  "height",
+  "allergies",
+]
 
 /**
  * Dify may return a two-part answer:
@@ -298,6 +316,30 @@ export async function postChat(req: Request, res: Response) {
     missing_fields: missingFields.join(","),
     missing_fields_instruction: missingInstruction,
     inventory_drugs: inventoryDrugsInput,
+    risk_rubric: RISK_RUBRIC_INPUT,
+    off_kiosk_examples: OFF_KIOSK_EXAMPLES_INPUT,
+  }
+
+  if (trimmedMessage && isJailbreakAttempt(trimmedMessage)) {
+    const refusal = jailbreakRefusalReply()
+    await prisma.chatMessage.create({
+      data: { sessionId: session.id, role: "assistant", content: refusal },
+    })
+    res.json({
+      answer: refusal,
+      sessionId: session.id,
+      conversationId: session.difyConversationId,
+      riskLevel: "LOW",
+      profile: {
+        missingFields,
+        missingCritical: missingFields.filter((f) =>
+          CRITICAL_FIELDS.includes(f)
+        ),
+        askedInChat: false,
+        autoSavedFields: autoSaved,
+      },
+    })
+    return
   }
 
   await prisma.chatMessage.create({
@@ -312,15 +354,7 @@ export async function postChat(req: Request, res: Response) {
   // Onboarding fast-path: only trigger when the patient has literally
   // never filled in any medical info AND this is the first message of a
   // brand-new session AND we couldn't pull anything from the message body
-  // (no regex match, no image). Every other case goes straight to Dify so
-  // the AI can drive the conversation itself — asking for missing fields
-  // via {{missing_fields_instruction}} when needed.
-  const CRITICAL_FIELDS: MissingFieldKey[] = [
-    "age",
-    "weight",
-    "height",
-    "allergies",
-  ]
+  // (no regex match, no image). Every other case goes straight to Dify.
   const missingCritical = missingFields.filter((f) =>
     CRITICAL_FIELDS.includes(f)
   )
@@ -373,7 +407,11 @@ export async function postChat(req: Request, res: Response) {
       inputs,
     })
 
-    const patientAnswer = extractPatientFacingAnswer(dify.answer)
+    const patientAnswer = sanitizeAssistantOutput(
+      extractPatientFacingAnswer(dify.answer)
+    )
+    const structured = extractStructuredJsonBlock(dify.answer)
+    const riskLevel = normalizeRiskLevel(structured)
 
     // --- Auto SafetyCheck: scan AI answer for drugs and validate against allergies ---
     const allDrugs = await prisma.drug.findMany({
@@ -412,6 +450,46 @@ export async function postChat(req: Request, res: Response) {
             .join(", ")}`
         : patientAnswer
     const { severity, reason } = inferSeverityFromAnswer(severityInput)
+    const finalSeverity =
+      severity === ConsultationSeverity.ESCALATE_HOSPITAL
+        ? severity
+        : severityFromRiskLevel(riskLevel)
+
+    let qrTicket: Awaited<ReturnType<typeof issuePickupTicket>> | null = null
+    const qrGate = canIssueQrFromStructured(structured, {
+      missingFieldsEmpty: missingFields.length === 0,
+      hasSafetyWarnings: safetyWarnings.length > 0,
+      inferredSeverity: finalSeverity,
+    })
+
+    if (qrGate.ok && structured?.recommendation?.drug_slot_id) {
+      const slotKey = structured.recommendation.drug_slot_id.toUpperCase()
+      if (isValidSlotId(slotKey)) {
+        const drug = await prisma.drug.findFirst({
+          where: { slotId: slotKey, quantity: { gt: 0 } },
+        })
+        if (drug) {
+          const drugSafety = checkDrugSafety({
+            userAllergyKeywords,
+            drugIngredientsText: drug.ingredientsText,
+          })
+          if (drugSafety.isSafe) {
+            try {
+              qrTicket = await issuePickupTicket({
+                sessionId: session.id,
+                drugId: drug.id,
+                slotId: slotKey,
+                quantity: structured.recommendation.quantity ?? 1,
+                riskLevel: qrGate.riskLevel,
+              })
+            } catch (e) {
+              console.warn("issuePickupTicket failed:", e)
+            }
+          }
+        }
+      }
+    }
+
     const summarySlice = (trimmedMessage || "[แนบรูปภาพ]").slice(0, 200)
 
     await prisma.chatSession.update({
@@ -419,13 +497,14 @@ export async function postChat(req: Request, res: Response) {
       data: {
         difyConversationId: dify.conversation_id || session.difyConversationId,
         summary: session.summary ?? summarySlice,
-        severity,
+        severity: finalSeverity,
         redFlagReason:
           reason ??
           (safetyWarnings.length > 0
             ? `SafetyCheck: ${safetyWarnings.map((w) => w.drugName).join(", ")}`
             : null),
         recommendedDrugId:
+          qrTicket?.drugId ??
           session.recommendedDrugId ??
           (mentioned[0]?.id ?? null),
       },
@@ -443,10 +522,15 @@ export async function postChat(req: Request, res: Response) {
       answer: finalAnswer,
       sessionId: session.id,
       conversationId: dify.conversation_id,
+      riskLevel,
+      qrTicket,
+      informationalAlternatives:
+        structured?.safety_check?.informational_alternatives ?? [],
       safetyCheck: {
         mentionedDrugIds: mentioned.map((m) => m.id),
         warnings: safetyWarnings,
         firstUnsafeDrugId,
+        qrGate: qrGate.ok ? "approved" : qrGate.reason ?? "denied",
       },
       profile: {
         missingFields,

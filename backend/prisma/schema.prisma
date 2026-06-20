@@ -100,6 +100,7 @@ model Drug {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   sessions    ChatSession[] @relation("RecommendedDrug")
+  pickupTickets PickupTicket[]
   diseaseMaps DiseaseDrugMap[]
   symptomMaps SymptomDrugMap[]
 
@@ -263,6 +264,13 @@ enum PickupStatus {
   EXPIRED
 }
 
+enum PickupTicketStatus {
+  ISSUED
+  REDEEMED
+  EXPIRED
+  CANCELLED
+}
+
 enum ConsultationSeverity {
   ROUTINE
   ESCALATE_HOSPITAL
@@ -284,6 +292,28 @@ model ChatSession {
   updatedAt            DateTime               @updatedAt
   messages             ChatMessage[]
   adminReview          AdminSessionReview?
+  pickupTickets        PickupTicket[]
+}
+
+model PickupTicket {
+  id          String             @id @default(cuid())
+  code        String             @unique
+  sessionId   String
+  session     ChatSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  drugId      String
+  drug        Drug               @relation(fields: [drugId], references: [id])
+  slotId      String
+  quantity    Int                @default(1)
+  channel     Int
+  expiresAt   DateTime
+  status      PickupTicketStatus @default(ISSUED)
+  redeemedAt  DateTime?
+  signature   String
+  riskLevel   String             @default("LOW")
+  createdAt   DateTime           @default(now())
+
+  @@index([sessionId])
+  @@index([status, expiresAt])
 }
 
 model ChatMessage {

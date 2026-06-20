@@ -2,8 +2,10 @@
 
 #include <WiFi.h>
 #include <esp_now.h>
+#include <ArduinoJson.h>
 
 #include "cam_espnow_protocol.h"
+#include "pickup_redeem.h"
 
 #if __has_include("config.h")
 #include "config.h"
@@ -36,6 +38,20 @@ static void handleCamPayload(const uint8_t* data, int len) {
   if (strcmp(buf, CAM_MSG_PONG) == 0 || strcmp(buf, CAM_MSG_OK) == 0) {
     camOnline = true;
     lastCamRxMs = millis();
+  } else if (strncmp(buf, CAM_MSG_QR_PREFIX, strlen(CAM_MSG_QR_PREFIX)) == 0) {
+    camOnline = true;
+    lastCamRxMs = millis();
+    const char* json = buf + strlen(CAM_MSG_QR_PREFIX);
+    JsonDocument doc;
+    if (!deserializeJson(doc, json)) {
+      const char* code = doc["code"] | "";
+      const char* signature = doc["signature"] | doc["sig"] | "";
+      if (code[0] && signature[0]) {
+        pickupRedeemAndDispense(code, signature);
+      } else {
+        Serial.println("[cam] QR payload missing code/signature");
+      }
+    }
   }
   Serial.printf("[cam] ESP-NOW << %s\n", buf);
 }
@@ -129,6 +145,12 @@ void camLinkLoop() {
     lastCamPingMs = now;
   }
 
+  static unsigned long lastScanMs = 0;
+  if (camPeerReady && camOnline && now - lastScanMs >= 3000) {
+    sendCamMessage(CAM_MSG_SCAN);
+    lastScanMs = now;
+  }
+
   if (camOnline && now - lastCamRxMs > CAM_ESPNOW_TIMEOUT_MS) {
     camOnline = false;
   }
@@ -138,4 +160,8 @@ bool camLinkOnline() { return camOnline; }
 
 void camLinkRequestCapture() {
   sendCamMessage(CAM_MSG_CAPTURE);
+}
+
+void camLinkRequestScan() {
+  sendCamMessage(CAM_MSG_SCAN);
 }

@@ -1197,6 +1197,40 @@ export default function AdminPage() {
                       </Badge>
                     </div>
 
+                    <div className="space-y-2 rounded-lg border p-4">
+                      <div>
+                        <p className="font-medium text-sm">{t("slotMapTitle")}</p>
+                        <p className="text-xs text-muted-foreground">{t("slotMapHint")}</p>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b text-left text-muted-foreground">
+                              <th className="py-2 pr-3">{t("slotMapColSlot")}</th>
+                              <th className="py-2 pr-3">{t("slotMapColChannel")}</th>
+                              <th className="py-2 pr-3">{t("slotMapColDrug")}</th>
+                              <th className="py-2">{t("slotMapColStock")}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {["A1", "A2", "A3", "A4", "A5", "B1", "B2", "B3", "B4", "B5"].map(
+                              (slotId, channel) => {
+                                const drug = drugs.find((d) => d.slotId === slotId)
+                                return (
+                                  <tr key={slotId} className="border-b last:border-0">
+                                    <td className="py-2 pr-3 font-mono">{slotId}</td>
+                                    <td className="py-2 pr-3 font-mono">{channel}</td>
+                                    <td className="py-2 pr-3">{drug?.name ?? "—"}</td>
+                                    <td className="py-2">{drug?.quantity ?? "—"}</td>
+                                  </tr>
+                                )
+                              }
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
                     <div className="space-y-3 rounded-lg border p-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>

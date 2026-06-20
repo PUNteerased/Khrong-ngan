@@ -781,10 +781,25 @@ export async function fetchChatSessionMessages(sessionId: string) {
 
 // --- Chat ---
 
+export type ChatQrTicket = {
+  code: string
+  signature: string
+  drugId: string
+  slotId: string
+  quantity: number
+  channel: number
+  expiresAt: string
+  riskLevel: string
+  drugName: string
+}
+
 export type ChatResponse = {
   answer: string
   sessionId: string
   conversationId: string | null
+  riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "ESCALATE"
+  qrTicket?: ChatQrTicket | null
+  informationalAlternatives?: string[]
   safetyCheck?: {
     mentionedDrugIds: string[]
     warnings: {
@@ -794,6 +809,7 @@ export type ChatResponse = {
       checkedIngredients: string[]
     }[]
     firstUnsafeDrugId: string | null
+    qrGate?: string
   }
   profile?: {
     missingFields: string[]
@@ -801,6 +817,19 @@ export type ChatResponse = {
     askedInChat: boolean
     autoSavedFields?: string[]
   }
+}
+
+export async function fetchTicketStatus(code: string) {
+  return apiJson<{
+    code: string
+    status: string
+    slotId: string
+    drugName: string
+    quantity: number
+    expiresAt: string
+    redeemedAt: string | null
+    riskLevel: string
+  }>(`/api/tickets/${encodeURIComponent(code)}/status`)
 }
 
 export async function sendChatMessage(

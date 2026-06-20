@@ -24,12 +24,14 @@ import { QRTicket } from "@/components/qr-ticket"
 import { ChatMarkdown } from "@/components/chat-markdown"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/badge"
 import {
   ApiError,
   fetchChatSessionMessages,
   fetchDrugs,
   fetchMe,
   sendChatMessage,
+  type ChatQrTicket,
   type DrugDto,
   type UserProfile,
 } from "@/lib/api"
@@ -42,35 +44,51 @@ interface Message {
   recommendedDrug?: DrugDto | null
   qrTicket?: {
     code: string
+    signature: string
     expiresAt: string
     quantity: number
     drug: DrugDto
+    riskLevel?: string
   } | null
+  riskLevel?: string
   sender: "user" | "ai"
   timestamp: Date
 }
 
-function randomFive() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-  let out = ""
-  for (let i = 0; i < 5; i += 1) {
-    out += chars[Math.floor(Math.random() * chars.length)]
+function riskBadgeClass(level: string) {
+  switch (level) {
+    case "ESCALATE":
+    case "HIGH":
+      return "bg-destructive/10 text-destructive border-destructive/30"
+    case "MEDIUM":
+      return "bg-amber-500/10 text-amber-800 border-amber-500/30"
+    default:
+      return "bg-success/10 text-success border-success/30"
   }
-  return out
 }
 
-function buildTicketCode(drug: DrugDto, quantity: number) {
-  const cabinetCode = "AA" // reserved for multi-cabinet in the future
-  const slotRaw = (drug.slotId || "A1").toUpperCase()
-  const slot = slotRaw.length >= 2 ? slotRaw.slice(0, 2) : `${slotRaw}1`.slice(0, 2)
-  const qty = String(Math.max(1, quantity)).padStart(2, "0")
-  const middle = `${cabinetCode}${slot}${qty}`
-  return `LNY-${middle}-${randomFive()}`
-}
-
-function containsQrIntent(text: string) {
-  const input = text.toLowerCase()
-  return /(qr|qrcode|ticket|คิวอาร์|คิวอา|ตั๋ว|qr code)/i.test(input)
+function mapServerQrTicket(
+  ticket: ChatQrTicket,
+  drugById: Record<string, DrugDto>
+): NonNullable<Message["qrTicket"]> | null {
+  const drug =
+    drugById[ticket.drugId] ??
+    ({
+      id: ticket.drugId,
+      name: ticket.drugName,
+      slotId: ticket.slotId,
+      description: "",
+      quantity: 0,
+      inCabinet: true,
+    } as DrugDto)
+  return {
+    code: ticket.code,
+    signature: ticket.signature,
+    expiresAt: ticket.expiresAt,
+    quantity: ticket.quantity,
+    drug,
+    riskLevel: ticket.riskLevel,
+  }
 }
 
 function formatMMSS(totalSeconds: number): string {
@@ -80,6 +98,19 @@ function formatMMSS(totalSeconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
 }
 
+function riskLevelKey(level: string) {
+  switch (level) {
+    case "ESCALATE":
+      return "riskLevelEscalate" as const
+    case "HIGH":
+      return "riskLevelHigh" as const
+    case "MEDIUM":
+      return "riskLevelMedium" as const
+    default:
+      return "riskLevelLow" as const
+  }
+}
+
 function ChatQrCard({
   ticket,
   onOpenFull,
@@ -87,6 +118,7 @@ function ChatQrCard({
   ticket: NonNullable<Message["qrTicket"]>
   onOpenFull: () => void
 }) {
+  const t = useTranslations("Chat")
   const [remainingSeconds, setRemainingSeconds] = useState(() =>
     Math.max(0, Math.floor((new Date(ticket.expiresAt).getTime() - Date.now()) / 1000))
   )
@@ -94,10 +126,12 @@ function ChatQrCard({
   const qrPayload = useMemo(
     () =>
       JSON.stringify({
+        v: 1,
         code: ticket.code,
+        signature: ticket.signature,
         drugId: ticket.drug.id,
         slotId: ticket.drug.slotId,
-        quantity: ticket.quantity,
+        qty: ticket.quantity,
         expiresAt: ticket.expiresAt,
       }),
     [ticket]
@@ -113,34 +147,34 @@ function ChatQrCard({
   }, [ticket.expiresAt])
 
   return (
-    <button
-      type="button"
-      onClick={onOpenFull}
-      className="mt-3 w-full rounded-lg border border-primary/30 bg-primary/5 p-3 text-left"
-    >
+    <div className="mt-3 w-full rounded-lg border border-primary/30 bg-primary/5 p-3">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="text-xs text-muted-foreground">QR Ticket</p>
-          <p className="text-sm font-semibold text-foreground">{ticket.code}</p>
+          <p className="text-xs font-medium text-primary">{t("qrPickupTitle")}</p>
+          <p className="text-xs text-muted-foreground">{t("qrPickupHint")}</p>
         </div>
-        <div className="flex items-center gap-1 text-xs text-primary">
-          <Expand className="h-3.5 w-3.5" />
-          Fullscreen
-        </div>
+        <Button type="button" variant="secondary" size="sm" onClick={onOpenFull}>
+          <Expand className="h-3.5 w-3.5 mr-1" />
+          {t("qrOpenFullscreen")}
+        </Button>
       </div>
       <div className="mt-2 flex items-center justify-between text-xs">
         <div className="flex items-center gap-1 text-muted-foreground">
           <QrCode className="h-3.5 w-3.5" />
           <span>{ticket.drug.name}</span>
+          <span className="text-muted-foreground/70">({ticket.drug.slotId})</span>
         </div>
         <span className={expired ? "text-destructive" : "text-primary"}>
-          {expired ? "Expired" : `เหลือเวลา ${formatMMSS(remainingSeconds)}`}
+          {expired
+            ? t("qrExpired")
+            : t("qrTimeLeft", { time: formatMMSS(remainingSeconds) })}
         </span>
       </div>
       <div className="mt-3 flex justify-center rounded-lg bg-white p-3">
-        <QRCode value={qrPayload} size={148} level="M" />
+        <QRCode value={qrPayload} size={168} level="M" />
       </div>
-    </button>
+      <p className="mt-2 text-center text-xs text-muted-foreground">{ticket.code}</p>
+    </div>
   )
 }
 
@@ -359,24 +393,9 @@ function ChatPageInner() {
       setChatSessionId(res.sessionId)
       const mentioned = res.safetyCheck?.mentionedDrugIds ?? []
       const recommendedId = mentioned.find((id) => !!drugById[id]) ?? null
-      const userAskedQr = containsQrIntent(content.trim())
-      let qrTicket: NonNullable<Message["qrTicket"]> | null = null
-      if (userAskedQr) {
-        const sourceDrug =
-          (recommendedId ? drugById[recommendedId] : null) ??
-          [...messages]
-            .reverse()
-            .find((m) => m.sender === "ai" && m.recommendedDrug)?.recommendedDrug ??
-          null
-        if (sourceDrug) {
-          qrTicket = {
-            code: buildTicketCode(sourceDrug, 1),
-            expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-            quantity: 1,
-            drug: sourceDrug,
-          }
-        }
-      }
+      const qrTicket = res.qrTicket
+        ? mapServerQrTicket(res.qrTicket, drugById)
+        : null
       setMessages((prev) => [
         ...prev,
         {
@@ -384,6 +403,7 @@ function ChatPageInner() {
           content: res.answer,
           recommendedDrug: recommendedId ? drugById[recommendedId] : null,
           qrTicket,
+          riskLevel: res.riskLevel,
           sender: "ai",
           timestamp: new Date(),
         },
@@ -493,7 +513,19 @@ function ChatPageInner() {
                       <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                     ) : null
                   ) : (
-                    <ChatMarkdown>{message.content}</ChatMarkdown>
+                    <>
+                      <ChatMarkdown>{message.content}</ChatMarkdown>
+                      {message.riskLevel ? (
+                        <Badge
+                          variant="outline"
+                          className={cn("mt-2 text-xs", riskBadgeClass(message.riskLevel))}
+                        >
+                          {t("riskLevel", {
+                            level: t(riskLevelKey(message.riskLevel)),
+                          })}
+                        </Badge>
+                      ) : null}
+                    </>
                   )}
                   {message.sender === "ai" && message.recommendedDrug ? (
                     <DrugRecommendationCard drug={message.recommendedDrug} />
@@ -594,6 +626,7 @@ function ChatPageInner() {
                 drug={activeFullscreenTicket.drug}
                 quantity={activeFullscreenTicket.quantity}
                 ticketCode={activeFullscreenTicket.code}
+                signature={activeFullscreenTicket.signature}
                 expiresAt={new Date(activeFullscreenTicket.expiresAt)}
                 onClose={() => setActiveFullscreenTicket(null)}
                 className="max-w-xl"

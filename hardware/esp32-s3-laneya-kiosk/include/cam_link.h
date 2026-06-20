@@ -4,3 +4,4 @@ void camLinkSetup();
 void camLinkLoop();
 bool camLinkOnline();
 void camLinkRequestCapture();
+void camLinkRequestScan();

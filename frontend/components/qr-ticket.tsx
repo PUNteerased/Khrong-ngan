@@ -15,6 +15,7 @@ type Props = {
   drug: DrugDto
   quantity: number
   ticketCode: string
+  signature?: string
   expiresAt: Date
   onClose?: () => void
   className?: string
@@ -55,6 +56,7 @@ export function QRTicket({
   drug,
   quantity,
   ticketCode,
+  signature = "",
   expiresAt,
   onClose,
   className,
@@ -71,12 +73,13 @@ export function QRTicket({
       JSON.stringify({
         v: 1,
         code: ticketCode,
+        signature,
         drugId: drug.id,
         slotId: drug.slotId,
         qty: quantity,
         expiresAt: expiresAt.toISOString(),
       }),
-    [ticketCode, drug.id, drug.slotId, quantity, expiresAt]
+    [ticketCode, signature, drug.id, drug.slotId, quantity, expiresAt]
   )
 
   const handleDownload = () => {

@@ -13,7 +13,7 @@
 2. Symptom → condition triage map
 3. Red-flag escalation matrix
 4. Drug safety rules (how to reject a candidate)
-5. Drug monographs (5 OTCs) — the RAG payload
+5. Drug monographs (10 OTCs A1–B5) — the RAG payload
 6. Weight/age dosing tables
 7. Follow-up question bank (Phase 1)
 8. Deterministic backend cross-check
@@ -68,7 +68,7 @@ Use only for **preliminary** triage. Never present as a diagnosis.
 
 ### 2.3 Allergic rhinitis / itch (mild)
 - **Typical:** sneezing, clear rhinorrhea, itchy nose/eyes, no systemic distress.
-- **Candidate drugs:** Chlorpheniramine (CPM) — short term only; avoid if drowsiness is a risk (driving).
+- **Candidate drugs:** Loratadine 10 mg (slot A3, non-sedating antihistamine).
 - **Red flags:** wheeze/dyspnea, throat swelling, generalized urticaria with breathing symptoms → anaphylaxis protocol.
 
 ### 2.4 Mild diarrhea / gastroenteritis
@@ -127,9 +127,11 @@ If all candidates fail → escalate (ask to consult a pharmacist/doctor).
 |---|---|
 | `NSAID`, `nsaid`, `แก้อักเสบ` | Ibuprofen |
 | `paracetamol`, `acetaminophen`, `พาราเซตามอล` | Paracetamol |
-| `antihistamine`, `ยาแก้แพ้`, `chlorpheniramine`, `CPM` | Chlorpheniramine |
-| `antacid`, `aluminum hydroxide`, `magnesium hydroxide` | Antacid suspension |
-| `ORS`, `oral rehydration`, `ผงเกลือแร่` | ORS |
+| `antihistamine`, `loratadine`, `ลอราทาดีน` | Loratadine (A3) |
+| `dextromethorphan`, `dxm`, `ยาแก้ไอ` | Dextromethorphan cough (A4) |
+| `antacid`, `aluminum hydroxide`, `magnesium hydroxide` | Antacid (B3) |
+| `ORS`, `oral rehydration`, `เกลือแร่` | ORS (B2) |
+| `ascorbic acid`, `vitamin c`, `วิตามินซี` | Vitamin C (B5) |
 
 ---
 
@@ -217,128 +219,135 @@ Each monograph is chunkable as a single RAG document. Keep the `# Drug:` heading
 
 ---
 
-### # Drug: Chlorpheniramine 4 mg (CPM / คลอร์เฟนิรามีน 4 มก.)
+### # Drug: Loratadine 10 mg (ลอราทาดีน 10 มก.) — slot A3
 
 | Field | Value |
 |---|---|
-| **Common name (TH)** | คลอร์เฟนิรามีน 4 มก. (ยาแก้แพ้เหลือง) |
-| **Common name (EN)** | Chlorpheniramine Maleate 4 mg (CPM) |
-| **Active ingredient** | `chlorpheniramine maleate` |
-| **Drug class** | First-generation H1 antihistamine (sedating) |
-| **Kiosk slot** | `B1` |
+| **Kiosk slot** | `A3` |
 | **Category** | ยาแก้แพ้ |
-
-**Indications**
-- Allergic rhinitis (sneezing, runny nose, itchy eyes).
-- Mild allergic skin reactions (urticaria, pruritus).
-- Common cold symptomatic relief.
-
-**Contraindications**
-- Known hypersensitivity to CPM or any first-gen antihistamine.
-- Narrow-angle glaucoma.
-- Urinary retention / BPH with obstruction.
-- Severe COPD or acute asthma attack.
-- Neonates and premature infants.
-
-**Dosing (weight/age)**
-- **Adult (≥ 12 yr):** 4 mg every 4–6 h PRN. Max 24 mg/day.
-- **Child 6–11 yr:** 2 mg every 4–6 h. Max 12 mg/day — **kiosk does not dispense 4 mg tablets to children under 12**; refer to pharmacist.
-- **Elderly:** high anticholinergic risk (confusion, falls) — prefer second-gen antihistamine if available; if kiosk has only CPM, use lowest dose.
-
-**Warnings (side-effects)**
-- **Drowsiness** — do not drive or operate heavy machinery.
-- Dry mouth, blurred vision, urinary hesitancy.
-- Potentiation with alcohol, benzodiazepines, opioids.
-- Paradoxical excitation in children.
-
-**Allergy / class keywords to match**
-`chlorpheniramine`, `cpm`, `antihistamine`, `ยาแก้แพ้`, `คลอร์เฟนิรามีน`
+| **Active ingredient** | `loratadine` |
+| **Indications** | Allergic rhinitis, urticaria, mild itch |
+| **Contraindications** | Loratadine hypersensitivity; severe hepatic impairment |
+| **Dosing** | Adult ≥12 yr: 10 mg once daily |
+| **Warnings** | Less sedating than first-gen antihistamines; caution with hepatic disease |
+| **Allergy keywords** | `loratadine`, `ลอราทาดีน`, `antihistamine` |
 
 ---
 
-### # Drug: Antacid suspension (ยาลดกรด — Aluminum/Magnesium Hydroxide)
+### # Drug: Dextromethorphan cough (ยาแก้ไอ) — slot A4
 
 | Field | Value |
 |---|---|
-| **Common name (TH)** | ยาลดกรด (น้ำขาว) |
-| **Common name (EN)** | Antacid suspension (Al(OH)₃ + Mg(OH)₂) |
-| **Active ingredient** | `aluminum hydroxide`, `magnesium hydroxide`, often `simethicone` |
-| **Drug class** | Antacid |
+| **Kiosk slot** | `A4` |
+| **Category** | ยาแก้ไอ |
+| **Active ingredient** | `dextromethorphan` |
+| **Indications** | Non-productive (dry) cough in adults |
+| **Contraindications** | Age <6 yr; MAOI use; severe respiratory depression |
+| **Dosing** | Adult: per label, q6–8h PRN |
+| **Warnings** | Do not combine with other CNS depressants; avoid in productive cough needing expectoration |
+| **Allergy keywords** | `dextromethorphan`, `dxm` |
+
+---
+
+### # Drug: Throat lozenges (ยาอมแก้เจ็บคอ) — slot A5
+
+| Field | Value |
+|---|---|
+| **Kiosk slot** | `A5` |
+| **Category** | ยาแก้ไอ / ลำคอ |
+| **Active ingredients** | `benzocaine`, `menthol`, `eucalyptus` |
+| **Indications** | Mild sore throat, throat irritation |
+| **Contraindications** | Age <6 yr; benzocaine allergy |
+| **Dosing** | Dissolve slowly q2–3h PRN |
+| **Warnings** | Choking hazard in young children; max daily lozenges per label |
+| **Allergy keywords** | `benzocaine`, `menthol`, `eucalyptus`, `ยาอม` |
+
+---
+
+### # Drug: Kaolin/pectin antidiarrheal (ยาธาตุน้ำขาว) — slot B1
+
+| Field | Value |
+|---|---|
+| **Kiosk slot** | `B1` |
+| **Category** | ยาระบบทางเดินอาหาร |
+| **Active ingredients** | `bismuth`, `kaolin`, `pectin`, `attapulgite` |
+| **Indications** | Mild acute diarrhea (non-bloody) |
+| **Contraindications** | Bloody stool, high fever, severe dehydration, child <2 yr |
+| **Dosing** | Per label after each loose stool |
+| **Warnings** | Stop after 2 days if no improvement; refer if red flags |
+| **Allergy keywords** | `bismuth`, `kaolin`, `pectin` |
+
+---
+
+### # Drug: ORS electrolyte (เกลือแร่ ORS) — slot B2
+
+| Field | Value |
+|---|---|
 | **Kiosk slot** | `B2` |
 | **Category** | ยาระบบทางเดินอาหาร |
-
-**Indications**
-- Mild dyspepsia, heartburn, GERD symptom relief.
-- Short-term (< 2 weeks) symptomatic use.
-
-**Contraindications**
-- Severe renal impairment (magnesium retention).
-- Known hypersensitivity to any component.
-- Hypophosphatemia.
-- Bowel obstruction, ileus.
-
-**Dosing (weight/age)**
-- **Adult (≥ 12 yr):** 10–20 mL (2–4 teaspoons) after meals and at bedtime, up to 4× per day.
-- **Child < 12 yr:** not routinely dispensed from kiosk — refer to pharmacist.
-- **Elderly:** lower end of range; beware of magnesium-induced diarrhea or aluminum-induced constipation.
-
-**Warnings (side-effects)**
-- Constipation (aluminum) or diarrhea (magnesium); combined formulas balance both.
-- **Drug–drug interactions:** reduces absorption of tetracyclines, fluoroquinolones, iron, levothyroxine, digoxin — separate by ≥ 2 h.
-- Long-term use may mask serious disease.
-
-**Allergy / class keywords to match**
-`antacid`, `aluminum hydroxide`, `magnesium hydroxide`, `ยาลดกรด`, `น้ำขาว`, `simethicone`
+| **Active ingredients** | `sodium`, `potassium`, `glucose`, `ors` |
+| **Indications** | Mild dehydration from diarrhea/vomiting |
+| **Contraindications** | Severe dehydration (IV needed), ileus, anuria |
+| **Dosing** | Dissolve per sachet label; sip frequently |
+| **Warnings** | Never over-concentrate; escalate if bloody stool or >48h |
+| **Allergy keywords** | `ors`, `electrolyte`, `เกลือแร่` |
 
 ---
 
-### # Drug: ORS — Oral Rehydration Salts (ผงเกลือแร่)
+### # Drug: Antacid (ยาลดกรด แก้ท้องอืด) — slot B3
 
 | Field | Value |
 |---|---|
-| **Common name (TH)** | ผงเกลือแร่ ORS |
-| **Common name (EN)** | Oral Rehydration Salts (WHO low-osmolarity) |
-| **Active ingredient** | `sodium chloride`, `potassium chloride`, `trisodium citrate`, `glucose anhydrous` |
-| **Drug class** | Oral electrolyte replacement |
 | **Kiosk slot** | `B3` |
-| **Category** | รักษาภาวะขาดน้ำ / ระบบทางเดินอาหาร |
+| **Category** | ยาระบบทางเดินอาหาร |
+| **Active ingredients** | `aluminium`, `magnesium`, `hydroxide`, `antacid` |
+| **Indications** | Mild dyspepsia, heartburn |
+| **Contraindications** | Severe renal impairment; GI obstruction |
+| **Dosing** | 1–2 tabs after meals and bedtime |
+| **Warnings** | Max 2 weeks without review; separate from tetracycline/iron by 2h |
+| **Allergy keywords** | `antacid`, `magnesium`, `aluminium`, `ยาลดกรด` |
 
-**Indications**
-- Prevention and treatment of mild-to-moderate dehydration from diarrhea or vomiting.
-- Fluid replacement for heat stress, exercise-related dehydration.
+---
 
-**Contraindications**
-- Severe dehydration (needs IV) — escalate.
-- Intractable vomiting — cannot retain oral fluids.
-- Intestinal obstruction, paralytic ileus.
-- Anuria or severe renal failure.
-- Altered consciousness — aspiration risk.
+### # Drug: Tiger balm / topical analgesic (บalm นวด) — slot B4
 
-**Dosing (weight/age)**
-- **Dilution:** dissolve 1 sachet in **the exact volume on the label** (usually 250 mL clean water). Never concentrate.
-- **Adult:** drink 200–400 mL after every loose stool, plus ad lib to thirst. Up to 2–4 L / 24 h as needed.
-- **Child 1–11 yr:** 100–200 mL after each loose stool; total 50 mL/kg over 4 h for mild dehydration, 100 mL/kg over 4 h for moderate.
-- **Infant < 1 yr:** **kiosk does not dispense** — refer to clinician for weight-based rehydration.
+| Field | Value |
+|---|---|
+| **Kiosk slot** | `B4` |
+| **Category** | ยาทาภายนอก |
+| **Active ingredients** | `menthol`, `camphor`, `methyl salicylate` |
+| **Indications** | Musculoskeletal aches, mild pain |
+| **Contraindications** | Open wounds, salicylate allergy, children <2 yr |
+| **Dosing** | Thin layer to affected area 2–3×/day |
+| **Warnings** | Avoid eyes/mucosa; wash hands after use; salicylate → NSAID cross-allergy |
+| **Allergy keywords** | `menthol`, `camphor`, `methyl salicylate`, `salicylate` |
 
-**Warnings (side-effects)**
-- Hypernatremia if wrongly concentrated — always use labeled dilution volume.
-- If diarrhea > 48 h, bloody, or accompanied by high fever → escalate.
+---
 
-**Allergy / class keywords to match**
-`ors`, `oral rehydration`, `electrolyte`, `เกลือแร่`, `สารน้ำ`
+### # Drug: Vitamin C 1000 mg (วิตามินซี) — slot B5
+
+| Field | Value |
+|---|---|
+| **Kiosk slot** | `B5` |
+| **Category** | วิตามิน |
+| **Active ingredient** | `ascorbic acid`, `vitamin c` |
+| **Indications** | Vitamin C supplementation, immune support adjunct |
+| **Contraindications** | Known oxalate kidney stone history — caution |
+| **Dosing** | 1 tab daily with food |
+| **Warnings** | High doses may cause GI upset; not a substitute for medical care |
+| **Allergy keywords** | `ascorbic`, `vitamin c`, `วิตามินซี` |
 
 ---
 
 ## 6. Weight / age dosing quick reference
 
-| Patient group | Paracetamol | Ibuprofen | CPM 4 mg | Antacid | ORS |
-|---|---|---|---|---|---|
-| Adult ≥ 50 kg | 500 mg–1 g q4–6 h (max 4 g/d) | 200–400 mg q6–8 h (max 1.2 g/d OTC) | 4 mg q4–6 h (max 24 mg/d) | 10–20 mL after meals + HS | 200–400 mL per loose stool |
-| Adolescent 12–17 yr, < 50 kg | 15 mg/kg q4–6 h | 5–10 mg/kg q6–8 h | 4 mg q4–6 h | 10 mL after meals | 100–200 mL per loose stool |
-| Child 6–11 yr | 10–15 mg/kg q4–6 h | 5–10 mg/kg q6–8 h → **refer** | 2 mg q4–6 h → **refer** | **refer** | 100–200 mL per loose stool |
-| Child < 6 yr | **refer** (syrup needed) | **refer** | **refer** | **refer** | weight-based → **refer** |
-| Elderly ≥ 65 yr | max 3 g/d if frail | lowest dose, shortest duration; beware renal | avoid if possible; else 2 mg | low end of range | monitor electrolytes if comorbid |
-| Pregnancy | paracetamol preferred | **avoid**, esp. 3rd trimester | caution; prefer loratadine if available | short-term OK | safe |
+| Patient group | Paracetamol (A1) | Ibuprofen (A2) | Loratadine (A3) | ORS (B2) |
+|---|---|---|---|---|
+| Adult ≥ 50 kg | 500 mg–1 g q4–6 h (max 4 g/d) | 200–400 mg q6–8 h | 10 mg once daily | 200–400 mL per loose stool |
+| Adolescent 12–17 yr | 15 mg/kg q4–6 h | 5–10 mg/kg q6–8 h | 10 mg once daily | 100–200 mL per loose stool |
+| Child < 12 yr | weight-based → **refer** | **refer** | **refer** | weight-based → **refer** |
+| Elderly ≥ 65 yr | max 3 g/d if frail | lowest dose; renal/GI caution | 10 mg daily; hepatic caution | monitor electrolytes |
+| Pregnancy | preferred analgesic | avoid (esp. 3rd trimester) | consult clinician | generally safe if mild dehydration |
 
 **"Refer" = kiosk cannot safely dispense; LaneYa must recommend seeing a pharmacist or doctor.**
 
@@ -407,6 +416,6 @@ QR is issued only when every check passes.
 
 ## Version
 
-- `laneya-knowledge-base.md` · v2.0
-- Aligned with backend `Drug.ingredientsText`, `User.allergyKeywords`, and `safetyCheck.ts`.
-- Drugs listed: **Paracetamol, Ibuprofen, CPM, Antacid, ORS**.
+- `laneya-knowledge-base.md` · v3.0
+- Aligned with backend `Drug` slots A1–B5 (10 OTCs), `safetyCheck.ts`, and `PickupTicket` QR flow.
+- Drugs listed: **Paracetamol, Ibuprofen, Loratadine, Dextromethorphan, Throat lozenges, Antidiarrheal, ORS, Antacid, Tiger balm, Vitamin C**.
