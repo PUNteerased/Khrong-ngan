@@ -34,8 +34,7 @@ static void writeServoPulse(uint8_t channel, uint16_t pulseUs) {
 static void writeServoStop(uint8_t channel) {
 #if DISPENSER_HAS_PCA9685
   if (!pwmReady) return;
-  writeServoPulse(channel, SERVO_STOP_US);
-  delay(150);
+  // 360° continuous servo: stop = no PWM (not 1500μs — that spins idle)
   pwm.setPWM(channel, 0, 4096);
 #endif
 }
@@ -44,7 +43,7 @@ static void stopAllServos() {
 #if DISPENSER_HAS_PCA9685
   if (!pwmReady) return;
   for (uint8_t ch = 0; ch < DISPENSER_SLOT_COUNT; ch++) {
-    writeServoStop(ch);
+    pwm.setPWM(ch, 0, 4096);
   }
 #endif
 }
@@ -69,12 +68,7 @@ void dispenserSetup() {
 }
 
 void dispenserLoop() {
-  static unsigned long lastIdleStopMs = 0;
-  const unsigned long now = millis();
-  if (dispenseBusy || !pwmReady) return;
-  if (now - lastIdleStopMs < 2000) return;
-  lastIdleStopMs = now;
-  stopAllServos();
+  // ไม่ pulse ซ้ำตอน idle — MG90S 360° จะหมุนถ้าได้รับ 1500μs
 }
 
 bool dispenserDispenseSlot(uint8_t slotIndex) {

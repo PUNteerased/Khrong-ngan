@@ -14,8 +14,8 @@
 #define WIFI_SSID "hah"
 #define WIFI_PASSWORD "Araina555"
 
-#define KIOSK_LAT 17.0075
-#define KIOSK_LNG 99.8260
+#define KIOSK_LAT 17.0147929
+#define KIOSK_LNG 99.820863
 #define KIOSK_NAME "LaneYa Kiosk"
 
 #define BACKEND_HEARTBEAT_URL "https://khrong-ngan.onrender.com/api/kiosk/heartbeat"
@@ -32,8 +32,7 @@
 #define PCA9685_I2C_ADDR 0x40
 #define DISPENSER_SLOT_COUNT 10
 #define PCA9685_PWM_FREQ 50
-// MG996R 360° — ค่านี้ใช้กับ MG996R เท่านั้น
-// MG90S 360° มักไม่หยุดที่ 1500 (หมุน idle) → ใช้ MG996R ในตู้จริง หรือปรับ STOP ด้วย pulse 0 1480 0
+// MG90S/MG996R 360° — หมุนด้วย SERVO_SPIN_US; หยุด = ตัด PWM (writeServoStop) ไม่ใช่ 1500μs
 #define SERVO_STOP_US 1500
 #define SERVO_SPIN_US 2000
 #define SERVO_SPIN_US_REV 1200
@@ -78,7 +77,6 @@ bool camPeerReady = false;
 unsigned long lastCamRxMs = 0;
 unsigned long lastCamPingMs = 0;
 unsigned long lastScanMs = 0;
-unsigned long lastIdleStopMs = 0;
 
 struct {
   bool pending = false;
@@ -135,18 +133,16 @@ void writeServoPulse(uint8_t channel, uint16_t pulseUs) {
   Serial.printf("[dispenser] ch=%u pulse=%uus tick=%lu\n", channel, pulseUs, tick);
 }
 
-// ส่ง stop pulse แล้วปิด PWM — ลดอาการ servo ค้างเมื่อ PCA9685 ยังมีไฟ
+// MG90S/MG996R 360° — หยุด = ตัด PWM (ไม่ส่ง 1500μs เพราะ 1500 = หมุน idle)
 void writeServoStop(uint8_t channel) {
   if (!pwmReady) return;
-  writeServoPulse(channel, SERVO_STOP_US);
-  delay(150);
   pwm.setPWM(channel, 0, 4096);
 }
 
 void stopAllServos() {
   if (!pwmReady) return;
   for (uint8_t ch = 0; ch < DISPENSER_SLOT_COUNT; ch++) {
-    writeServoStop(ch);
+    pwm.setPWM(ch, 0, 4096);
   }
 }
 
@@ -652,11 +648,6 @@ void loop() {
   server.handleClient();
   handleSerialDiag();
   camLinkLoop();
-
-  if (!dispenseBusy && pwmReady && millis() - lastIdleStopMs >= 2000) {
-    stopAllServos();
-    lastIdleStopMs = millis();
-  }
 
   if (WiFi.status() != WL_CONNECTED &&
       millis() - lastWifiRetryMs >= 15000) {

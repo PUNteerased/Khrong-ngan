@@ -57,28 +57,28 @@ Use only for **preliminary** triage. Never present as a diagnosis.
 ### 2.1 Mild headache
 - **Typical:** bilateral, dull, no neurologic deficits, no recent head trauma.
 - **Possible condition:** tension-type headache, minor viral illness.
-- **Candidate drugs:** Paracetamol (first line), Ibuprofen (if no NSAID contraindication).
+- **Candidate drugs:** Paracetamol (A1, first line).
 - **Red flags:** worst headache of life, focal weakness, confusion, persistent vomiting, stiff neck, new-onset headache age > 50.
 
 ### 2.2 Common cold / mild URTI
 - **Typical:** sneezing, runny nose, sore throat, low-grade fever, mild cough.
 - **Possible condition:** viral URI, mild viral pharyngitis.
-- **Candidate drugs:** Paracetamol (fever/pain), Chlorpheniramine (runny nose/sneeze).
+- **Candidate drugs:** Paracetamol (A1, fever/pain), Chlorpheniramine (A3, runny nose), Andrographis (B3, sore throat adjunct).
 - **Red flags:** dyspnea, high persistent fever > 48 h, chest pain, hemoptysis, severe sore throat with drooling.
 
 ### 2.3 Allergic rhinitis / itch (mild)
 - **Typical:** sneezing, clear rhinorrhea, itchy nose/eyes, no systemic distress.
-- **Candidate drugs:** Loratadine 10 mg (slot A3, non-sedating antihistamine).
+- **Candidate drugs:** Chlorpheniramine (A3, slot in kiosk).
 - **Red flags:** wheeze/dyspnea, throat swelling, generalized urticaria with breathing symptoms → anaphylaxis protocol.
 
 ### 2.4 Mild diarrhea / gastroenteritis
 - **Typical:** loose stool, no blood, mild cramps, no high fever, tolerating fluids.
-- **Candidate drugs:** ORS for hydration (first line).
+- **Candidate drugs:** Activated charcoal capsules (A5) for non-bloody diarrhea; Simethicone (A2) for bloating.
 - **Red flags:** bloody stool, black tarry stool, severe dehydration (dizziness, no urine ≥ 8 h), high fever, severe abdominal pain, pregnancy.
 
 ### 2.5 Dyspepsia / heartburn (mild)
 - **Typical:** burning epigastric discomfort after meals, no alarm features.
-- **Candidate drugs:** Antacid (aluminum/magnesium hydroxide) — short term.
+- **Candidate drugs:** Simethicone (A2) — short term; Turmeric (B4) for dyspepsia adjunct.
 - **Red flags:** weight loss, dysphagia, GI bleeding, vomiting blood, anemia, night pain, age > 50 new-onset.
 
 ---
@@ -125,12 +125,16 @@ If all candidates fail → escalate (ask to consult a pharmacist/doctor).
 
 | Class / keyword | Drugs in this KB that match |
 |---|---|
-| `NSAID`, `nsaid`, `แก้อักเสบ` | Ibuprofen |
-| `paracetamol`, `acetaminophen`, `พาราเซตามอล` | Paracetamol |
-| `antihistamine`, `loratadine`, `ลอราทาดีน` | Loratadine (A3) |
-| `dextromethorphan`, `dxm`, `ยาแก้ไอ` | Dextromethorphan cough (A4) |
-| `antacid`, `aluminum hydroxide`, `magnesium hydroxide` | Antacid (B3) |
-| `ORS`, `oral rehydration`, `เกลือแร่` | ORS (B2) |
+| `NSAID`, `nsaid`, `แก้อักเสบ` | *(not in kiosk — off-kiosk only)* |
+| `paracetamol`, `acetaminophen`, `พาราเซตามอล`, `พารา` | Paracetamol (A1) |
+| `simethicone`, `ไซเมทิโคน`, `air-x` | Simethicone (A2) |
+| `chlorpheniramine`, `cpm`, `antihistamine`, `ยาแก้แพ้` | Chlorpheniramine (A3) |
+| `dimenhydrinate`, `เมารถ` | Dimenhydrinate (A4) |
+| `activated charcoal`, `ถ่าน`, `ผงถ่าน` | Activated Charcoal (A5) |
+| `cough`, `dextromethorphan`, `ยาแก้ไอ` | Cough syrup (B1) |
+| `decongestant`, `pseudoephedrine`, `ลดน้ำมูก` | Nasal decongestant (B2) |
+| `andrographis`, `ฟ้าทะลายโจร` | Andrographis (B3) |
+| `turmeric`, `curcuma`, `ขมิ้นชัน` | Turmeric (B4) |
 | `ascorbic acid`, `vitamin c`, `วิตามินซี` | Vitamin C (B5) |
 
 ---
@@ -179,175 +183,167 @@ Each monograph is chunkable as a single RAG document. Keep the `# Drug:` heading
 
 ---
 
-### # Drug: Ibuprofen 400 mg (ไอบูโพรเฟน 400 มก.)
+### # Drug: Simethicone (ยาไซเมทิโคน) — slot A2
 
 | Field | Value |
 |---|---|
-| **Common name (TH)** | ไอบูโพรเฟน 400 มก. |
-| **Common name (EN)** | Ibuprofen 400 mg |
-| **Active ingredient** | `ibuprofen` |
-| **Drug class** | NSAID (non-selective COX inhibitor) |
+| **Formal name (TH)** | ยาไซเมทิโคน |
+| **Common name (TH)** | แอร์-เอ็กซ์ |
+| **Generic (EN)** | Simethicone |
 | **Kiosk slot** | `A2` |
-| **Category** | ยาแก้ปวด / ลดการอักเสบ |
-
-**Indications**
-- Inflammatory pain (musculoskeletal strain, dysmenorrhea, dental pain).
-- Fever that is inadequately controlled by paracetamol (when NSAID not contraindicated).
-
-**Contraindications**
-- **NSAID allergy** (including aspirin-sensitive asthma) — absolute reject.
-- Active peptic ulcer, GI bleeding history.
-- Severe renal impairment (eGFR < 30).
-- Decompensated heart failure.
-- Pregnancy — avoid in 3rd trimester; caution at any trimester.
-- Children < 6 months.
-
-**Dosing (weight/age)**
-- **Adult:** 200–400 mg every 6–8 h PRN with food. Max 1,200 mg/day OTC (higher requires physician).
-- **Adolescent (12–17 yr):** 5–10 mg/kg every 6–8 h. Max 40 mg/kg/day.
-- **Child (6 months–11 yr):** 5–10 mg/kg every 6–8 h — **kiosk does not dispense**, refer to pharmacist.
-- **Elderly:** lowest effective dose, shortest duration; watch renal/GI risk.
-
-**Warnings (side-effects)**
-- GI: dyspepsia, ulceration, bleeding.
-- Renal: acute kidney injury, fluid retention.
-- Cardiovascular: increased MI/stroke risk with chronic use.
-- Asthma exacerbation in aspirin-sensitive patients.
-
-**Allergy / class keywords to match**
-`ibuprofen`, `brufen`, `nsaid`, `ไอบูโพรเฟน`, `แพ้ยาแก้อักเสบ`, `aspirin`
+| **Category** | ยาระบบทางเดินอาหาร |
+| **Indications** | Bloating, flatulence, abdominal distension |
+| **Contraindications** | Known hypersensitivity |
+| **Dosing** | Adult: per label after meals |
+| **Warnings** | If symptoms >2 weeks, refer |
+| **Allergy keywords** | `simethicone`, `ไซเมทิโคน`, `air-x` |
 
 ---
 
-### # Drug: Loratadine 10 mg (ลอราทาดีน 10 มก.) — slot A3
+### # Drug: Chlorpheniramine (ยาคลอร์เฟนิรามีน) — slot A3
 
 | Field | Value |
 |---|---|
+| **Formal name (TH)** | ยาคลอร์เฟนิรามีน |
+| **Common name (TH)** | แก้แพ้ แก้คัน |
+| **Generic (EN)** | Chlorpheniramine Maleate (CPM) |
 | **Kiosk slot** | `A3` |
 | **Category** | ยาแก้แพ้ |
-| **Active ingredient** | `loratadine` |
-| **Indications** | Allergic rhinitis, urticaria, mild itch |
-| **Contraindications** | Loratadine hypersensitivity; severe hepatic impairment |
-| **Dosing** | Adult ≥12 yr: 10 mg once daily |
-| **Warnings** | Less sedating than first-gen antihistamines; caution with hepatic disease |
-| **Allergy keywords** | `loratadine`, `ลอราทาดีน`, `antihistamine` |
+| **Indications** | Allergic rhinitis, urticaria, itch, runny nose |
+| **Contraindications** | Glaucoma, urinary retention, severe asthma attack |
+| **Dosing** | Adult: 4 mg q4–6h; max 24 mg/day |
+| **Warnings** | Drowsiness — do not drive |
+| **Allergy keywords** | `chlorpheniramine`, `cpm`, `antihistamine` |
 
 ---
 
-### # Drug: Dextromethorphan cough (ยาแก้ไอ) — slot A4
+### # Drug: Dimenhydrinate (ยาไดเมนไฮดริเนต) — slot A4
 
 | Field | Value |
 |---|---|
+| **Formal name (TH)** | ยาไดเมนไฮดริเนต |
+| **Common name (TH)** | เมารถ |
+| **Generic (EN)** | Dimenhydrinate |
 | **Kiosk slot** | `A4` |
-| **Category** | ยาแก้ไอ |
-| **Active ingredient** | `dextromethorphan` |
-| **Indications** | Non-productive (dry) cough in adults |
-| **Contraindications** | Age <6 yr; MAOI use; severe respiratory depression |
-| **Dosing** | Adult: per label, q6–8h PRN |
-| **Warnings** | Do not combine with other CNS depressants; avoid in productive cough needing expectoration |
-| **Allergy keywords** | `dextromethorphan`, `dxm` |
+| **Category** | ยาแก้เมารถ |
+| **Indications** | Motion sickness, nausea, vomiting |
+| **Contraindications** | Glaucoma, children <2 yr without clinician advice |
+| **Dosing** | Adult: 50 mg q4–6h before travel, per label |
+| **Warnings** | Sedation; avoid alcohol |
+| **Allergy keywords** | `dimenhydrinate`, `dramamine`, `เมารถ` |
 
 ---
 
-### # Drug: Throat lozenges (ยาอมแก้เจ็บคอ) — slot A5
+### # Drug: Activated Charcoal (ผงถ่านกัมมันต์) — slot A5
 
 | Field | Value |
 |---|---|
+| **Formal name (TH)** | ผงถ่านกัมมันต์ชนิดแคปซูล |
+| **Common name (TH)** | ผงถ่าน |
+| **Generic (EN)** | Activated Charcoal |
 | **Kiosk slot** | `A5` |
-| **Category** | ยาแก้ไอ / ลำคอ |
-| **Active ingredients** | `benzocaine`, `menthol`, `eucalyptus` |
-| **Indications** | Mild sore throat, throat irritation |
-| **Contraindications** | Age <6 yr; benzocaine allergy |
-| **Dosing** | Dissolve slowly q2–3h PRN |
-| **Warnings** | Choking hazard in young children; max daily lozenges per label |
-| **Allergy keywords** | `benzocaine`, `menthol`, `eucalyptus`, `ยาอม` |
-
----
-
-### # Drug: Kaolin/pectin antidiarrheal (ยาธาตุน้ำขาว) — slot B1
-
-| Field | Value |
-|---|---|
-| **Kiosk slot** | `B1` |
 | **Category** | ยาระบบทางเดินอาหาร |
-| **Active ingredients** | `bismuth`, `kaolin`, `pectin`, `attapulgite` |
-| **Indications** | Mild acute diarrhea (non-bloody) |
-| **Contraindications** | Bloody stool, high fever, severe dehydration, child <2 yr |
+| **Indications** | Non-bloody acute diarrhea, adsorption adjunct |
+| **Contraindications** | Bloody stool, high fever, ileus, altered consciousness |
 | **Dosing** | Per label after each loose stool |
-| **Warnings** | Stop after 2 days if no improvement; refer if red flags |
-| **Allergy keywords** | `bismuth`, `kaolin`, `pectin` |
+| **Warnings** | Max 2 days without improvement → refer |
+| **Allergy keywords** | `activated charcoal`, `charcoal`, `ถ่าน`, `ผงถ่าน` |
 
 ---
 
-### # Drug: ORS electrolyte (เกลือแร่ ORS) — slot B2
+### # Drug: Cough syrup (ยาแก้ไอขับเสมหะ) — slot B1
 
 | Field | Value |
 |---|---|
+| **Formal name (TH)** | ยาบรรเทาอาการไอขับเสมหะ |
+| **Common name (TH)** | แก้ไอ |
+| **Generic (EN)** | Cough Syrup / Antitussives |
+| **Kiosk slot** | `B1` |
+| **Category** | ยาแก้ไอ |
+| **Indications** | Dry or productive cough (per formulation) |
+| **Contraindications** | Age <6 yr; MAOI; severe respiratory depression |
+| **Dosing** | Adult: per label q6–8h |
+| **Warnings** | Check dextromethorphan vs guaifenesin on label |
+| **Allergy keywords** | `dextromethorphan`, `guaifenesin`, `cough`, `dxm` |
+
+---
+
+### # Drug: Nasal decongestant (ยาลดน้ำมูก) — slot B2
+
+| Field | Value |
+|---|---|
+| **Formal name (TH)** | ยาลดน้ำมูกและบรรเทาอาการคัดจมูก |
+| **Common name (TH)** | ลดน้ำมูก |
+| **Generic (EN)** | Nasal Decongestants |
 | **Kiosk slot** | `B2` |
-| **Category** | ยาระบบทางเดินอาหาร |
-| **Active ingredients** | `sodium`, `potassium`, `glucose`, `ors` |
-| **Indications** | Mild dehydration from diarrhea/vomiting |
-| **Contraindications** | Severe dehydration (IV needed), ileus, anuria |
-| **Dosing** | Dissolve per sachet label; sip frequently |
-| **Warnings** | Never over-concentrate; escalate if bloody stool or >48h |
-| **Allergy keywords** | `ors`, `electrolyte`, `เกลือแร่` |
+| **Category** | ยาแก้หวัด |
+| **Indications** | Nasal congestion, rhinorrhea |
+| **Contraindications** | Uncontrolled hypertension, MAOI |
+| **Dosing** | Per label; max 7 days continuous use |
+| **Warnings** | Rebound congestion if overused |
+| **Allergy keywords** | `pseudoephedrine`, `phenylephrine`, `decongestant` |
 
 ---
 
-### # Drug: Antacid (ยาลดกรด แก้ท้องอืด) — slot B3
+### # Drug: Andrographis (ฟ้าทะลายโจร) — slot B3
 
 | Field | Value |
 |---|---|
+| **Formal name (TH)** | สารสกัดฟ้าทะลายโจร |
+| **Common name (TH)** | ฟ้าทะลายโจร |
+| **Generic (EN)** | Andrographis paniculata |
 | **Kiosk slot** | `B3` |
-| **Category** | ยาระบบทางเดินอาหาร |
-| **Active ingredients** | `aluminium`, `magnesium`, `hydroxide`, `antacid` |
-| **Indications** | Mild dyspepsia, heartburn |
-| **Contraindications** | Severe renal impairment; GI obstruction |
-| **Dosing** | 1–2 tabs after meals and bedtime |
-| **Warnings** | Max 2 weeks without review; separate from tetracycline/iron by 2h |
-| **Allergy keywords** | `antacid`, `magnesium`, `aluminium`, `ยาลดกรด` |
+| **Category** | ยาสมุนไพร |
+| **Indications** | Common cold symptoms, sore throat adjunct |
+| **Contraindications** | Pregnancy — caution |
+| **Dosing** | Per label 2–3×/day |
+| **Warnings** | GI upset if overdose |
+| **Allergy keywords** | `andrographis`, `ฟ้าทะลายโจร` |
 
 ---
 
-### # Drug: Tiger balm / topical analgesic (บalm นวด) — slot B4
+### # Drug: Turmeric (ขมิ้นชัน) — slot B4
 
 | Field | Value |
 |---|---|
+| **Formal name (TH)** | ผงขมิ้นชันแคปซูล |
+| **Common name (TH)** | ขมิ้นชัน |
+| **Generic (EN)** | Curcuma longa (Turmeric) |
 | **Kiosk slot** | `B4` |
-| **Category** | ยาทาภายนอก |
-| **Active ingredients** | `menthol`, `camphor`, `methyl salicylate` |
-| **Indications** | Musculoskeletal aches, mild pain |
-| **Contraindications** | Open wounds, salicylate allergy, children <2 yr |
-| **Dosing** | Thin layer to affected area 2–3×/day |
-| **Warnings** | Avoid eyes/mucosa; wash hands after use; salicylate → NSAID cross-allergy |
-| **Allergy keywords** | `menthol`, `camphor`, `methyl salicylate`, `salicylate` |
+| **Category** | ยาสมุนไพร |
+| **Indications** | Dyspepsia, bloating, flatulence adjunct |
+| **Contraindications** | Gallstones — caution; anticoagulant use |
+| **Dosing** | 1–2 caps after meals |
+| **Warnings** | Drug interaction with warfarin |
+| **Allergy keywords** | `turmeric`, `curcuma`, `curcumin`, `ขมิ้นชัน` |
 
 ---
 
-### # Drug: Vitamin C 1000 mg (วิตามินซี) — slot B5
+### # Drug: Vitamin C (กรดแอสคอร์บิก) — slot B5
 
 | Field | Value |
 |---|---|
+| **Formal name (TH)** | กรดแอสคอร์บิก (วิตามินซี) |
+| **Common name (TH)** | วิตามินซี |
+| **Generic (EN)** | Ascorbic Acid (Vitamin C) |
 | **Kiosk slot** | `B5` |
 | **Category** | วิตามิน |
-| **Active ingredient** | `ascorbic acid`, `vitamin c` |
-| **Indications** | Vitamin C supplementation, immune support adjunct |
-| **Contraindications** | Known oxalate kidney stone history — caution |
+| **Indications** | Vitamin C supplementation |
+| **Contraindications** | Renal oxalate stones — caution |
 | **Dosing** | 1 tab daily with food |
-| **Warnings** | High doses may cause GI upset; not a substitute for medical care |
+| **Warnings** | Not a substitute for medical care |
 | **Allergy keywords** | `ascorbic`, `vitamin c`, `วิตามินซี` |
 
 ---
 
 ## 6. Weight / age dosing quick reference
 
-| Patient group | Paracetamol (A1) | Ibuprofen (A2) | Loratadine (A3) | ORS (B2) |
-|---|---|---|---|---|
-| Adult ≥ 50 kg | 500 mg–1 g q4–6 h (max 4 g/d) | 200–400 mg q6–8 h | 10 mg once daily | 200–400 mL per loose stool |
-| Adolescent 12–17 yr | 15 mg/kg q4–6 h | 5–10 mg/kg q6–8 h | 10 mg once daily | 100–200 mL per loose stool |
-| Child < 12 yr | weight-based → **refer** | **refer** | **refer** | weight-based → **refer** |
-| Elderly ≥ 65 yr | max 3 g/d if frail | lowest dose; renal/GI caution | 10 mg daily; hepatic caution | monitor electrolytes |
-| Pregnancy | preferred analgesic | avoid (esp. 3rd trimester) | consult clinician | generally safe if mild dehydration |
+| Patient group | Paracetamol (A1) | CPM (A3) | Simethicone (A2) |
+|---|---|---|---|
+| Adult ≥ 12 yr | 500 mg–1 g q4–6 h (max 4 g/d) | 4 mg q4–6 h (max 24 mg/d) | per label |
+| Child < 12 yr | weight-based → **refer** | **refer** | **refer** |
+| Elderly ≥ 65 yr | max 3 g/d if frail | lower dose; fall risk | per label |
+| Pregnancy | preferred analgesic | consult clinician | generally OK short-term |
 
 **"Refer" = kiosk cannot safely dispense; LaneYa must recommend seeing a pharmacist or doctor.**
 
@@ -418,4 +414,4 @@ QR is issued only when every check passes.
 
 - `laneya-knowledge-base.md` · v3.0
 - Aligned with backend `Drug` slots A1–B5 (10 OTCs), `safetyCheck.ts`, and `PickupTicket` QR flow.
-- Drugs listed: **Paracetamol, Ibuprofen, Loratadine, Dextromethorphan, Throat lozenges, Antidiarrheal, ORS, Antacid, Tiger balm, Vitamin C**.
+- Drugs listed: **Paracetamol, Simethicone, Chlorpheniramine, Dimenhydrinate, Activated Charcoal, Cough syrup, Nasal decongestant, Andrographis, Turmeric, Vitamin C** (A1–B5).
