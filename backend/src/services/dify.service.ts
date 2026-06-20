@@ -6,6 +6,13 @@ export type DifyChatResponse = {
   message_id?: string
 }
 
+export type DifyStreamChunk = {
+  event: string
+  answer?: string
+  conversationId?: string
+  message?: string
+}
+
 function pickDifyErrorMessage(err: unknown): string {
   if (!axios.isAxiosError(err)) {
     return err instanceof Error ? err.message : "เชื่อมต่อ AI ไม่สำเร็จ"
@@ -84,5 +91,98 @@ export async function sendDifyChatMessage(params: {
     }
   } catch (err) {
     throw new Error(pickDifyErrorMessage(err))
+  }
+}
+
+function getDifyConfig() {
+  const apiKey = process.env.DIFY_API_KEY?.trim()
+  const base = (process.env.DIFY_API_BASE || "https://api.dify.ai/v1").replace(
+    /\/$/,
+    ""
+  )
+  if (!apiKey) {
+    throw new Error(
+      "DIFY_API_KEY ไม่ได้ตั้งค่า — ใส่ใน backend/.env แล้วรีสตาร์ทเซิร์ฟเวอร์"
+    )
+  }
+  return { apiKey, url: `${base}/chat-messages` }
+}
+
+function parseSseBlocks(buffer: string): { blocks: string[]; rest: string } {
+  const parts = buffer.split("\n\n")
+  const rest = parts.pop() ?? ""
+  return { blocks: parts, rest }
+}
+
+function parseSseDataBlock(block: string): Record<string, unknown> | null {
+  const dataLine = block.split("\n").find((line) => line.startsWith("data:"))
+  if (!dataLine) return null
+  try {
+    return JSON.parse(dataLine.slice(5).trim()) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+/** Stream Dify Chat API — uses response_mode=streaming (no Dify UI change). */
+export async function* streamDifyChatMessage(params: {
+  query: string
+  user: string
+  conversationId?: string | null
+  inputs: Record<string, string>
+}): AsyncGenerator<DifyStreamChunk> {
+  const { apiKey, url } = getDifyConfig()
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      inputs: params.inputs,
+      query: params.query,
+      response_mode: "streaming",
+      conversation_id: params.conversationId || undefined,
+      user: params.user,
+    }),
+  })
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "")
+    throw new Error(text.trim() || `Dify HTTP ${response.status}`)
+  }
+  if (!response.body) {
+    throw new Error("Dify streaming response has no body")
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const parsed = parseSseBlocks(buffer)
+    buffer = parsed.rest
+
+    for (const block of parsed.blocks) {
+      const json = parseSseDataBlock(block)
+      if (!json) continue
+      const event = String(json.event ?? "")
+      if (event === "error") {
+        throw new Error(String(json.message ?? "Dify stream error"))
+      }
+      yield {
+        event,
+        answer: typeof json.answer === "string" ? json.answer : undefined,
+        conversationId:
+          typeof json.conversation_id === "string"
+            ? json.conversation_id
+            : undefined,
+        message: typeof json.message === "string" ? json.message : undefined,
+      }
+    }
   }
 }

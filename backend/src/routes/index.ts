@@ -105,6 +105,7 @@ router.post(
 )
 
 router.post("/api/chat", chatLimiter, authMiddleware, chatController.postChat)
+router.post("/api/chat/stream", chatLimiter, authMiddleware, chatController.postChatStream)
 router.get(
   "/api/chat/sessions",
   authMiddleware,
