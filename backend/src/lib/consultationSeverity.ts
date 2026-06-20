@@ -45,9 +45,17 @@ export function canIssueQrFromStructured(
     missingFieldsEmpty: boolean
     hasSafetyWarnings: boolean
     inferredSeverity: ConsultationSeverity
+    fallbackSlotId?: string | null
   }
-): { ok: boolean; reason?: string; riskLevel: DifyRiskLevel } {
+): { ok: boolean; reason?: string; riskLevel: DifyRiskLevel; slotId?: string } {
   const riskLevel = normalizeRiskLevel(structured)
+  const slotFromStructured = structured?.recommendation?.drug_slot_id
+    ?.toUpperCase()
+    .trim()
+  const slotId =
+    (slotFromStructured && slotFromStructured.length > 0
+      ? slotFromStructured
+      : opts.fallbackSlotId?.toUpperCase().trim()) || null
 
   if (!opts.missingFieldsEmpty) {
     return { ok: false, reason: "profile_incomplete", riskLevel }
@@ -58,21 +66,29 @@ export function canIssueQrFromStructured(
   if (riskLevel === "ESCALATE" || riskLevel === "HIGH") {
     return { ok: false, reason: "risk_too_high", riskLevel }
   }
-  if (structured?.next_action !== "dispense_qr") {
-    return { ok: false, reason: "next_action_not_dispense", riskLevel }
-  }
-  if (structured?.safety_check?.safe_to_dispense !== true) {
-    return { ok: false, reason: "not_safe_to_dispense", riskLevel }
-  }
   if (structured?.safety_check?.allergy_conflict === true) {
     return { ok: false, reason: "allergy_conflict", riskLevel }
+  }
+  if (structured?.safety_check?.safe_to_dispense === false) {
+    return { ok: false, reason: "not_safe_to_dispense", riskLevel }
   }
   if (opts.hasSafetyWarnings) {
     return { ok: false, reason: "backend_allergy_warning", riskLevel }
   }
-  if (!structured?.recommendation?.drug_slot_id) {
+  if (!slotId) {
     return { ok: false, reason: "no_slot_id", riskLevel }
   }
 
-  return { ok: true, riskLevel }
+  const explicitDispense = structured?.next_action === "dispense_qr"
+  const safety = structured?.safety_check
+  const relaxedDispense =
+    riskLevel === "LOW" &&
+    safety?.allergy_conflict !== true &&
+    safety?.safe_to_dispense !== false
+
+  if (!explicitDispense && !relaxedDispense) {
+    return { ok: false, reason: "next_action_not_dispense", riskLevel }
+  }
+
+  return { ok: true, riskLevel, slotId }
 }

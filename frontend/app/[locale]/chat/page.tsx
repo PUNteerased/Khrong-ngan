@@ -376,12 +376,18 @@ function ChatPageInner() {
                     message.content ? (
                       <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                     ) : null
+                  ) : message.isStreaming && !message.content ? (
+                    <div className="flex gap-1.5 py-1">
+                      <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" />
+                      <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:0.1s]" />
+                      <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:0.2s]" />
+                    </div>
                   ) : message.content || message.isStreaming ? (
                     <>
                       {message.content ? (
                         <ChatMarkdown>{message.content}</ChatMarkdown>
                       ) : null}
-                      {message.isStreaming ? (
+                      {message.isStreaming && message.content ? (
                         <span className="inline-block w-2 h-4 ml-0.5 bg-primary/60 animate-pulse align-middle" />
                       ) : null}
                     </>

@@ -9,8 +9,10 @@ import {
   RISK_RUBRIC_INPUT,
   OFF_KIOSK_EXAMPLES_INPUT,
 } from "../lib/chatGuardrails.js"
-import { stripPatientFacingAnswer } from "../lib/stripPatientFacingAnswer.js"
-import { finalizeDifyAnswer } from "../lib/chatFinalize.js"
+import { stripPatientFacingAnswer, stripPatientFacingAnswerStreaming } from "../lib/stripPatientFacingAnswer.js"
+import { finalizeDifyAnswer, finalizeQrRequest } from "../lib/chatFinalize.js"
+import { getInventoryDrugsInput } from "../lib/inventoryCache.js"
+import { isQrRequestIntent } from "../lib/qrSlotExtract.js"
 import { initSse, writeSse, endSse } from "../lib/sse.js"
 import {
   MISSING_FIELD_PROMPTS,
@@ -73,28 +75,6 @@ function buildUserSnapshot(user: {
     currentMedications: user.currentMedications,
     capturedAt: new Date().toISOString(),
   }
-}
-
-async function buildInventoryDrugsInput(): Promise<string> {
-  const drugs = await prisma.drug.findMany({
-    where: { quantity: { gt: 0 } },
-    orderBy: { slotId: "asc" },
-    select: {
-      slotId: true,
-      name: true,
-      quantity: true,
-      ingredientsText: true,
-      category: true,
-    },
-  })
-  if (drugs.length === 0) return "ไม่มียาในตู้ขณะนี้"
-  return drugs
-    .map((d) => {
-      const ing = d.ingredientsText.trim() || "-"
-      const cat = d.category?.trim() || "-"
-      return `- ${d.slotId} | ${d.name} | stock: ${d.quantity} | category: ${cat} | ingredients: ${ing}`
-    })
-    .join("\n")
 }
 
 function buildAskMissingReply(missing: MissingFieldKey[]): string {
@@ -175,11 +155,16 @@ async function prepareChatContext(req: Request): Promise<
 
   const snapshot = buildUserSnapshot(user)
 
-  let session = sessionId
-    ? await prisma.chatSession.findFirst({
-        where: { id: sessionId, userId: user.id },
-      })
-    : null
+  const [existingSession, inventoryDrugsInput] = await Promise.all([
+    sessionId
+      ? prisma.chatSession.findFirst({
+          where: { id: sessionId, userId: user.id },
+        })
+      : Promise.resolve(null),
+    getInventoryDrugsInput(),
+  ])
+
+  let session = existingSession
 
   if (!session) {
     session = await prisma.chatSession.create({
@@ -211,7 +196,6 @@ async function prepareChatContext(req: Request): Promise<
     currentMedications: user.currentMedications,
   })
   const missingInstruction = buildMissingFieldsInstruction(missingFields)
-  const inventoryDrugsInput = await buildInventoryDrugsInput()
 
   const inputs: Record<string, string> = {
     allergy_context: allergyContext,
@@ -263,6 +247,18 @@ async function prepareChatContext(req: Request): Promise<
       imageUrl: trimmedImage || null,
     },
   })
+
+  if (isQrRequestIntent(trimmedMessage) && !trimmedImage) {
+    const qrFast = await finalizeQrRequest({
+      session,
+      user,
+      missingFields,
+      autoSavedFields: autoSaved as string[],
+    })
+    if (qrFast) {
+      return { kind: "early", body: qrFast as unknown as EarlyChatJson }
+    }
+  }
 
   const missingCritical = missingFields.filter((f) => CRITICAL_FIELDS.includes(f))
   const profileFullyEmpty =
@@ -318,8 +314,11 @@ async function prepareChatContext(req: Request): Promise<
   }
 }
 
-function visiblePatientSlice(rawAnswer: string): string {
-  return stripPatientFacingAnswer(sanitizeAssistantOutput(rawAnswer))
+function visiblePatientSlice(rawAnswer: string, streaming = false): string {
+  const stripped = streaming
+    ? stripPatientFacingAnswerStreaming(rawAnswer)
+    : stripPatientFacingAnswer(rawAnswer)
+  return sanitizeAssistantOutput(stripped)
 }
 
 export async function postChat(req: Request, res: Response) {
@@ -367,13 +366,32 @@ export async function postChat(req: Request, res: Response) {
 }
 
 export async function postChatStream(req: Request, res: Response) {
-  const prepared = await prepareChatContext(req)
-  if (prepared.kind === "error") {
-    res.status(prepared.status).json(prepared.body)
+  if (!req.auth) {
+    res.status(401).json({ error: "ต้องเข้าสู่ระบบเพื่อแชท" })
+    return
+  }
+
+  const { userMessage, imageUrl } = req.body as {
+    userMessage?: string
+    sessionId?: string | null
+    imageUrl?: string | null
+  }
+  const trimmedMessage = String(userMessage ?? "").trim()
+  const trimmedImage = imageUrl ? String(imageUrl).trim() : ""
+  if (!trimmedMessage && !trimmedImage) {
+    res.status(400).json({ error: "กรุณาส่งข้อความหรือแนบรูป" })
     return
   }
 
   initSse(res)
+  writeSse(res, "status", { phase: "thinking" })
+
+  const prepared = await prepareChatContext(req)
+  if (prepared.kind === "error") {
+    writeSse(res, "error", prepared.body)
+    endSse(res)
+    return
+  }
 
   if (prepared.kind === "early") {
     const answer = String(prepared.body.answer ?? "")
@@ -403,7 +421,7 @@ export async function postChatStream(req: Request, res: Response) {
       if (chunk.event !== "message" || !chunk.answer) continue
 
       rawAnswer += chunk.answer
-      const newVisible = visiblePatientSlice(rawAnswer)
+      const newVisible = visiblePatientSlice(rawAnswer, true)
       const delta = newVisible.slice(visibleAnswer.length)
       visibleAnswer = newVisible
       if (delta) writeSse(res, "delta", { text: delta })

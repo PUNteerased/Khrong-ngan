@@ -853,6 +853,7 @@ export async function sendChatMessage(
 export type ChatStreamHandlers = {
   onDelta: (text: string) => void
   onReplace?: (text: string) => void
+  onStatus?: (phase: string) => void
   onDone: (response: ChatResponse) => void
   onError?: (message: string) => void
 }
@@ -932,6 +933,8 @@ export async function sendChatMessageStream(
       const payload = data as Record<string, unknown>
       if (event === "delta" && typeof payload.text === "string") {
         handlers.onDelta(payload.text)
+      } else if (event === "status" && typeof payload.phase === "string") {
+        handlers.onStatus?.(payload.phase)
       } else if (event === "replace" && typeof payload.text === "string") {
         handlers.onReplace?.(payload.text)
       } else if (event === "done") {

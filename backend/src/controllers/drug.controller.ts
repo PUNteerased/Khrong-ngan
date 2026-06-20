@@ -1,6 +1,7 @@
 import type { Request, Response } from "express"
 import type { Prisma } from "@prisma/client"
 import { prisma } from "../lib/prisma.js"
+import { invalidateInventoryCache } from "../lib/inventoryCache.js"
 import { checkDrugSafety, parseAllergyKeywords } from "../lib/safetyCheck.js"
 
 function serializeDrug(d: {
@@ -154,6 +155,7 @@ export async function createDrug(req: Request, res: Response) {
         priceCents: price,
       },
     })
+    invalidateInventoryCache()
     res.status(201).json(serializeDrug(drug))
   } catch {
     res.status(400).json({ error: "สร้างไม่สำเร็จ (slot ซ้ำ?)" })
@@ -226,6 +228,7 @@ export async function patchDrug(req: Request, res: Response) {
       where: { id: String(req.params.id) },
       data: data as Parameters<typeof prisma.drug.update>[0]["data"],
     })
+    invalidateInventoryCache()
     res.json(serializeDrug(drug))
   } catch {
     res.status(404).json({ error: "ไม่พบยา" })
@@ -253,12 +256,14 @@ export async function restockDrug(req: Request, res: Response) {
     where: { id },
     data: { quantity: Math.max(0, next) },
   })
+  invalidateInventoryCache()
   res.json(serializeDrug(updated))
 }
 
 export async function deleteDrug(req: Request, res: Response) {
   try {
     await prisma.drug.delete({ where: { id: String(req.params.id) } })
+    invalidateInventoryCache()
     res.status(204).send()
   } catch {
     res.status(404).json({ error: "ไม่พบยา" })

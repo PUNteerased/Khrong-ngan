@@ -1,4 +1,4 @@
-import type { User } from "@prisma/client"
+import type { User, ChatSession } from "@prisma/client"
 import { ConsultationSeverity } from "@prisma/client"
 import { prisma } from "./prisma.js"
 import {
@@ -8,7 +8,11 @@ import {
 } from "./consultationSeverity.js"
 import { sanitizeAssistantOutput } from "./chatGuardrails.js"
 import { extractStructuredJsonBlock, normalizeRiskLevel } from "./difyStructured.js"
-import { stripPatientFacingAnswer } from "./stripPatientFacingAnswer.js"
+import {
+  stripPatientFacingAnswer,
+  stripQrHoldPhrases,
+} from "./stripPatientFacingAnswer.js"
+import { extractSlotFromText } from "./qrSlotExtract.js"
 import { isValidSlotId } from "./slotMapping.js"
 import { issuePickupTicket } from "../services/pickupTicket.service.js"
 import {
@@ -65,6 +69,106 @@ export type ChatFinalizeResult = {
   }
 }
 
+async function issueQrForSlot(params: {
+  sessionId: string
+  messageId: string
+  slotKey: string
+  quantity: number
+  riskLevel: string
+  userAllergyKeywords: string[]
+}): Promise<Awaited<ReturnType<typeof issuePickupTicket>> | null> {
+  if (!isValidSlotId(params.slotKey)) return null
+  const drug = await prisma.drug.findFirst({
+    where: { slotId: params.slotKey, quantity: { gt: 0 } },
+  })
+  if (!drug) return null
+  const drugSafety = checkDrugSafety({
+    userAllergyKeywords: params.userAllergyKeywords,
+    drugIngredientsText: drug.ingredientsText,
+  })
+  if (!drugSafety.isSafe) return null
+  try {
+    return await issuePickupTicket({
+      sessionId: params.sessionId,
+      messageId: params.messageId,
+      drugId: drug.id,
+      slotId: params.slotKey,
+      quantity: params.quantity,
+      riskLevel: params.riskLevel as "LOW" | "MEDIUM" | "HIGH" | "ESCALATE",
+    })
+  } catch (e) {
+    console.warn("issuePickupTicket failed:", e)
+    return null
+  }
+}
+
+/** Fast-path: user asks for QR and session already has a recommended drug. */
+export async function finalizeQrRequest(params: {
+  session: ChatSession
+  user: User
+  missingFields: MissingFieldKey[]
+  autoSavedFields: string[]
+}): Promise<ChatFinalizeResult | null> {
+  const { session, user, missingFields, autoSavedFields } = params
+  if (missingFields.length > 0 || !session.recommendedDrugId) return null
+
+  const drug = await prisma.drug.findFirst({
+    where: { id: session.recommendedDrugId, quantity: { gt: 0 } },
+  })
+  if (!drug) return null
+
+  const userAllergyKeywords = parseAllergyKeywords({
+    noAllergies: user.noAllergies,
+    allergyKeywords: user.allergyKeywords,
+    allergiesText: user.allergiesText,
+  })
+  const drugSafety = checkDrugSafety({
+    userAllergyKeywords,
+    drugIngredientsText: drug.ingredientsText,
+  })
+  if (!drugSafety.isSafe) return null
+
+  const answer =
+    `ได้เลยครับ/ค่ะ 🙏 นี่คือ QR สำหรับรับ **${drug.name} (ช่อง ${drug.slotId})** ที่ตู้จ่ายยานะครับ/ค่ะ\n\n` +
+    `ถือ QR บนหน้าจอให้กล้องที่ตู้เพื่อรับยาได้เลยครับ/ค่ะ 📱`
+
+  const assistantMessage = await prisma.chatMessage.create({
+    data: { sessionId: session.id, role: "assistant", content: answer },
+  })
+
+  const qrTicket = await issueQrForSlot({
+    sessionId: session.id,
+    messageId: assistantMessage.id,
+    slotKey: drug.slotId.toUpperCase(),
+    quantity: 1,
+    riskLevel: "LOW",
+    userAllergyKeywords,
+  })
+
+  if (!qrTicket) return null
+
+  return {
+    answer,
+    sessionId: session.id,
+    conversationId: session.difyConversationId,
+    riskLevel: "LOW",
+    qrTicket,
+    informationalAlternatives: [],
+    safetyCheck: {
+      mentionedDrugIds: [drug.id],
+      warnings: [],
+      firstUnsafeDrugId: null,
+      qrGate: "approved",
+    },
+    profile: {
+      missingFields,
+      missingCritical: [] as MissingFieldKey[],
+      askedInChat: false,
+      autoSavedFields,
+    },
+  }
+}
+
 export async function finalizeDifyAnswer(params: {
   rawDifyAnswer: string
   difyConversationId: string | null
@@ -77,14 +181,16 @@ export async function finalizeDifyAnswer(params: {
   const { rawDifyAnswer, session, user, missingFields, autoSavedFields, summarySlice } =
     params
 
-  const patientAnswer = sanitizeAssistantOutput(
-    stripPatientFacingAnswer(rawDifyAnswer)
-  )
   const structured = extractStructuredJsonBlock(rawDifyAnswer)
   const riskLevel = normalizeRiskLevel(structured)
+  const fallbackSlot = extractSlotFromText(rawDifyAnswer)
+
+  let patientAnswer = sanitizeAssistantOutput(
+    stripPatientFacingAnswer(rawDifyAnswer)
+  )
 
   const allDrugs = await prisma.drug.findMany({
-    select: { id: true, name: true, ingredientsText: true },
+    select: { id: true, name: true, ingredientsText: true, slotId: true },
   })
   const userAllergyKeywords = parseAllergyKeywords({
     noAllergies: user.noAllergies,
@@ -110,8 +216,6 @@ export async function finalizeDifyAnswer(params: {
     }
   }
 
-  const safetyBanner = buildSafetyBanner(safetyWarnings)
-  const finalAnswer = safetyBanner + patientAnswer
   const severityInput =
     safetyWarnings.length > 0
       ? `${patientAnswer}\nแจ้งเตือนแพ้ยา: ${safetyWarnings
@@ -128,44 +232,41 @@ export async function finalizeDifyAnswer(params: {
     missingFieldsEmpty: missingFields.length === 0,
     hasSafetyWarnings: safetyWarnings.length > 0,
     inferredSeverity: finalSeverity,
+    fallbackSlotId: fallbackSlot,
   })
 
   const assistantMessage = await prisma.chatMessage.create({
     data: {
       sessionId: session.id,
       role: "assistant",
-      content: finalAnswer,
+      content: patientAnswer,
     },
   })
 
   let qrTicket: Awaited<ReturnType<typeof issuePickupTicket>> | null = null
-  if (qrGate.ok && structured?.recommendation?.drug_slot_id) {
-    const slotKey = structured.recommendation.drug_slot_id.toUpperCase()
-    if (isValidSlotId(slotKey)) {
-      const drug = await prisma.drug.findFirst({
-        where: { slotId: slotKey, quantity: { gt: 0 } },
-      })
-      if (drug) {
-        const drugSafety = checkDrugSafety({
-          userAllergyKeywords,
-          drugIngredientsText: drug.ingredientsText,
-        })
-        if (drugSafety.isSafe) {
-          try {
-            qrTicket = await issuePickupTicket({
-              sessionId: session.id,
-              messageId: assistantMessage.id,
-              drugId: drug.id,
-              slotId: slotKey,
-              quantity: structured.recommendation.quantity ?? 1,
-              riskLevel: qrGate.riskLevel,
-            })
-          } catch (e) {
-            console.warn("issuePickupTicket failed:", e)
-          }
-        }
-      }
-    }
+  if (qrGate.ok && qrGate.slotId) {
+    qrTicket = await issueQrForSlot({
+      sessionId: session.id,
+      messageId: assistantMessage.id,
+      slotKey: qrGate.slotId,
+      quantity: structured?.recommendation?.quantity ?? 1,
+      riskLevel: qrGate.riskLevel,
+      userAllergyKeywords,
+    })
+  }
+
+  if (!qrTicket) {
+    patientAnswer = stripQrHoldPhrases(patientAnswer)
+  }
+
+  const safetyBanner = buildSafetyBanner(safetyWarnings)
+  const finalAnswer = safetyBanner + patientAnswer
+
+  if (assistantMessage.content !== finalAnswer) {
+    await prisma.chatMessage.update({
+      where: { id: assistantMessage.id },
+      data: { content: finalAnswer },
+    })
   }
 
   const conversationId =
