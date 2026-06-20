@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useEffect, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import {
   AlertTriangle,
@@ -85,11 +85,6 @@ function ChatPageInner() {
   const t = useTranslations("Chat")
   const searchParams = useSearchParams()
   const sessionIdFromUrl = searchParams.get("sessionId")
-
-  const quickReplies = useMemo(
-    () => [t("quick1"), t("quick2"), t("quick3"), t("quick4"), t("quick5"), t("quick6")],
-    [t]
-  )
 
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState("")
@@ -416,22 +411,6 @@ function ChatPageInner() {
             ))}
 
             <div ref={messagesEndRef} />
-          </div>
-
-          <div className="px-3 pb-2 sm:px-4">
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-              {quickReplies.map((reply) => (
-                <Button
-                  key={reply}
-                  variant="outline"
-                  size="sm"
-                  className="flex-shrink-0 rounded-full"
-                  onClick={() => handleSendMessage(reply)}
-                >
-                  {reply}
-                </Button>
-              ))}
-            </div>
           </div>
 
           <div

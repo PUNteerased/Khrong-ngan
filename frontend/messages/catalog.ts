@@ -134,12 +134,6 @@ export const thMessages = {
     cookiesLink: "จัดการคุกกี้",
   },
   Chat: {
-    quick1: "ปวดหัว",
-    quick2: "เจ็บคอ",
-    quick3: "มีไข้",
-    quick4: "ท้องเสีย",
-    quick5: "น้ำมูกไหล",
-    quick6: "ผื่นคัน",
     greeting:
       "สวัสดีครับ ผมคือ LaneYa AI ช่วยประเมินอาการเบื้องต้นได้ครับ วันนี้มีอาการอย่างไรบ้างครับ?",
     loginRequired: "กรุณาเข้าสู่ระบบก่อนแชท",
@@ -818,12 +812,6 @@ export const enMessages = {
     cookiesLink: "Cookie preferences",
   },
   Chat: {
-    quick1: "Headache",
-    quick2: "Sore throat",
-    quick3: "Fever",
-    quick4: "Diarrhoea",
-    quick5: "Runny nose",
-    quick6: "Itchy rash",
     greeting:
       "Hi — I’m LaneYa AI. I can help with a quick first assessment. What symptoms do you have today?",
     loginRequired: "Please sign in before chatting.",
