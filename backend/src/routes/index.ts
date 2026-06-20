@@ -15,6 +15,7 @@ import * as healthTipsController from "../controllers/healthTips.controller.js"
 import * as i18nController from "../controllers/i18n.controller.js"
 import * as contactController from "../controllers/contact.controller.js"
 import * as kioskController from "../controllers/kiosk.controller.js"
+import * as adminKioskController from "../controllers/adminKiosk.controller.js"
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth.js"
 import { adminAuthMiddleware, adminOrKeyMiddleware } from "../middleware/adminAuth.js"
 
@@ -170,4 +171,14 @@ router.patch(
   "/api/admin/issue-reports/:id",
   adminAuthMiddleware,
   contactController.updateIssueReportStatus
+)
+router.post(
+  "/api/admin/kiosk/servo-test",
+  adminAuthMiddleware,
+  adminKioskController.postAdminServoTest
+)
+router.get(
+  "/api/admin/kiosk/servo-test/status",
+  adminAuthMiddleware,
+  adminKioskController.getAdminServoTestStatus
 )

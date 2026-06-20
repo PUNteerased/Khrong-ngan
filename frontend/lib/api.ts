@@ -426,6 +426,46 @@ export async function fetchAdminHealth() {
   })
 }
 
+export type KioskCommandStatus =
+  | "pending"
+  | "delivered"
+  | "acked"
+  | "failed"
+  | "expired"
+
+export type AdminKioskCommand = {
+  id: string
+  action: "dispense"
+  slot: number
+  status: KioskCommandStatus
+  createdAt: string
+  deliveredAt: string | null
+  ackAt: string | null
+  result: boolean | null
+  error: string | null
+}
+
+export type AdminServoTestStatus = {
+  cabinetOnline: boolean
+  command: AdminKioskCommand | null
+}
+
+export async function postAdminServoTest(slot: number) {
+  return apiJson<{ command: AdminKioskCommand }>("/api/admin/kiosk/servo-test", {
+    method: "POST",
+    body: JSON.stringify({ slot }),
+    auth: false,
+    adminAuth: true,
+  })
+}
+
+export async function fetchAdminServoTestStatus() {
+  return apiJson<AdminServoTestStatus>("/api/admin/kiosk/servo-test/status", {
+    auth: false,
+    adminAuth: true,
+  })
+}
+
 export type AdminKnowledgeSyncRowError = {
   tab: string
   rowNumber: number

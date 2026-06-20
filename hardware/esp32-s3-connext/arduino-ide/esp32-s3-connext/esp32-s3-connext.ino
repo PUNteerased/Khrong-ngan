@@ -1,12 +1,12 @@
 /*
- * LaneYa — ESP32-S3 Kiosk (Arduino IDE)
+ * LaneYa — ESP32-S3 Connext (เทสเชื่อมต่ออย่างเดียว)
+ * WiFi + HTTP local + heartbeat HTTPS ไป backend
  *
- * โฟลเดอร์นี้มี 2 วิธีอัปโหลด:
- *   1. Arduino IDE — เปิดไฟล์ .ino นี้ (ง่าย, ไฟล์เดียว)
- *   2. PlatformIO — ใช้ src/*.cpp แยกโมดูล (โปรเจกต์จริง, เพิ่ม PCA9685 ภายหลัง)
- *
- * Tools → Board: ESP32S3 Dev Module
- *       Flash 16MB, PSRAM OPI, USB CDC On Boot Enabled
+ * Arduino IDE → Tools:
+ *   Board: ESP32S3 Dev Module
+ *   USB CDC On Boot: Enabled
+ *   Flash Size: 16MB (128Mb)
+ *   PSRAM: OPI PSRAM
  */
 
 // ============ CONFIG — แก้ก่อน upload ============
@@ -20,7 +20,7 @@
 #define BACKEND_HEARTBEAT_URL "https://khrong-ngan.onrender.com/api/kiosk/heartbeat"
 #define KIOSK_HEARTBEAT_SECRET "change-me-kiosk-secret"
 
-#define FIRMWARE_VERSION "1.0.0-kiosk"
+#define FIRMWARE_VERSION "1.0.0-connext"
 #define HEARTBEAT_INTERVAL_MS 60000
 // ================================================
 
@@ -71,6 +71,7 @@ bool connectWiFi(unsigned long timeoutMs = 20000) {
 
   Serial.printf("[wifi] FAILED — status %d (%s)\n",
                 WiFi.status(), wifiStatusText(WiFi.status()));
+  Serial.println("[wifi] ใช้ WiFi 2.4GHz — ฮอตสปอตเปิด Maximize Compatibility");
   return false;
 }
 
@@ -120,7 +121,7 @@ void sendHeartbeat() {
 void setup() {
   Serial.begin(115200);
   delay(500);
-  Serial.println("[boot] LaneYa ESP32-S3 Kiosk");
+  Serial.println("[boot] LaneYa ESP32-S3 Connext");
 
   connectWiFi();
 

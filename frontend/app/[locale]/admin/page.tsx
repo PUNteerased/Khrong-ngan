@@ -84,8 +84,11 @@ import {
   type AdminKnowledgeSyncStatus,
   fetchAdminIssueReports,
   updateAdminIssueReportStatus,
+  postAdminServoTest,
+  fetchAdminServoTestStatus,
   type IssueReportDto,
   type IssueReportStatus,
+  type AdminServoTestStatus,
   ApiError,
 } from "@/lib/api"
 import {
@@ -147,6 +150,10 @@ export default function AdminPage() {
     "ALL" | IssueReportStatus
   >("ALL")
   const [reportsLoading, setReportsLoading] = useState(false)
+  const [servoStatus, setServoStatus] = useState<AdminServoTestStatus | null>(
+    null
+  )
+  const [servoSubmitting, setServoSubmitting] = useState(false)
 
   useEffect(() => {
     setUnlocked(!!getStoredAdminToken())
@@ -259,6 +266,77 @@ export default function AdminPage() {
     if (!unlocked || mainTab !== "reports") return
     void loadIssueReports()
   }, [unlocked, mainTab, issueReportFilter, loadIssueReports])
+
+  const loadServoStatus = useCallback(async () => {
+    try {
+      const status = await fetchAdminServoTestStatus()
+      setServoStatus(status)
+      return status
+    } catch {
+      return null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!unlocked || mainTab !== "hardware") return
+    void loadServoStatus()
+  }, [unlocked, mainTab, loadServoStatus])
+
+  useEffect(() => {
+    if (!unlocked || mainTab !== "hardware") return
+    const cmd = servoStatus?.command
+    const inProgress =
+      cmd?.status === "pending" || cmd?.status === "delivered"
+    if (!inProgress) return
+
+    const interval = setInterval(() => {
+      void loadServoStatus()
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [unlocked, mainTab, servoStatus?.command, loadServoStatus])
+
+  const handleServoTest = async (slot: number) => {
+    if (health?.cabinet !== true) {
+      toast.error(t("servoOffline"))
+      return
+    }
+    setServoSubmitting(true)
+    try {
+      await postAdminServoTest(slot)
+      toast.success(t("servoQueued"))
+      await loadServoStatus()
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : t("servoFailed")
+      toast.error(msg)
+    } finally {
+      setServoSubmitting(false)
+    }
+  }
+
+  const servoCommand = servoStatus?.command
+  const servoBusy =
+    servoCommand?.status === "pending" || servoCommand?.status === "delivered"
+
+  const servoStatusMessage = () => {
+    if (!kioskOnline) return t("servoOffline")
+    if (!servoCommand) return t("servoIdle")
+    switch (servoCommand.status) {
+      case "pending":
+        return t("servoQueued")
+      case "delivered":
+        return t("servoWaiting")
+      case "acked":
+        return servoCommand.result
+          ? t("servoSuccess", { slot: servoCommand.slot })
+          : t("servoFailed")
+      case "failed":
+        return servoCommand.error || t("servoFailed")
+      case "expired":
+        return t("servoExpired")
+      default:
+        return t("servoIdle")
+    }
+  }
 
   const categoryLabel = (cat: string) => {
     const subLabelKeys: Record<string, Record<string, string>> = {
@@ -1095,19 +1173,39 @@ export default function AdminPage() {
                       </Badge>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <Button variant="outline" className="h-auto py-4" type="button">
-                        <div className="flex flex-col items-center gap-2">
-                          <Play className="h-5 w-5" />
-                          <span className="text-xs">{t("testMotor")}</span>
+                    <div className="space-y-3 rounded-lg border p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="font-medium text-sm">{t("servoTestTitle")}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {t("servoTestHint")}
+                          </p>
                         </div>
-                      </Button>
-                      <Button variant="outline" className="h-auto py-4" type="button">
-                        <div className="flex flex-col items-center gap-2">
-                          <RefreshCw className="h-5 w-5" />
-                          <span className="text-xs">{t("resetCabinet")}</span>
-                        </div>
-                      </Button>
+                        <Badge variant="outline" className="text-xs">
+                          {servoStatusMessage()}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        {Array.from({ length: 10 }, (_, slot) => (
+                          <Button
+                            key={slot}
+                            variant="outline"
+                            className="h-auto py-3"
+                            type="button"
+                            disabled={
+                              !kioskOnline || servoBusy || servoSubmitting
+                            }
+                            onClick={() => void handleServoTest(slot)}
+                          >
+                            <div className="flex flex-col items-center gap-1">
+                              <Play className="h-4 w-4" />
+                              <span className="text-xs">
+                                {t("servoSlot", { slot })}
+                              </span>
+                            </div>
+                          </Button>
+                        ))}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

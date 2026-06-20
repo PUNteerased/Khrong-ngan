@@ -3,6 +3,10 @@ import {
   getKioskStatus,
   recordKioskHeartbeat,
 } from "../services/kioskStatus.service.js"
+import {
+  ackCommand,
+  takePendingCommand,
+} from "../services/kioskCommand.service.js"
 
 export async function getPublicKioskStatus(_req: Request, res: Response) {
   const status = await getKioskStatus()
@@ -26,6 +30,19 @@ export async function postKioskHeartbeat(req: Request, res: Response) {
     firmwareVersion?: string
     firmware?: string
     rssi?: number
+    commandAck?: {
+      id?: string
+      ok?: boolean
+      error?: string
+    }
+  }
+
+  if (body.commandAck?.id) {
+    ackCommand(
+      String(body.commandAck.id),
+      body.commandAck.ok !== false,
+      body.commandAck.error
+    )
   }
 
   recordKioskHeartbeat({
@@ -36,6 +53,19 @@ export async function postKioskHeartbeat(req: Request, res: Response) {
     firmwareVersion: body.firmwareVersion || body.firmware,
     rssi: body.rssi,
   })
+
+  const pending = takePendingCommand()
+  if (pending) {
+    res.json({
+      ok: true,
+      command: {
+        id: pending.id,
+        action: pending.action,
+        slot: pending.slot,
+      },
+    })
+    return
+  }
 
   res.json({ ok: true })
 }
