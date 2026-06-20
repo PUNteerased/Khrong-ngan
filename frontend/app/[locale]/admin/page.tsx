@@ -1205,25 +1205,27 @@ export default function AdminPage() {
                             {t("servoTestHint")}
                           </p>
                         </div>
-                        <Badge variant="outline" className="text-xs">
-                          {servoStatusMessage()}
-                        </Badge>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          type="button"
-                          disabled={
-                            !kioskOnline || servoBusy || servoSubmitting
-                          }
-                          onClick={() => void handleServoTestAll()}
-                        >
-                          {servoSubmitting ? (
-                            <Spinner className="h-4 w-4 mr-1" />
-                          ) : (
-                            <RotateCw className="h-4 w-4 mr-1" />
-                          )}
-                          {t("servoTestAll")}
-                        </Button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge variant="outline" className="text-xs">
+                            {servoStatusMessage()}
+                          </Badge>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            type="button"
+                            disabled={
+                              !kioskOnline || servoBusy || servoSubmitting
+                            }
+                            onClick={() => void handleServoTestAll()}
+                          >
+                            {servoSubmitting ? (
+                              <Spinner className="h-4 w-4 mr-1" />
+                            ) : (
+                              <RotateCw className="h-4 w-4 mr-1" />
+                            )}
+                            {t("servoTestAll")}
+                          </Button>
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                         {Array.from({ length: 10 }, (_, slot) => (
