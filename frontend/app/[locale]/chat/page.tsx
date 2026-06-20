@@ -21,9 +21,9 @@ import { ChatMarkdown } from "@/components/chat-markdown"
 import {
   ChatQrCard,
   mapServerQrTicket,
-  RiskLevelBadge,
   type ChatQrTicketView,
 } from "@/components/chat-qr-card"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import {
@@ -31,7 +31,7 @@ import {
   fetchChatSessionMessages,
   fetchDrugs,
   fetchMe,
-  sendChatMessage,
+  sendChatMessageStream,
   type DrugDto,
   type UserProfile,
 } from "@/lib/api"
@@ -45,6 +45,7 @@ interface Message {
   riskLevel?: string
   sender: "user" | "ai"
   timestamp: Date
+  isStreaming?: boolean
 }
 
 function ProfileAvatar({
@@ -92,7 +93,6 @@ function ChatPageInner() {
 
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState("")
-  const [isTyping, setIsTyping] = useState(false)
   const [chatSessionId, setChatSessionId] = useState<string | null>(null)
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [userCtx, setUserCtx] = useState<UserProfile | null>(null)
@@ -101,6 +101,7 @@ function ChatPageInner() {
   const [activeFullscreenTicket, setActiveFullscreenTicket] =
     useState<ChatQrTicketView | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     if (sessionIdFromUrl) return
@@ -227,29 +228,57 @@ function ChatPageInner() {
       },
     ])
     setInputValue("")
-    setIsTyping(true)
+    const aiMessageId = String(Date.now() + 1)
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: aiMessageId,
+        content: "",
+        sender: "ai",
+        timestamp: new Date(),
+        isStreaming: true,
+      },
+    ])
 
     try {
-      const res = await sendChatMessage(content.trim(), chatSessionId, null)
-      setChatSessionId(res.sessionId)
-      const qrTicket = res.qrTicket ? mapServerQrTicket(res.qrTicket, drugById) : null
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: String(Date.now() + 1),
-          content: res.answer,
-          qrTicket,
-          riskLevel: res.riskLevel,
-          sender: "ai",
-          timestamp: new Date(),
+      await sendChatMessageStream(content.trim(), chatSessionId, null, {
+        onDelta: (text) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === aiMessageId ? { ...m, content: m.content + text } : m
+            )
+          )
         },
-      ])
+        onReplace: (text) => {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === aiMessageId ? { ...m, content: text } : m))
+          )
+        },
+        onDone: (res) => {
+          setChatSessionId(res.sessionId)
+          const qrTicket = res.qrTicket
+            ? mapServerQrTicket(res.qrTicket, drugById)
+            : null
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === aiMessageId
+                ? {
+                    ...m,
+                    content: res.answer,
+                    qrTicket,
+                    riskLevel: res.riskLevel,
+                    isStreaming: false,
+                  }
+                : m
+            )
+          )
+        },
+      })
     } catch (err) {
+      setMessages((prev) => prev.filter((m) => m.id !== aiMessageId))
       const msg = err instanceof ApiError ? err.message : t("sendFail")
       toast.error(msg)
       if (err instanceof ApiError && err.status === 401) router.push("/login")
-    } finally {
-      setIsTyping(false)
     }
   }
 
@@ -347,12 +376,16 @@ function ChatPageInner() {
                     message.content ? (
                       <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                     ) : null
-                  ) : (
+                  ) : message.content || message.isStreaming ? (
                     <>
-                      <ChatMarkdown>{message.content}</ChatMarkdown>
-                      {message.riskLevel ? <RiskLevelBadge level={message.riskLevel} /> : null}
+                      {message.content ? (
+                        <ChatMarkdown>{message.content}</ChatMarkdown>
+                      ) : null}
+                      {message.isStreaming ? (
+                        <span className="inline-block w-2 h-4 ml-0.5 bg-primary/60 animate-pulse align-middle" />
+                      ) : null}
                     </>
-                  )}
+                  ) : null}
                   {message.sender === "ai" && message.qrTicket ? (
                     <ChatQrCard
                       ticket={message.qrTicket}
@@ -375,18 +408,6 @@ function ChatPageInner() {
                 ) : null}
               </div>
             ))}
-
-            {isTyping ? (
-              <div className="flex justify-start">
-                <div className="bg-muted rounded-2xl rounded-bl-sm px-4 py-3">
-                  <div className="flex gap-1.5">
-                    <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" />
-                    <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:0.1s]" />
-                    <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:0.2s]" />
-                  </div>
-                </div>
-              </div>
-            ) : null}
 
             <div ref={messagesEndRef} />
           </div>
@@ -419,13 +440,13 @@ function ChatPageInner() {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  if (e.key === "Enter" && !e.shiftKey && !isMobile) {
                     e.preventDefault()
                     void handleSendMessage(inputValue)
                   }
                 }}
                 rows={1}
-                enterKeyHint="send"
+                enterKeyHint={isMobile ? "enter" : "send"}
                 className="flex-1 max-h-40 min-h-[2.5rem] resize-none py-2"
               />
               <Button

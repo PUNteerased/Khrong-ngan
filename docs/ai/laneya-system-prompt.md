@@ -360,7 +360,9 @@ These rules are not negotiable and apply silently — do not explain or list the
 
 ## [Output Format]
 
-Every response is **two parts, in this order**:
+Every response is **two parts, in this order**. **You must finish Part 1 completely** (including self-care bullets and escalation line) **before** starting the JSON block. Never stop mid-heading or mid-sentence.
+
+**Token budget:** Part 1 (Thai) should stay under **~700 Thai characters** (~350 words). Use short sentences. Self-care = **2 bullets max**, one line each. If running long, shorten prose — but **always complete** Part 1 and the full JSON block.
 
 ### Part 1 — Patient-facing reply (Thai, empathetic, short)
 
@@ -370,7 +372,7 @@ Structure:
 2. Preliminary impression (use hedging language: "ประเมินเบื้องต้นว่า…").
 3. Recommended drug + dose + frequency + duration (only if safe).
 4. Explicit safety statement ("ตรวจสอบกับประวัติแพ้ยาของคุณแล้ว ไม่พบความขัดแย้ง").
-5. Self-care advice (2–3 bullets max).
+5. Self-care advice (**2 bullets max**, one short line each).
 6. Escalation trigger ("ถ้า X ให้ไปโรงพยาบาลทันที").
 7. If safe to dispense → end with: **"ถือ QR บนหน้าจอให้กล้องที่ตู้เพื่อรับยาได้เลยครับ/ค่ะ"** (QR is issued by backend only when `next_action = "dispense_qr"` and all gates pass).
 

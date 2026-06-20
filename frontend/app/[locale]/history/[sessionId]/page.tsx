@@ -11,7 +11,6 @@ import { ChatMarkdown } from "@/components/chat-markdown"
 import {
   ChatQrCard,
   mapServerQrTicket,
-  RiskLevelBadge,
   type ChatQrTicketView,
 } from "@/components/chat-qr-card"
 import { fetchChatSessionMessages, fetchDrugs, ApiError, type DrugDto } from "@/lib/api"
@@ -151,7 +150,6 @@ export default function HistoryDetailPage() {
                 ) : (
                   <>
                     <ChatMarkdown>{m.content}</ChatMarkdown>
-                    {m.riskLevel ? <RiskLevelBadge level={m.riskLevel} /> : null}
                     {m.qrTicket ? <ChatQrCard ticket={m.qrTicket} /> : null}
                   </>
                 )}

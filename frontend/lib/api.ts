@@ -850,6 +850,102 @@ export async function sendChatMessage(
   })
 }
 
+export type ChatStreamHandlers = {
+  onDelta: (text: string) => void
+  onReplace?: (text: string) => void
+  onDone: (response: ChatResponse) => void
+  onError?: (message: string) => void
+}
+
+function parseSseChunk(buffer: string): {
+  events: { event: string; data: unknown }[]
+  rest: string
+} {
+  const parts = buffer.split("\n\n")
+  const rest = parts.pop() ?? ""
+  const events: { event: string; data: unknown }[] = []
+  for (const block of parts) {
+    const eventLine = block.split("\n").find((l) => l.startsWith("event:"))
+    const dataLine = block.split("\n").find((l) => l.startsWith("data:"))
+    if (!dataLine) continue
+    try {
+      events.push({
+        event: eventLine ? eventLine.slice(6).trim() : "message",
+        data: JSON.parse(dataLine.slice(5).trim()),
+      })
+    } catch {
+      // skip malformed block
+    }
+  }
+  return { events, rest }
+}
+
+/** Stream chat tokens via SSE (ChatGPT-style typing). */
+export async function sendChatMessageStream(
+  userMessage: string,
+  sessionId: string | null | undefined,
+  imageUrl: string | null | undefined,
+  handlers: ChatStreamHandlers
+): Promise<void> {
+  const headers = new Headers({ "Content-Type": "application/json" })
+  const token = getStoredToken()
+  if (token) headers.set("Authorization", `Bearer ${token}`)
+
+  const res = await fetch(`${getApiBase()}/api/chat/stream`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      userMessage,
+      sessionId: sessionId || undefined,
+      imageUrl: imageUrl || undefined,
+    }),
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    let message = text
+    try {
+      const j = JSON.parse(text) as { error?: string }
+      if (j.error) message = j.error
+    } catch {
+      // keep raw text
+    }
+    throw new ApiError(message || `HTTP ${res.status}`, res.status)
+  }
+
+  if (!res.body) {
+    throw new ApiError("Streaming response has no body", 502)
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const parsed = parseSseChunk(buffer)
+    buffer = parsed.rest
+
+    for (const { event, data } of parsed.events) {
+      const payload = data as Record<string, unknown>
+      if (event === "delta" && typeof payload.text === "string") {
+        handlers.onDelta(payload.text)
+      } else if (event === "replace" && typeof payload.text === "string") {
+        handlers.onReplace?.(payload.text)
+      } else if (event === "done") {
+        handlers.onDone(payload as ChatResponse)
+      } else if (event === "error") {
+        const msg =
+          typeof payload.error === "string" ? payload.error : "เชื่อมต่อ AI ไม่สำเร็จ"
+        handlers.onError?.(msg)
+        throw new ApiError(msg, 502)
+      }
+    }
+  }
+}
+
 // --- Knowledge graph ---
 export type KnowledgeDiseaseListItem = {
   id: string

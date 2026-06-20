@@ -8,7 +8,7 @@ Use this after deploying backend/frontend. QR tickets are issued by the **backen
 |---------|--------|
 | Model | MiniMax 2.5 (or your chosen chat model) |
 | Temperature | **0** |
-| Max tokens | **768–1024** |
+| Max tokens | **2048** (อย่าต่ำกว่า 1536 — ข้อความไทย+JSON ยาวเกิน 1024 จะถูกตัดกลางคัน) |
 | Top P | 1 (default) |
 
 ## Instructions (system prompt)
@@ -51,3 +51,15 @@ Tickets look like **`A1-0001-XYZABC`** (slot-qty-token). Issued only when backen
 
 1. Chat with complete profile → AI recommends in-kiosk drug → mobile shows QR `B3-0001-ABCDEF`
 2. Redeem: `POST /api/kiosk/redeem-ticket` with `{ "code": "B3-0001-ABCDEF" }` and `X-Kiosk-Secret`
+
+## Streaming (ไม่ต้องเปลี่ยน Dify UI)
+
+เว็บเรียก `POST /api/chat/stream` ซึ่ง backend ใช้ Dify `response_mode: "streaming"` โดยอัตโนมัติ — ข้อความจะไหลทีละส่วนแบบ ChatGPT โดยไม่ต้องตั้งค่าเพิ่มใน Dify Orchestrate
+
+## ข้อความ AI ถูกตัดกลางคัน (เช่น หยุดที่ `**คำแนะนำ`)
+
+สาเหตุหลัก: **Max tokens ใน Dify ต่ำเกินไป** — โมเดลเขียนข้อความไทยยาว + JSON ไม่ทัน
+
+1. Dify → App → **Model** → ตั้ง **Max tokens = 2048** (อย่างน้อย 1536)
+2. อัปเดต system prompt จาก [`laneya-system-prompt.md`](laneya-system-prompt.md) แล้ว **Publish** ใหม่
+3. ทดสอบแชทใหม่ — ข้อความเก่าใน log จะยังเป็นข้อความที่ถูกตัดอยู่แล้ว
