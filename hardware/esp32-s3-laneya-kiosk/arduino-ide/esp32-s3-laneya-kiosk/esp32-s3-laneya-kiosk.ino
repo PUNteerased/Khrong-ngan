@@ -22,16 +22,24 @@
 #define KIOSK_HEARTBEAT_SECRET "ilovevijai"
 
 #define FIRMWARE_VERSION "1.0.0-kiosk"
-#define HEARTBEAT_INTERVAL_MS 60000  // เทส Admin: ลอง 15000
+// รับคำสั่ง Admin เร็วขึ้น — ESP32 ดึง command ทุกครั้งที่ POST heartbeat นี้
+// production อาจใช้ 15000–30000 ถ้าไม่อยากยิง Render บ่อย
+#define HEARTBEAT_INTERVAL_MS 5000
 
 #define I2C_SDA_PIN 9
 #define I2C_SCL_PIN 10
 #define PCA9685_I2C_ADDR 0x40
 #define DISPENSER_SLOT_COUNT 10
 #define PCA9685_PWM_FREQ 50
+// MG996R 360° — ค่านี้ใช้กับ MG996R เท่านั้น
+// MG90S 360° มักไม่หยุดที่ 1500 (หมุน idle) → ใช้ MG996R ในตู้จริง หรือปรับ STOP ด้วย pulse 0 1480 0
 #define SERVO_STOP_US 1500
-#define SERVO_SPIN_US 1700
-#define SERVO_SPIN_MS 800
+#define SERVO_SPIN_US 2000
+#define SERVO_SPIN_US_REV 1200
+#define SERVO_SPIN_MS 3000
+
+// 1 = หมุนช่อง 0 ตอน boot | 0 = ปิด (แนะนำเมื่อใช้งานจริง)
+#define BOOT_SERVO_TEST 0
 // ================================================
 
 #include <WiFi.h>
@@ -101,6 +109,92 @@ void writeServoPulse(uint8_t channel, uint16_t pulseUs) {
   if (!pwmReady) return;
   const uint32_t tick = (pulseUs * 4096UL) / 20000UL;
   pwm.setPWM(channel, 0, tick);
+  Serial.printf("[dispenser] ch=%u pulse=%uus tick=%lu\n", channel, pulseUs, tick);
+}
+
+bool probeI2cDevice(uint8_t addr) {
+  Wire.beginTransmission(addr);
+  return Wire.endTransmission() == 0;
+}
+
+void scanI2cBus() {
+  Serial.println("[diag] I2C scan SDA=GPIO9 SCL=GPIO10:");
+  uint8_t found = 0;
+  for (uint8_t addr = 1; addr < 127; addr++) {
+    Wire.beginTransmission(addr);
+    if (Wire.endTransmission() == 0) {
+      Serial.printf("[diag]   device 0x%02X\n", addr);
+      found++;
+    }
+  }
+  if (found == 0) {
+    Serial.println("[diag]   NO devices — ตรวจ SDA/SCL/GND หรือ PCA9685 ไม่ได้ไฟ");
+  }
+}
+
+void spinChannel(uint8_t slotIndex, uint16_t pulseUs, uint16_t durationMs) {
+  Serial.printf("[diag] spin ch=%u pulse=%uus for %ums\n", slotIndex, pulseUs, durationMs);
+  writeServoPulse(slotIndex, pulseUs);
+  delay(durationMs);
+  writeServoPulse(slotIndex, SERVO_STOP_US);
+}
+
+void runBootServoTest() {
+  Serial.println("[diag] === BOOT SERVO TEST ch0 ===");
+  Serial.println("[diag] ต้องมี: ไฟ 5V ที่ V+ ขั้วนอต PCA9685 + GND ร่วม + servo ช่อง 0");
+  Serial.println("[diag] ถ้าไม่หมุน → มักเป็นไฟ servo หรือ OE ไม่ต่อ GND");
+  delay(1000);
+  spinChannel(0, SERVO_SPIN_US, 1500);
+  delay(500);
+  spinChannel(0, SERVO_SPIN_US_REV, 1500);
+  Serial.println("[diag] === BOOT TEST DONE ===");
+}
+
+void handleSerialDiag() {
+  if (!Serial.available()) return;
+  String line = Serial.readStringUntil('\n');
+  line.trim();
+  if (line.length() == 0) return;
+
+  if (line == "scan") {
+    scanI2cBus();
+    return;
+  }
+  if (line == "test" || line == "test 0") {
+    runBootServoTest();
+    return;
+  }
+  if (line.startsWith("test ")) {
+    const int ch = line.substring(5).toInt();
+    if (ch < 0 || ch > 9) {
+      Serial.println("[diag] usage: test 0..9");
+      return;
+    }
+    spinChannel(static_cast<uint8_t>(ch), SERVO_SPIN_US, 1500);
+    delay(500);
+    spinChannel(static_cast<uint8_t>(ch), SERVO_SPIN_US_REV, 1500);
+    return;
+  }
+  if (line.startsWith("pulse ")) {
+    // pulse 0 1700 2000  → ช่อง pulseUs ระยะ ms
+    const int sp1 = line.indexOf(' ');
+    const int sp2 = line.indexOf(' ', sp1 + 1);
+    const int sp3 = line.indexOf(' ', sp2 + 1);
+    if (sp3 < 0) {
+      Serial.println("[diag] usage: pulse <ch> <us> <ms>  e.g. pulse 0 1700 2000");
+      return;
+    }
+    const int ch = line.substring(sp1 + 1, sp2).toInt();
+    const int us = line.substring(sp2 + 1, sp3).toInt();
+    const int ms = line.substring(sp3 + 1).toInt();
+    if (ch < 0 || ch > 9 || us < 500 || us > 2500 || ms < 100 || ms > 10000) {
+      Serial.println("[diag] invalid args");
+      return;
+    }
+    spinChannel(static_cast<uint8_t>(ch), static_cast<uint16_t>(us), static_cast<uint16_t>(ms));
+    return;
+  }
+  Serial.println("[diag] commands: scan | test | test 0..9 | pulse <ch> <us> <ms>");
 }
 
 void dispenserSetup() {
@@ -108,17 +202,37 @@ void dispenserSetup() {
   Serial.printf("[dispenser] I2C SDA=GPIO%d SCL=GPIO%d slots=%d\n",
                 I2C_SDA_PIN, I2C_SCL_PIN, DISPENSER_SLOT_COUNT);
 
-  pwm.begin();
+  scanI2cBus();
+  if (!probeI2cDevice(PCA9685_I2C_ADDR)) {
+    Serial.printf("[dispenser] ERROR: PCA9685 0x%02X not found on I2C!\n", PCA9685_I2C_ADDR);
+    Serial.println("[dispenser] → ตรวจ SDA/SCL, ที่อยู่ A0-A5, ไฟ 3.3V VCC");
+    pwmReady = false;
+    return;
+  }
+
+  if (!pwm.begin()) {
+    Serial.println("[dispenser] ERROR: pwm.begin() failed");
+    pwmReady = false;
+    return;
+  }
   pwm.setOscillatorFrequency(27000000);
   pwm.setPWMFreq(PCA9685_PWM_FREQ);
+  pwmReady = true;
   for (uint8_t ch = 0; ch < DISPENSER_SLOT_COUNT; ch++) {
     writeServoPulse(ch, SERVO_STOP_US);
   }
-  pwmReady = true;
   Serial.println("[dispenser] PCA9685 ready (channels 0-9)");
+  Serial.println("[dispenser] ⚠ servo ต้องมีไฟ 5V ที่ขั้ว V+ ของ PCA9685 (ไม่ใช่แค่ 3.3V logic)");
+#if BOOT_SERVO_TEST
+  runBootServoTest();
+#endif
 }
 
 bool dispenserDispenseSlot(uint8_t slotIndex) {
+  if (!pwmReady) {
+    Serial.println("[dispenser] ERROR: PCA9685 not ready — ไม่หมุน servo");
+    return false;
+  }
   if (slotIndex >= DISPENSER_SLOT_COUNT) return false;
   Serial.printf("[web-cmd] spinning PCA9685 channel %u\n", slotIndex);
   Serial.printf("[dispenser] spin slot %u (MG90S 360)\n", slotIndex);
@@ -286,6 +400,7 @@ void setup() {
   });
   server.begin();
   Serial.println("[http] /health /status /dispense on port 80");
+  Serial.println("[diag] Serial commands: scan | test | test 0..9 | pulse <ch> <us> <ms>");
 
   sendHeartbeat();
   lastHeartbeatMs = millis();
@@ -293,6 +408,7 @@ void setup() {
 
 void loop() {
   server.handleClient();
+  handleSerialDiag();
 
   if (WiFi.status() != WL_CONNECTED &&
       millis() - lastWifiRetryMs >= 15000) {

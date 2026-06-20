@@ -13,19 +13,20 @@
 #define KIOSK_HEARTBEAT_SECRET "change-me-kiosk-secret"
 
 #define FIRMWARE_VERSION "1.0.0"
-#define HEARTBEAT_INTERVAL_MS 60000
+#define HEARTBEAT_INTERVAL_MS 5000  // 5000=รับคำสั่งเร็ว, 60000=ประหยัด traffic
 
-// --- I2C → PCA9685 (มอเตอร์ MG90S 360° ช่อง 0–9) ---
+// --- I2C → PCA9685 (มอเตอร์ MG996R 360° ช่อง 0–9) ---
 #define I2C_SDA_PIN 9
 #define I2C_SCL_PIN 10
 #define PCA9685_I2C_ADDR 0x40
 #define DISPENSER_SLOT_COUNT 10
 #define PCA9685_PWM_FREQ 50
 
-// MG90S 360° — pulse  μs (ปรับตามการทดสอบจริง)
+// MG996R 360° — pulse μs (ปรับตามการทดสอบจริง)
 #define SERVO_STOP_US 1500
-#define SERVO_SPIN_US 1700
-#define SERVO_SPIN_MS 800
+#define SERVO_SPIN_US 1800
+#define SERVO_SPIN_US_REV 1200
+#define SERVO_SPIN_MS 3000
 
 // --- IR Barrier — ตรวจยาร่วง ---
 #define IR_DROP_LEFT_PIN 4
