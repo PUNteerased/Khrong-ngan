@@ -27,9 +27,10 @@ export function jailbreakRefusalReply(): string {
   return REFUSAL_REPLY
 }
 
+import { stripPatientFacingAnswer } from "./stripPatientFacingAnswer.js"
+
 export function sanitizeAssistantOutput(text: string): string {
-  return text
-    .replace(/```json[\s\S]*?```/gi, "")
+  return stripPatientFacingAnswer(text)
     .replace(/\b(fuck|shit|damn)\b/gi, "—")
     .trim()
 }

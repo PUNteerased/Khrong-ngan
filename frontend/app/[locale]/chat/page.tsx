@@ -583,8 +583,14 @@ function ChatPageInner() {
                 placeholder={t("inputPh")}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault()
+                    void handleSendMessage(inputValue)
+                  }
+                }}
                 rows={1}
-                enterKeyHint="enter"
+                enterKeyHint="send"
                 className="flex-1 max-h-40 min-h-[2.5rem] resize-none py-2"
               />
               <Button

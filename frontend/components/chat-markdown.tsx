@@ -2,6 +2,7 @@
 
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import { stripPatientFacingAnswer } from "@/lib/stripPatientFacingAnswer"
 import { cn } from "@/lib/utils"
 
 type ChatMarkdownProps = {
@@ -17,6 +18,7 @@ export function ChatMarkdown({
   variant = "ai",
 }: ChatMarkdownProps) {
   const isUser = variant === "user"
+  const visibleText = variant === "ai" ? stripPatientFacingAnswer(children) : children
 
   return (
     <div
@@ -118,7 +120,7 @@ export function ChatMarkdown({
           ),
         }}
       >
-        {children}
+        {visibleText}
       </ReactMarkdown>
     </div>
   )

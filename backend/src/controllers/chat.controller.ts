@@ -12,6 +12,7 @@ import {
   OFF_KIOSK_EXAMPLES_INPUT,
 } from "../lib/chatGuardrails.js"
 import { extractStructuredJsonBlock, normalizeRiskLevel } from "../lib/difyStructured.js"
+import { stripPatientFacingAnswer } from "../lib/stripPatientFacingAnswer.js"
 import { isValidSlotId } from "../lib/slotMapping.js"
 import { issuePickupTicket } from "../services/pickupTicket.service.js"
 import {
@@ -44,42 +45,6 @@ const CRITICAL_FIELDS: MissingFieldKey[] = [
   "height",
   "allergies",
 ]
-
-/**
- * Dify may return a two-part answer:
- * 1) patient-facing Thai message
- * 2) structured JSON block (sometimes raw, sometimes in ```json fences)
- *
- * For chat UX we only display part (1). This helper strips trailing JSON-ish
- * blocks so users don't see machine payload in the bubble.
- */
-function extractPatientFacingAnswer(raw: string): string {
-  const text = String(raw ?? "").trim()
-  if (!text) return ""
-
-  // Remove fenced JSON blocks first.
-  const withoutFenced = text.replace(/```json[\s\S]*?```/gi, "").trim()
-  if (withoutFenced !== text) return withoutFenced
-
-  // If the whole answer is JSON, keep original text (for easier debugging).
-  if (text.startsWith("{") && text.endsWith("}")) return text
-
-  // Try to remove a trailing raw JSON object appended after human text.
-  const lines = text.split("\n")
-  for (let i = 0; i < lines.length; i++) {
-    if (!lines[i].trim().startsWith("{")) continue
-    const candidate = lines.slice(i).join("\n").trim()
-    try {
-      JSON.parse(candidate)
-      const visible = lines.slice(0, i).join("\n").trim()
-      return visible || text
-    } catch {
-      // keep scanning
-    }
-  }
-
-  return text
-}
 
 function buildSafetyBanner(warnings: SafetyWarning[]): string {
   if (warnings.length === 0) return ""
@@ -408,7 +373,7 @@ export async function postChat(req: Request, res: Response) {
     })
 
     const patientAnswer = sanitizeAssistantOutput(
-      extractPatientFacingAnswer(dify.answer)
+      stripPatientFacingAnswer(dify.answer)
     )
     const structured = extractStructuredJsonBlock(dify.answer)
     const riskLevel = normalizeRiskLevel(structured)
