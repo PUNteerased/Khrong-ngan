@@ -18,7 +18,7 @@
 #define KIOSK_NAME "LaneYa Kiosk"
 
 #define BACKEND_HEARTBEAT_URL "https://khrong-ngan.onrender.com/api/kiosk/heartbeat"
-#define KIOSK_HEARTBEAT_SECRET "change-me-kiosk-secret"
+#define KIOSK_HEARTBEAT_SECRET "ilovevijai"
 
 #define FIRMWARE_VERSION "1.0.0-kiosk"
 #define HEARTBEAT_INTERVAL_MS 60000
