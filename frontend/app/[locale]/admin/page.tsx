@@ -1354,7 +1354,15 @@ export default function AdminPage() {
                         </p>
                       </div>
                       <Button asChild variant="default" className="w-full sm:w-auto">
-                        <Link href="/admin/kiosk" target="_blank" rel="noopener noreferrer">
+                        <Link
+                          href="/admin/kiosk"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => {
+                            const token = getStoredAdminToken()
+                            if (token) setStoredAdminToken(token)
+                          }}
+                        >
                           {t("openKioskDisplay")}
                         </Link>
                       </Button>
