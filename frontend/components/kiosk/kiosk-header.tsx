@@ -4,12 +4,15 @@ import { AppLogo } from "@/components/app-logo"
 import { cn } from "@/lib/utils"
 import type { KioskLocale } from "@/lib/kiosk-api"
 import type { KioskMessages } from "@/lib/kiosk-i18n"
-import { Volume2, VolumeX } from "lucide-react"
+import { Link } from "@/i18n/navigation"
+import { ArrowLeft, Volume2, VolumeX } from "lucide-react"
 
 type Props = {
   locale: KioskLocale
   t: KioskMessages
   ttsOn: boolean
+  backHref?: string
+  backLabel?: string
   onLocaleChange: (locale: KioskLocale) => void
   onTtsToggle: () => void
 }
@@ -18,14 +21,25 @@ export function KioskHeader({
   locale,
   t,
   ttsOn,
+  backHref,
+  backLabel,
   onLocaleChange,
   onTtsToggle,
 }: Props) {
   return (
     <header className="flex min-h-[8vh] shrink-0 items-center justify-between bg-[#023c75] px-4 py-2 text-white safe-top">
-      <div className="flex items-center gap-3">
-        <AppLogo size={40} className="rounded-md" priority />
-        <span className="text-[clamp(1.25rem,3.5vw,1.75rem)] font-bold leading-tight">
+      <div className="flex min-w-0 items-center gap-3">
+        {backHref ? (
+          <Link
+            href={backHref}
+            className="flex shrink-0 items-center gap-1 rounded-lg border border-white/30 bg-white/10 px-2 py-2 text-sm font-medium hover:bg-white/20"
+          >
+            <ArrowLeft className="h-5 w-5" />
+            <span className="hidden sm:inline">{backLabel}</span>
+          </Link>
+        ) : null}
+        <AppLogo size={40} className="shrink-0 rounded-md" priority />
+        <span className="truncate text-[clamp(1.25rem,3.5vw,1.75rem)] font-bold leading-tight">
           {t.title}
         </span>
       </div>

@@ -4,9 +4,16 @@
 
 ## URL
 
+**แท็บเล็ตบนตู้ (bookmark):**
 ```
 https://<your-host>/kiosk?token=<KIOSK_DISPLAY_TOKEN>
 ```
+
+**ผู้ดูแล (login admin แล้ว):**
+```
+https://<your-host>/admin/kiosk
+```
+หรือจาก Admin → แท็บ **Kiosk** → **เปิดจอ Kiosk**
 
 ครั้งแรกใส่ `?token=` แล้ว cookie จะถูกตั้ง — bookmark URL หลัง redirect ได้
 

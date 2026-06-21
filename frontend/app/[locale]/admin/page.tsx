@@ -23,6 +23,7 @@ import {
   Cloud,
   BookOpen,
   Flag,
+  Monitor,
 } from "lucide-react"
 import {
   LineChart,
@@ -101,6 +102,7 @@ import { normalizeUsername, USERNAME_PATTERN } from "@/lib/username"
 import { AdminDrugDialog } from "@/components/admin-drug-dialog"
 import { AdminSessionSheet } from "@/components/admin-session-sheet"
 import { AdminUserSheet } from "@/components/admin-user-sheet"
+import { Link } from "@/i18n/navigation"
 
 function stockStatus(q: number, threshold: number): "normal" | "low" | "empty" {
   if (q === 0) return "empty"
@@ -737,7 +739,7 @@ export default function AdminPage() {
             </div>
 
             <Tabs value={mainTab} onValueChange={setMainTab}>
-              <TabsList className="grid h-auto w-full min-w-0 grid-cols-2 gap-1 sm:grid-cols-4 lg:grid-cols-7">
+              <TabsList className="grid h-auto w-full min-w-0 grid-cols-2 gap-1 sm:grid-cols-4 lg:grid-cols-8">
                 <TabsTrigger value="overview" className="text-xs sm:text-sm">
                   <LayoutDashboard className="h-4 w-4 mr-1 hidden sm:inline" />
                   {t("tabOverview")}
@@ -757,6 +759,10 @@ export default function AdminPage() {
                 <TabsTrigger value="hardware" className="text-xs sm:text-sm">
                   <Cpu className="h-4 w-4 mr-1 hidden sm:inline" />
                   {t("tabHardware")}
+                </TabsTrigger>
+                <TabsTrigger value="kiosk" className="text-xs sm:text-sm">
+                  <Monitor className="h-4 w-4 mr-1 hidden sm:inline" />
+                  {t("tabKiosk")}
                 </TabsTrigger>
                 <TabsTrigger value="knowledge" className="text-xs sm:text-sm">
                   <BookOpen className="h-4 w-4 mr-1 hidden sm:inline" />
@@ -1282,6 +1288,77 @@ export default function AdminPage() {
                           </Button>
                         ))}
                       </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="kiosk" className="space-y-4 mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Monitor className="h-5 w-5" />
+                      {t("kioskTabTitle")}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      {t("kioskTabDescription")}
+                    </p>
+
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                      <div className="flex items-center gap-3">
+                        {kioskOnline ? (
+                          <Wifi className="h-5 w-5 text-success" />
+                        ) : (
+                          <WifiOff className="h-5 w-5 text-destructive" />
+                        )}
+                        <div>
+                          <p className="font-medium text-foreground">{t("connTitle")}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {kioskOnline ? t("connOk") : t("connBad")}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge
+                        variant={kioskOnline ? "default" : "destructive"}
+                        className={kioskOnline ? "bg-success hover:bg-success/80" : ""}
+                      >
+                        {kioskOnline ? t("online") : t("offline")}
+                      </Badge>
+                    </div>
+
+                    <div className="rounded-lg border p-4 space-y-2">
+                      <p className="font-medium text-sm">{t("kioskS3UrlLabel")}</p>
+                      <p className="font-mono text-sm break-all text-muted-foreground">
+                        {process.env.NEXT_PUBLIC_KIOSK_S3_URL?.trim() ||
+                          t("kioskS3UrlUnset")}
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg border p-4 space-y-2">
+                      <p className="font-medium text-sm">{t("kioskFlowTitle")}</p>
+                      <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground">
+                        <li>{t("kioskFlowStep1")}</li>
+                        <li>{t("kioskFlowStep2")}</li>
+                        <li>{t("kioskFlowStep3")}</li>
+                        <li>{t("kioskFlowStep4")}</li>
+                      </ol>
+                    </div>
+
+                    <div className="rounded-lg border p-4 space-y-3">
+                      <div>
+                        <p className="font-medium text-sm">{t("openKioskDisplay")}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {t("openKioskDisplayHint")}
+                        </p>
+                      </div>
+                      <Button asChild variant="default" className="w-full sm:w-auto">
+                        <Link href="/admin/kiosk" target="_blank" rel="noopener noreferrer">
+                          {t("openKioskDisplay")}
+                        </Link>
+                      </Button>
+                      <p className="text-xs text-muted-foreground">{t("kioskTabletUrlHint")}</p>
                     </div>
                   </CardContent>
                 </Card>
