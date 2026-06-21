@@ -4,7 +4,13 @@
 
 ## URL
 
-**แท็บเล็ตบนตู้ (bookmark):**
+**แท็บเล็ตบนตู้ (ไม่มี PC — แนะนำ):**
+```
+http://<S3-IP>/kiosk
+```
+เช่น `http://10.207.223.130/kiosk` — หน้า UI ฝังใน firmware ESP32-S3 (HTTP เดียวกับ API ไม่มี mixed content)
+
+**แท็บเล็ต + PC ใน LAN (dev):**
 ```
 http://<PC-IP>:3000/th/kiosk?token=<KIOSK_DISPLAY_TOKEN>
 ```
@@ -49,6 +55,18 @@ KIOSK_DISPLAY_TOKEN=change-me-kiosk-display
 4. แท็บเล็ตแสดงยา + คำเตือน → ผู้ป่วยกด **ยืนยัน**
 5. S3 redeem + หมุนมอเตอร์จ่ายยา
 
+## Preview กล้องตอนสแกน
+
+เมื่อกดสแกน หน้า `/kiosk` จะแสดงภาพจาก ESP32-CAM (refresh ~2–4 ครั้ง/วิ):
+
+1. CAM ส่ง `IP:10.x.x.x` ไป S3 ผ่าน ESP-NOW
+2. S3 ส่ง `camPreviewUrl` ใน `GET /kiosk/session` ตอน phase `scanning`
+3. แท็บเล็ตโหลด `http://<CAM-IP>:81/jpg` โดยตรง
+
+ทด preview ขณะสแกน: เปิด `http://<CAM-IP>:81/jpg` ใน browser (ต้องกดสแกนบนคีออสก่อน)
+
+**ต้อง upload firmware ล่าสุดทั้ง S3 และ CAM**
+
 ## Troubleshooting — แสกนไม่ติด
 
 เช็คตามลำดับ:
@@ -66,6 +84,7 @@ KIOSK_DISPLAY_TOKEN=change-me-kiosk-display
 | `connected=false` / S3 offline | IP ผิด, WiFi คนละเครือข่าย, S3 ดับ |
 | `camOnline=false` | ESP-NOW ไม่จับคู่, MAC/channel ไม่ตรง |
 | Countdown แต่ไม่สแกน | CAM ไม่ได้รับ SCAN — ดู Serial CAM |
+| ไม่เห็นภาพกล้องบนจอ | CAM firmware เก่า / ไม่มี `:81/jpg` / ยังไม่ได้ IP: จาก ESP-NOW |
 | Error หลังสแกน | ตั๋วหมดอายุ / secret ไม่ตรง / backend cold start |
 
 ## Deploy checklist

@@ -473,11 +473,12 @@ export const thMessages = {
     servoTestAll: "หมุนทุกช่อง",
     openKioskDisplay: "เปิดจอคีออส",
     openKioskDisplayHint:
-      "จอแสดงผลสำหรับแท็บเล็ตบนตู้ — ต้อง WiFi เดียวกับ ESP32-S3",
+      "จอคีออสบน ESP32-S3 — แท็บเล็ตที่ตู้ bookmark URL นี้ (WiFi เดียวกับตู้)",
     kioskTabTitle: "จอคีออสบนตู้จ่ายยา",
     kioskTabDescription:
       "หน้าจอสำหรับแท็บเล็ต 11 นิ้วแนวตั้ง — สแกน QR ยืนยันตัวตน แล้วจ่ายยาจากตู้",
     kioskS3UrlLabel: "ESP32-S3 (LAN)",
+    kioskDisplayUrlLabel: "URL จอคีออส (แท็บเล็ต)",
     kioskS3UrlUnset: "ยังไม่ได้ตั้ง NEXT_PUBLIC_KIOSK_S3_URL",
     kioskFlowTitle: "ขั้นตอนการใช้งาน",
     kioskFlowStep1: "ผู้ป่วยคัดกรองและรับ QR บนมือถือ",
@@ -485,7 +486,7 @@ export const thMessages = {
     kioskFlowStep3: "ระบบแสดงยาและคำเตือน — ผู้ป่วยกดยืนยัน",
     kioskFlowStep4: "ตู้ redeem QR และหมุนมอเตอร์จ่ายยา",
     kioskTabletUrlHint:
-      "แท็บเล็ตติดตั้งถาวร: bookmark /kiosk?token=... (ตั้ง KIOSK_DISPLAY_TOKEN ใน env)",
+      "แท็บเล็ตที่ตู้: bookmark http://<S3-IP>/kiosk — ไม่ใช้ Vercel HTTPS",
     kioskAuthRequired: "ต้องเข้าสู่ระบบผู้ดูแลก่อน",
     kioskAuthHint: "เข้าสู่ระบบที่หน้า Admin แล้วเปิดจอคีออสอีกครั้ง",
     backToAdmin: "กลับ Admin",
@@ -1197,11 +1198,12 @@ export const enMessages = {
     servoTestAll: "Spin all channels",
     openKioskDisplay: "Open Kiosk display",
     openKioskDisplayHint:
-      "Tablet UI on the cabinet — device must share WiFi with ESP32-S3",
+      "Kiosk UI on ESP32-S3 — bookmark this URL on the cabinet tablet (same WiFi)",
     kioskTabTitle: "Cabinet Kiosk display",
     kioskTabDescription:
       "11\" portrait tablet UI — scan QR, verify identity, then dispense from the cabinet",
     kioskS3UrlLabel: "ESP32-S3 (LAN)",
+    kioskDisplayUrlLabel: "Kiosk display URL (tablet)",
     kioskS3UrlUnset: "NEXT_PUBLIC_KIOSK_S3_URL is not set",
     kioskFlowTitle: "How it works",
     kioskFlowStep1: "Patient completes screening and gets a QR on their phone",
@@ -1209,7 +1211,7 @@ export const enMessages = {
     kioskFlowStep3: "System shows drug info and warnings — patient confirms",
     kioskFlowStep4: "Cabinet redeems QR and spins the motor to dispense",
     kioskTabletUrlHint:
-      "Always-on tablet: bookmark /kiosk?token=... (set KIOSK_DISPLAY_TOKEN in env)",
+      "Cabinet tablet: bookmark http://<S3-IP>/kiosk — do not use Vercel HTTPS",
     kioskAuthRequired: "Admin login required",
     kioskAuthHint: "Sign in on the Admin page, then open Kiosk display again",
     backToAdmin: "Back to Admin",

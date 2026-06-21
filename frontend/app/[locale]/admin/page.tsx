@@ -102,7 +102,7 @@ import { normalizeUsername, USERNAME_PATTERN } from "@/lib/username"
 import { AdminDrugDialog } from "@/components/admin-drug-dialog"
 import { AdminSessionSheet } from "@/components/admin-session-sheet"
 import { AdminUserSheet } from "@/components/admin-user-sheet"
-import { Link } from "@/i18n/navigation"
+import { getEmbeddedKioskUrl } from "@/lib/kiosk-connectivity"
 
 function stockStatus(q: number, threshold: number): "normal" | "low" | "empty" {
   if (q === 0) return "empty"
@@ -622,6 +622,7 @@ export default function AdminPage() {
     : []
 
   const kioskOnline = health?.cabinet === true
+  const kioskDisplayUrl = getEmbeddedKioskUrl()
 
   if (!authReady) {
     return (
@@ -1337,6 +1338,13 @@ export default function AdminPage() {
                     </div>
 
                     <div className="rounded-lg border p-4 space-y-2">
+                      <p className="font-medium text-sm">{t("kioskDisplayUrlLabel")}</p>
+                      <p className="font-mono text-sm break-all text-muted-foreground">
+                        {kioskDisplayUrl}
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg border p-4 space-y-2">
                       <p className="font-medium text-sm">{t("kioskFlowTitle")}</p>
                       <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground">
                         <li>{t("kioskFlowStep1")}</li>
@@ -1354,17 +1362,13 @@ export default function AdminPage() {
                         </p>
                       </div>
                       <Button asChild variant="default" className="w-full sm:w-auto">
-                        <Link
-                          href="/admin/kiosk"
+                        <a
+                          href={kioskDisplayUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          onClick={() => {
-                            const token = getStoredAdminToken()
-                            if (token) setStoredAdminToken(token)
-                          }}
                         >
                           {t("openKioskDisplay")}
-                        </Link>
+                        </a>
                       </Button>
                       <p className="text-xs text-muted-foreground">{t("kioskTabletUrlHint")}</p>
                     </div>

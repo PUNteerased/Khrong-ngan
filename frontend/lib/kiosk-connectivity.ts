@@ -4,6 +4,11 @@ export function getKioskS3BaseUrl(): string {
   ).replace(/\/$/, "")
 }
 
+/** Embedded kiosk UI served by ESP32-S3 firmware (for tablet bookmark). */
+export function getEmbeddedKioskUrl(): string {
+  return `${getKioskS3BaseUrl()}/kiosk`
+}
+
 /** HTTPS page cannot fetch HTTP LAN ESP32 (mixed content). */
 export function isKioskMixedContentBlocked(): boolean {
   if (typeof window === "undefined") return false
