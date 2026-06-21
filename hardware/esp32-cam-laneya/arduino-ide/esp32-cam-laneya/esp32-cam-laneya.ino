@@ -155,6 +155,8 @@ static void sendCamIpToS3() {
   lastSentIp[sizeof(lastSentIp) - 1] = '\0';
 }
 
+static unsigned long lastPreviewLogMs = 0;
+
 static void clearPreviewJpeg() {
   portENTER_CRITICAL(&jpgMux);
   if (jpgBuf) {
@@ -168,7 +170,14 @@ static void clearPreviewJpeg() {
 static void capturePreviewJpeg() {
   if (!scanning) return;
   camera_fb_t* fb = esp_camera_fb_get();
-  if (!fb) return;
+  if (!fb) {
+    const unsigned long now = millis();
+    if (now - lastPreviewLogMs > 5000) {
+      lastPreviewLogMs = now;
+      Serial.println("[preview] camera fb_get failed");
+    }
+    return;
+  }
 
   uint8_t* out = nullptr;
   size_t outLen = 0;
@@ -177,6 +186,11 @@ static void capturePreviewJpeg() {
 
   if (!ok || !out || outLen == 0) {
     if (out) free(out);
+    const unsigned long now = millis();
+    if (now - lastPreviewLogMs > 5000) {
+      lastPreviewLogMs = now;
+      Serial.println("[preview] frame2jpg failed");
+    }
     return;
   }
 
@@ -185,16 +199,35 @@ static void capturePreviewJpeg() {
   jpgBuf = out;
   jpgLen = outLen;
   portEXIT_CRITICAL(&jpgMux);
+
+  const unsigned long now = millis();
+  if (now - lastPreviewLogMs > 3000) {
+    lastPreviewLogMs = now;
+    Serial.printf("[preview] captured %u bytes\n", static_cast<unsigned>(outLen));
+  }
 }
 
 static void handlePreviewJpg() {
   previewServer.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   previewServer.sendHeader("Access-Control-Allow-Origin", "*");
 
-  portENTER_CRITICAL(&jpgMux);
-  if (!scanning || !jpgBuf || jpgLen == 0) {
-    portEXIT_CRITICAL(&jpgMux);
+  if (!scanning) {
     previewServer.send(404, "text/plain", "no preview");
+    return;
+  }
+
+  portENTER_CRITICAL(&jpgMux);
+  const bool hasJpg = jpgBuf && jpgLen > 0;
+  portEXIT_CRITICAL(&jpgMux);
+
+  if (!hasJpg) {
+    capturePreviewJpeg();
+  }
+
+  portENTER_CRITICAL(&jpgMux);
+  if (!jpgBuf || jpgLen == 0) {
+    portEXIT_CRITICAL(&jpgMux);
+    previewServer.send(503, "text/plain", "capturing");
     return;
   }
   const uint8_t* data = jpgBuf;
@@ -295,6 +328,9 @@ static void startScan() {
   lastPreviewCaptureMs = 0;
   digitalWrite(FLASH_LED_PIN, HIGH);
   sendCamIpToS3();
+  capturePreviewJpeg();
+  delay(50);
+  capturePreviewJpeg();
   Serial.println("[scan] started (60s)");
 }
 
@@ -465,7 +501,7 @@ void loop() {
   }
 
   struct QRCodeData qrCodeData;
-  if (qrReader.receiveQrCode(&qrCodeData, 300)) {
+  if (qrReader.receiveQrCode(&qrCodeData, 120)) {
     if (qrCodeData.valid && !qrSentThisScan) {
       Serial.println("[qr] decoded");
       if (handleDecodedQr(reinterpret_cast<const char*>(qrCodeData.payload))) {

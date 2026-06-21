@@ -125,6 +125,15 @@ static bool postCloudJson(const char* url, const String& body) {
   return ok;
 }
 
+static unsigned long lastCamRelayWarnMs = 0;
+
+static void camRelayWarnf(const char* fmt, int a) {
+  const unsigned long now = millis();
+  if (now - lastCamRelayWarnMs < 4000) return;
+  lastCamRelayWarnMs = now;
+  Serial.printf(fmt, a);
+}
+
 static bool postCameraFrameRaw(const uint8_t* data, size_t len) {
   if (!data || len < 100) return false;
   if (!isWiFiConnected()) return false;
@@ -141,8 +150,35 @@ static bool postCameraFrameRaw(const uint8_t* data, size_t len) {
   http.addHeader("X-Kiosk-Secret", KIOSK_HEARTBEAT_SECRET);
 
   const int code = http.POST(const_cast<uint8_t*>(data), len);
+  if (code < 0) {
+    camRelayWarnf("[cam-relay] POST error %d\n", code);
+  } else if (code < 200 || code >= 300) {
+    camRelayWarnf("[cam-relay] POST HTTP %d\n", code);
+  }
   http.end();
   return code >= 200 && code < 300;
+}
+
+static size_t readCamJpegBody(HTTPClient& camHttp, WiFiClient* stream, uint8_t* buf, size_t capacity) {
+  const int contentLen = camHttp.getSize();
+  if (contentLen > 0 && static_cast<size_t>(contentLen) <= capacity) {
+    return stream->readBytes(buf, static_cast<size_t>(contentLen));
+  }
+
+  size_t readTotal = 0;
+  const unsigned long deadline = millis() + 4500;
+  while (millis() < deadline && readTotal < capacity) {
+    const int avail = stream->available();
+    if (avail <= 0) {
+      if (!camHttp.connected()) break;
+      delay(1);
+      continue;
+    }
+    const size_t chunk = static_cast<size_t>(avail);
+    const size_t room = capacity - readTotal;
+    readTotal += stream->readBytes(buf + readTotal, chunk < room ? chunk : room);
+  }
+  return readTotal;
 }
 
 static void relayCameraFrameIfScanning() {
@@ -160,15 +196,11 @@ static void relayCameraFrameIfScanning() {
   WiFiClient camClient;
   HTTPClient camHttp;
   camHttp.begin(camClient, previewUrl);
-  camHttp.setTimeout(4000);
+  camHttp.setTimeout(5000);
   const int camCode = camHttp.GET();
   if (camCode != HTTP_CODE_OK) {
-    camHttp.end();
-    return;
-  }
-
-  const int len = camHttp.getSize();
-  if (len <= 0 || len > 512000) {
+    if (camCode == 503) return;
+    camRelayWarnf("[cam-relay] CAM GET HTTP %d\n", camCode);
     camHttp.end();
     return;
   }
@@ -179,17 +211,20 @@ static void relayCameraFrameIfScanning() {
     return;
   }
 
-  std::vector<uint8_t> jpeg(static_cast<size_t>(len));
-  size_t readTotal = 0;
-  while (readTotal < static_cast<size_t>(len) && camHttp.connected()) {
-    const size_t n = stream->readBytes(
-        jpeg.data() + readTotal, static_cast<size_t>(len) - readTotal);
-    if (n == 0) break;
-    readTotal += n;
+  const int contentLen = camHttp.getSize();
+  size_t capacity = 65536;
+  if (contentLen > 0 && contentLen <= 512000) {
+    capacity = static_cast<size_t>(contentLen);
   }
+
+  std::vector<uint8_t> jpeg(capacity);
+  const size_t readTotal = readCamJpegBody(camHttp, stream, jpeg.data(), capacity);
   camHttp.end();
 
-  if (readTotal < 100) return;
+  if (readTotal < 100) {
+    camRelayWarnf("[cam-relay] CAM read only %u bytes\n", static_cast<int>(readTotal));
+    return;
+  }
 
   if (postCameraFrameRaw(jpeg.data(), readTotal)) {
     Serial.printf("[cam-relay] posted %u bytes\n", static_cast<unsigned>(readTotal));
