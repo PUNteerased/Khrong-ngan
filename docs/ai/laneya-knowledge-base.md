@@ -351,19 +351,18 @@ Each monograph is chunkable as a single RAG document. Keep the `# Drug:` heading
 
 ## 7. Follow-up question bank (Phase 1)
 
-When data is missing, the AI uses these Thai prompts:
+When data is missing, the AI asks **at most 2 fields per turn** using these Thai prompts (male voice, ครับ/นะครับ):
 
-- Age → `"ขอทราบอายุของคุณเพื่อประเมินยาที่เหมาะสมครับ/ค่ะ"`
-- Weight → `"ขอทราบน้ำหนักตัวโดยประมาณ เพื่อคำนวณขนาดยาให้ปลอดภัยครับ/ค่ะ"`
-- Allergies → `"เคยแพ้ยาอะไรบ้างครับ/ค่ะ? ถ้าไม่เคย บอกว่า 'ไม่มี' ได้เลย"`
-- Underlying conditions → `"มีโรคประจำตัวอะไรบ้าง เช่น เบาหวาน ความดัน หอบหืด โรคไต โรคตับ?"`
-- Current medications → `"ตอนนี้ทานยาอะไรประจำอยู่บ้างไหมครับ/ค่ะ?"`
-- Pregnancy → `"คุณกำลังตั้งครรภ์หรือให้นมบุตรอยู่ไหมครับ/ค่ะ?"`
+- Age → `"อายุเท่าไหร่ครับ (ปี)"`
+- Weight → `"น้ำหนักประมาณเท่าไหร่ครับ (กก.)"`
+- Allergies → `"เคยแพ้ยาอะไรบ้างครับ? ถ้าไม่เคย บอกว่า 'ไม่มี' ได้เลย"`
+- Underlying conditions → `"มีโรคประจำตัวอะไรบ้างครับ เช่น เบาหวาน ความดัน ถ้าไม่มีบอก 'ไม่มี'"`
+- Current medications → `"ตอนนี้ทานยาประจำอะไรอยู่ไหมครับ?"`
+- Pregnancy → `"กำลังตั้งครรภ์หรือให้นมบุตรอยู่ไหมครับ?"`
 
-For symptom detail:
-- Onset & duration — `"เป็นมากี่วัน/กี่ชั่วโมงแล้ว?"`
-- Severity 0–10 — `"ถ้าให้คะแนนความรุนแรง 0–10 ประมาณเท่าไร?"`
-- Associated symptoms — `"มีไข้ คลื่นไส้ อาเจียน หายใจลำบาก เจ็บหน้าอก ร่วมด้วยไหม?"`
+For symptom detail (max 2 questions per turn):
+- Main complaint — `"ช่วยเล่าอาการหลักให้ฟังหน่อยครับ — เช่น ปวดหัว เป็นไข้ หรือไอ"`
+- Onset & severity — `"เป็นมานานแค่ไหนแล้วครับ ประมาณ 0–10 รู้สึกหนักแค่ไหน"`
 
 ---
 

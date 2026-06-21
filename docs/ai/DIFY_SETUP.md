@@ -14,8 +14,21 @@ Use this after deploying backend/frontend. QR tickets are issued by the **backen
 ## Instructions (system prompt)
 
 1. Open Dify → App **Khrong-ngan** → **Orchestrate** → **Instructions**
-2. Paste the full contents of [`docs/ai/laneya-system-prompt.md`](../../docs/ai/laneya-system-prompt.md) (v3)
-3. Save and publish
+2. Paste the full contents of [`docs/ai/laneya-system-prompt.md`](../../docs/ai/laneya-system-prompt.md) (v2.1 — male warm voice)
+3. **Save and Publish** (required after every prompt change)
+
+## Voice & tone (v2.1)
+
+LaneYa speaks as a **male pharmacist** — warm, short, **ครับ/นะครับ** only (never ครับ/ค่ะ).
+
+- Follow-up turns: **max 2 questions** per reply (backend sends max 2 `missing_fields` per turn)
+- Re-sync knowledge base after updating [`laneya-knowledge-base.md`](../../docs/ai/laneya-knowledge-base.md) §7
+
+**Quick voice test (new chat session):**
+
+1. Empty profile → should ask **only 2** fields (e.g. age + weight), not a long numbered list
+2. "ปรึกษาเรื่องยาหน่อยได้มั้ย" → short warm reply + 1–2 symptom questions
+3. No ครับ/ค่ะ anywhere in the reply
 
 ## Knowledge base
 
