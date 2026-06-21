@@ -5,7 +5,7 @@
 #include <ArduinoJson.h>
 
 #include "cam_espnow_protocol.h"
-#include "pickup_redeem.h"
+#include "kiosk_session.h"
 
 #if __has_include("config.h")
 #include "config.h"
@@ -28,6 +28,22 @@ static bool isPlaceholderMac(const uint8_t* mac) {
          mac[3] == 0xFF && mac[4] == 0xFF && mac[5] == 0xFF;
 }
 
+void camLinkOnQrPayload(const char* payload) {
+  if (!payload || !payload[0]) return;
+  if (payload[0] == '{') {
+    JsonDocument doc;
+    if (!deserializeJson(doc, payload)) {
+      const char* code = doc["code"] | "";
+      const char* signature = doc["signature"] | doc["sig"] | "";
+      if (code[0]) {
+        kioskSessionOnQrCode(code, signature[0] ? signature : nullptr);
+      }
+    }
+  } else {
+    kioskSessionOnQrCode(payload, nullptr);
+  }
+}
+
 static void handleCamPayload(const uint8_t* data, int len) {
   if (len <= 0) return;
   char buf[251];
@@ -41,19 +57,7 @@ static void handleCamPayload(const uint8_t* data, int len) {
   } else if (strncmp(buf, CAM_MSG_QR_PREFIX, strlen(CAM_MSG_QR_PREFIX)) == 0) {
     camOnline = true;
     lastCamRxMs = millis();
-    const char* payload = buf + strlen(CAM_MSG_QR_PREFIX);
-    if (payload[0] == '{') {
-      JsonDocument doc;
-      if (!deserializeJson(doc, payload)) {
-        const char* code = doc["code"] | "";
-        const char* signature = doc["signature"] | doc["sig"] | "";
-        if (code[0]) {
-          pickupRedeemAndDispense(code, signature);
-        }
-      }
-    } else if (payload[0]) {
-      pickupRedeemAndDispense(payload, nullptr);
-    }
+    camLinkOnQrPayload(buf + strlen(CAM_MSG_QR_PREFIX));
   }
   Serial.printf("[cam] ESP-NOW << %s\n", buf);
 }
@@ -116,6 +120,7 @@ static bool addCamPeer() {
 static void sendCamMessage(const char* msg) {
   if (!camPeerReady) return;
   esp_now_send(camPeerMac, reinterpret_cast<const uint8_t*>(msg), strlen(msg));
+  Serial.printf("[cam] ESP-NOW >> %s\n", msg);
 }
 
 void camLinkSetup() {
@@ -147,12 +152,6 @@ void camLinkLoop() {
     lastCamPingMs = now;
   }
 
-  static unsigned long lastScanMs = 0;
-  if (camPeerReady && camOnline && now - lastScanMs >= 3000) {
-    sendCamMessage(CAM_MSG_SCAN);
-    lastScanMs = now;
-  }
-
   if (camOnline && now - lastCamRxMs > CAM_ESPNOW_TIMEOUT_MS) {
     camOnline = false;
   }
@@ -166,4 +165,8 @@ void camLinkRequestCapture() {
 
 void camLinkRequestScan() {
   sendCamMessage(CAM_MSG_SCAN);
+}
+
+void camLinkRequestScanStop() {
+  sendCamMessage(CAM_MSG_SCAN_STOP);
 }

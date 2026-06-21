@@ -87,6 +87,10 @@ router.get("/api/i18n/ui", i18nController.listUiTranslations)
 router.get("/api/kiosk/status", kioskController.getPublicKioskStatus)
 router.post("/api/kiosk/heartbeat", kioskController.postKioskHeartbeat)
 router.post(
+  "/api/kiosk/preview-ticket",
+  kioskPickupController.postKioskPreviewTicket
+)
+router.post(
   "/api/kiosk/redeem-ticket",
   kioskPickupController.postKioskRedeemTicket
 )

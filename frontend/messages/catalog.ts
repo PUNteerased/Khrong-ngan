@@ -676,6 +676,29 @@ export const thMessages = {
     s5n: "เจ็บคอ",
     s5d: "อาการเจ็บบริเวณลำคอ",
   },
+  Kiosk: {
+    title: "LaneYa Kiosk",
+    emergencyBanner:
+      "⚠️ หากท่านมีอาการป่วยฉุกเฉินรุนแรง (เช่น แน่นหน้าอก, หายใจไม่ออก, หมดสติ) โปรดอย่าใช้ตู้นี้ และโทรสายด่วน 1669 ทันที",
+    scanCaption:
+      "หากท่านคัดกรองอาการผ่านมือถือเรียบร้อยแล้ว โปรดกดปุ่มด้านล่างเพื่อเปิดกล้องสแกนรับยา",
+    openScan: "🔍 กดตรงนี้เพื่อเปิดกล้องสแกน QR Code",
+    cameraOn: "ระบบเปิดกล้องแล้ว...",
+    scanHint: "ยื่น QR Code จากมือถือไปที่ช่องสแกนใต้หน้าจอ",
+    analysisTitle: "ผลการวิเคราะห์",
+    warningsTitle: "ข้อควรระวัง",
+    cancel: "🚫 ยกเลิก / กลับหน้าแรก",
+    confirm: "🟢 ยืนยันข้อมูลถูกต้อง และรับยา",
+    dispensing: "กำลังจ่ายยา...",
+    success: "รับยาที่ช่องด้านล่างของตู้",
+    error: "เกิดข้อผิดพลาด กรุณาลองใหม่",
+    ttsOn: "เปิดเสียงอ่าน",
+    ttsOff: "ปิดเสียงอ่าน",
+    langTh: "TH",
+    langEn: "EN",
+    noDrugImage: "ไม่มีรูปยา",
+    fallbackSummary: "ยาที่แนะนำจากการประเมินอาการเบื้องต้น",
+  },
 } as const
 
 export const enMessages = {
@@ -1349,5 +1372,28 @@ export const enMessages = {
     s4d: "Itching on the skin",
     s5n: "Sore throat",
     s5d: "Discomfort in the throat",
+  },
+  Kiosk: {
+    title: "LaneYa Kiosk",
+    emergencyBanner:
+      "⚠️ If you have severe emergency symptoms (e.g. chest pain, cannot breathe, unconscious), do not use this kiosk — call 1669 immediately.",
+    scanCaption:
+      "If you have completed symptom screening on your phone, tap the button below to open the QR scanner.",
+    openScan: "🔍 Tap here to open QR scanner",
+    cameraOn: "Camera is active...",
+    scanHint: "Hold your phone QR code at the scanner below the screen",
+    analysisTitle: "Assessment result",
+    warningsTitle: "Safety warnings",
+    cancel: "🚫 Cancel / Back to home",
+    confirm: "🟢 Confirm and receive medicine",
+    dispensing: "Dispensing...",
+    success: "Collect your medicine from the slot below",
+    error: "Something went wrong. Please try again.",
+    ttsOn: "Voice on",
+    ttsOff: "Voice off",
+    langTh: "TH",
+    langEn: "EN",
+    noDrugImage: "No drug image",
+    fallbackSummary: "Medicine recommended from preliminary assessment",
   },
 } as const

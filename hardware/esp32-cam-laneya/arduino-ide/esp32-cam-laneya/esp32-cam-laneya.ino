@@ -21,11 +21,12 @@
 #define MSG_PONG "PONG"
 #define MSG_CAPTURE "CAPTURE"
 #define MSG_SCAN "SCAN"
+#define MSG_SCAN_STOP "SCAN_STOP"
 #define MSG_OK "OK"
 #define MSG_QR_PREFIX "QR:"
 #define MSG_ERR_PREFIX "ERR:"
 
-#define SCAN_DURATION_MS 10000
+#define SCAN_DURATION_MS 45000
 #define FLASH_LED_PIN 4
 
 #include <WiFi.h>
@@ -197,7 +198,7 @@ static void startScan() {
   qrSentThisScan = false;
   scanUntilMs = millis() + SCAN_DURATION_MS;
   digitalWrite(FLASH_LED_PIN, HIGH);
-  Serial.println("[scan] started (10s)");
+  Serial.println("[scan] started (45s)");
 }
 
 static void stopScan(const char* errMsg) {
@@ -225,6 +226,8 @@ static void handlePayload(const uint8_t* data, int len) {
     sendToS3(MSG_OK);
   } else if (strcmp(buf, MSG_SCAN) == 0) {
     startScan();
+  } else if (strcmp(buf, MSG_SCAN_STOP) == 0) {
+    stopScan(nullptr);
   }
 }
 

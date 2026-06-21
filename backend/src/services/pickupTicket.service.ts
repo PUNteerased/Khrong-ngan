@@ -111,6 +111,74 @@ export async function issuePickupTicket(input: IssueTicketInput) {
   }
 }
 
+export async function previewPickupTicket(code: string, signature?: string) {
+  const codeKey = code.trim().toUpperCase()
+  if (!TICKET_CODE_RE.test(codeKey)) {
+    throw new Error("INVALID_CODE")
+  }
+  const ticket = await prisma.pickupTicket.findUnique({
+    where: { code: codeKey },
+    include: {
+      drug: true,
+      session: { select: { summary: true } },
+    },
+  })
+  if (!ticket) throw new Error("NOT_FOUND")
+
+  if (
+    ticket.status === PickupTicketStatus.CANCELLED ||
+    ticket.status === PickupTicketStatus.EXPIRED
+  ) {
+    throw new Error("INVALID_STATUS")
+  }
+
+  if (
+    ticket.status === PickupTicketStatus.ISSUED &&
+    ticket.expiresAt.getTime() < Date.now()
+  ) {
+    throw new Error("EXPIRED")
+  }
+
+  if (signature) {
+    const signBase = `${ticket.code}|${ticket.sessionId}|${ticket.drugId}|${ticket.quantity}|${ticket.expiresAt.toISOString()}`
+    const expected = signPayload(signBase)
+    if (signature !== expected && signature !== ticket.signature) {
+      throw new Error("BAD_SIGNATURE")
+    }
+  }
+
+  if (ticket.drug.quantity < ticket.quantity) {
+    throw new Error("OUT_OF_STOCK")
+  }
+
+  const sessionSummary =
+    ticket.session.summary?.trim() ||
+    ticket.drug.indication?.trim() ||
+    ticket.drug.description?.trim() ||
+    ""
+
+  return {
+    ok: true,
+    code: ticket.code,
+    slotId: ticket.slotId,
+    channel: ticket.channel,
+    quantity: ticket.quantity,
+    riskLevel: ticket.riskLevel,
+    expiresAt: ticket.expiresAt.toISOString(),
+    alreadyRedeemed: ticket.status === PickupTicketStatus.REDEEMED,
+    drug: {
+      name: ticket.drug.name,
+      genericName: ticket.drug.genericName,
+      brandNameEn: ticket.drug.brandNameEn,
+      imageUrl: ticket.drug.imageUrl,
+      warnings: ticket.drug.warnings,
+      contraindications: ticket.drug.contraindications,
+      indication: ticket.drug.indication,
+    },
+    sessionSummary,
+  }
+}
+
 export async function redeemPickupTicket(code: string, signature?: string) {
   const codeKey = code.trim().toUpperCase()
   if (!TICKET_CODE_RE.test(codeKey)) {

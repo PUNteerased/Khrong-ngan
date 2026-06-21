@@ -11,6 +11,7 @@
 
 #define BACKEND_HEARTBEAT_URL "https://khrong-ngan.onrender.com/api/kiosk/heartbeat"
 #define BACKEND_REDEEM_URL "https://khrong-ngan.onrender.com/api/kiosk/redeem-ticket"
+#define BACKEND_PREVIEW_URL "https://khrong-ngan.onrender.com/api/kiosk/preview-ticket"
 #define KIOSK_HEARTBEAT_SECRET "change-me-kiosk-secret"
 
 #define FIRMWARE_VERSION "1.0.0"

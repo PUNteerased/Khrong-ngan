@@ -6,6 +6,7 @@
 #include "dispenser.h"
 #include "drop_sensor.h"
 #include "cam_link.h"
+#include "kiosk_session.h"
 
 void setup() {
   Serial.begin(115200);
@@ -26,5 +27,6 @@ void loop() {
   heartbeatLoop();
   dropSensorLoop();
   camLinkLoop();
+  kioskSessionLoop();
   dispenserLoop();
 }

@@ -17,7 +17,11 @@
 #define BACKEND_REDEEM_URL "https://khrong-ngan.onrender.com/api/kiosk/redeem-ticket"
 #endif
 
-bool pickupRedeemAndDispense(const char* code, const char* signature) {
+#ifndef BACKEND_PREVIEW_URL
+#define BACKEND_PREVIEW_URL "https://khrong-ngan.onrender.com/api/kiosk/preview-ticket"
+#endif
+
+static bool postKioskTicket(const char* url, const char* code, const char* signature, String& response) {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("[pickup] WiFi not connected");
     return false;
@@ -26,13 +30,12 @@ bool pickupRedeemAndDispense(const char* code, const char* signature) {
     Serial.println("[pickup] missing code");
     return false;
   }
-  (void)signature;
 
   WiFiClientSecure client;
   client.setInsecure();
 
   HTTPClient http;
-  http.begin(client, BACKEND_REDEEM_URL);
+  http.begin(client, url);
   http.setTimeout(30000);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Kiosk-Secret", KIOSK_HEARTBEAT_SECRET);
@@ -47,13 +50,42 @@ bool pickupRedeemAndDispense(const char* code, const char* signature) {
 
   const int status = http.POST(body);
   if (status < 200 || status >= 300) {
-    Serial.printf("[pickup] redeem HTTP %d\n", status);
+    Serial.printf("[pickup] HTTP %d (%s)\n", status, url);
     http.end();
     return false;
   }
 
-  const String response = http.getString();
+  response = http.getString();
   http.end();
+  return true;
+}
+
+bool pickupPreviewTicket(const char* code, const char* signature, String& outJson) {
+  String response;
+  if (!postKioskTicket(BACKEND_PREVIEW_URL, code, signature, response)) {
+    return false;
+  }
+
+  JsonDocument res;
+  if (deserializeJson(res, response)) {
+    Serial.println("[pickup] invalid preview JSON");
+    return false;
+  }
+  if (!res["ok"].as<bool>()) {
+    Serial.println("[pickup] preview not ok");
+    return false;
+  }
+
+  outJson = response;
+  Serial.println("[pickup] preview ok");
+  return true;
+}
+
+bool pickupRedeemAndDispense(const char* code, const char* signature) {
+  String response;
+  if (!postKioskTicket(BACKEND_REDEEM_URL, code, signature, response)) {
+    return false;
+  }
 
   JsonDocument res;
   if (deserializeJson(res, response)) {

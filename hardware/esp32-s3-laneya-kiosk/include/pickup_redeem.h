@@ -2,4 +2,5 @@
 
 #include <Arduino.h>
 
-bool pickupRedeemAndDispense(const char* code, const char* signature);
+bool pickupPreviewTicket(const char* code, const char* signature, String& outJson);
+bool pickupRedeemAndDispense(const char* code, const char* signature = nullptr);

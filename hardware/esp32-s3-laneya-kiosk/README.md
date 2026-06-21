@@ -9,7 +9,7 @@
 | โมดูล | ไฟล์ | ฮาร์ดแวร์ |
 |--------|------|-----------|
 | WiFi | `wifi_manager.cpp` | 2.4 GHz |
-| HTTP | `kiosk_http.cpp` | `/health`, `/status`, `/dispense` |
+| HTTP | `kiosk_http.cpp` | `/health`, `/status`, `/kiosk/*`, `/dispense` |
 | Heartbeat | `heartbeat.cpp` | → Render + รับคำสั่ง Admin |
 | จ่ายยา | `dispenser.cpp` | PCA9685, MG90S x10 ช่อง 0–9 |
 | ตรวจยาร่วง | `drop_sensor.cpp` | IR GPIO 4, 5 |
@@ -67,6 +67,21 @@ Body: {"slot": 0}
 ```
 
 Serial จะแสดง `[web-cmd] LAN POST /dispense slot=0`
+
+### API สำหรับแท็บเล็ต Kiosk Display
+
+แท็บเล็ต poll ผ่าน WiFi LAN (CORS เปิดแล้ว):
+
+| Method | Path | หน้าที่ |
+|--------|------|---------|
+| GET | `/kiosk/session` | สถานะ phase, countdown, preview |
+| POST | `/kiosk/scan/start` | เปิดกล้อง CAM สแกน 45 วิ |
+| POST | `/kiosk/scan/cancel` | ยกเลิก + ปิด flash |
+| POST | `/kiosk/pickup/confirm` | redeem backend + หมุนมอเตอร์ |
+
+Flow: QR จาก CAM → `preview-ticket` (ยังไม่จ่าย) → ผู้ป่วยยืนยันบนแท็บเล็ต → confirm → dispense
+
+ดู frontend: [`../../frontend/KIOSK.md`](../../frontend/KIOSK.md)
 
 ## พิน GPIO (สรุป)
 

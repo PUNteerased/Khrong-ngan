@@ -20,6 +20,7 @@
 
 #define BACKEND_HEARTBEAT_URL "https://khrong-ngan.onrender.com/api/kiosk/heartbeat"
 #define BACKEND_REDEEM_URL "https://khrong-ngan.onrender.com/api/kiosk/redeem-ticket"
+#define BACKEND_PREVIEW_URL "https://khrong-ngan.onrender.com/api/kiosk/preview-ticket"
 #define KIOSK_HEARTBEAT_SECRET "ilovevijai"
 
 #define FIRMWARE_VERSION "1.0.0-kiosk"
@@ -50,6 +51,7 @@
 #define CAM_MSG_PING "PING"
 #define CAM_MSG_PONG "PONG"
 #define CAM_MSG_SCAN "SCAN"
+#define CAM_MSG_SCAN_STOP "SCAN_STOP"
 #define CAM_MSG_OK "OK"
 #define CAM_MSG_QR_PREFIX "QR:"
 // ================================================
@@ -79,6 +81,23 @@ unsigned long lastCamRxMs = 0;
 unsigned long lastCamPingMs = 0;
 unsigned long lastScanMs = 0;
 
+enum KioskPhase : uint8_t {
+  KIOSK_IDLE = 0,
+  KIOSK_SCANNING,
+  KIOSK_PREVIEW,
+  KIOSK_DISPENSING,
+  KIOSK_SUCCESS,
+  KIOSK_ERROR,
+};
+
+static KioskPhase kioskPhase = KIOSK_IDLE;
+static unsigned long kioskScanUntilMs = 0;
+static unsigned long kioskSuccessAtMs = 0;
+static char kioskSessionError[96] = {};
+static char kioskPreviewJson[2048] = {};
+static char kioskPendingCode[32] = {};
+static char kioskPendingSignature[128] = {};
+
 struct {
   bool pending = false;
   char id[40] = {};
@@ -100,6 +119,8 @@ const char* wifiStatusText(wl_status_t s) {
 }
 
 void camLinkStart();
+
+bool pickupRedeemAndDispense(const char* code);
 
 bool connectWiFi(unsigned long timeoutMs = 20000) {
   if (WiFi.status() == WL_CONNECTED) return true;
@@ -303,39 +324,150 @@ static bool isPlaceholderMac(const uint8_t* mac) {
          mac[3] == 0xFF && mac[4] == 0xFF && mac[5] == 0xFF;
 }
 
-bool pickupRedeemAndDispense(const char* code) {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[pickup] WiFi not connected");
-    return false;
+const char* kioskPhaseName() {
+  switch (kioskPhase) {
+    case KIOSK_SCANNING: return "scanning";
+    case KIOSK_PREVIEW: return "preview";
+    case KIOSK_DISPENSING: return "dispensing";
+    case KIOSK_SUCCESS: return "success";
+    case KIOSK_ERROR: return "error";
+    default: return "idle";
   }
-  if (!code || !code[0]) {
-    Serial.println("[pickup] missing code");
-    return false;
-  }
+}
 
+void sendCamMessage(const char* msg);
+
+void camLinkRequestScanStop() {
+  sendCamMessage(CAM_MSG_SCAN_STOP);
+}
+
+void kioskSessionReset() {
+  kioskPhase = KIOSK_IDLE;
+  kioskScanUntilMs = 0;
+  kioskSessionError[0] = '\0';
+  kioskPreviewJson[0] = '\0';
+  kioskPendingCode[0] = '\0';
+  kioskPendingSignature[0] = '\0';
+  camLinkRequestScanStop();
+}
+
+bool postKioskTicketUrl(const char* url, const char* code, const char* signature, String& response) {
+  if (WiFi.status() != WL_CONNECTED || !code || !code[0]) return false;
   WiFiClientSecure client;
   client.setInsecure();
-
   HTTPClient http;
-  http.begin(client, BACKEND_REDEEM_URL);
+  http.begin(client, url);
   http.setTimeout(30000);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Kiosk-Secret", KIOSK_HEARTBEAT_SECRET);
-
   JsonDocument doc;
   doc["code"] = code;
+  if (signature && signature[0]) doc["signature"] = signature;
   String body;
   serializeJson(doc, body);
-
   const int status = http.POST(body);
   if (status < 200 || status >= 300) {
-    Serial.printf("[pickup] redeem HTTP %d\n", status);
     http.end();
     return false;
   }
-
-  const String response = http.getString();
+  response = http.getString();
   http.end();
+  return true;
+}
+
+bool pickupPreviewTicket(const char* code, const char* signature, String& outJson) {
+  String response;
+  if (!postKioskTicketUrl(BACKEND_PREVIEW_URL, code, signature, response)) return false;
+  JsonDocument res;
+  if (deserializeJson(res, response) || !res["ok"].as<bool>()) return false;
+  outJson = response;
+  return true;
+}
+
+bool kioskSessionOnQrCode(const char* code, const char* signature) {
+  if (!code || !code[0]) return false;
+  if (kioskPhase != KIOSK_SCANNING && kioskPhase != KIOSK_PREVIEW) return false;
+  strncpy(kioskPendingCode, code, sizeof(kioskPendingCode) - 1);
+  kioskPendingCode[sizeof(kioskPendingCode) - 1] = '\0';
+  if (signature && signature[0]) {
+    strncpy(kioskPendingSignature, signature, sizeof(kioskPendingSignature) - 1);
+    kioskPendingSignature[sizeof(kioskPendingSignature) - 1] = '\0';
+  } else {
+    kioskPendingSignature[0] = '\0';
+  }
+  String previewBody;
+  if (!pickupPreviewTicket(kioskPendingCode, kioskPendingSignature[0] ? kioskPendingSignature : nullptr, previewBody)) {
+    kioskPhase = KIOSK_ERROR;
+    strncpy(kioskSessionError, "preview failed", sizeof(kioskSessionError) - 1);
+    camLinkRequestScanStop();
+    return false;
+  }
+  if (previewBody.length() >= sizeof(kioskPreviewJson)) return false;
+  strncpy(kioskPreviewJson, previewBody.c_str(), sizeof(kioskPreviewJson) - 1);
+  kioskPreviewJson[sizeof(kioskPreviewJson) - 1] = '\0';
+  kioskPhase = KIOSK_PREVIEW;
+  kioskScanUntilMs = 0;
+  camLinkRequestScanStop();
+  return true;
+}
+
+void kioskSessionStartScan() {
+  if (kioskPhase == KIOSK_DISPENSING) return;
+  kioskSessionError[0] = '\0';
+  kioskPreviewJson[0] = '\0';
+  kioskPendingCode[0] = '\0';
+  kioskPendingSignature[0] = '\0';
+  kioskPhase = KIOSK_SCANNING;
+  kioskScanUntilMs = millis() + 45000;
+  sendCamMessage(CAM_MSG_SCAN);
+}
+
+void kioskSessionCancelScan() {
+  kioskSessionReset();
+}
+
+bool kioskSessionConfirmPickup() {
+  if (kioskPhase != KIOSK_PREVIEW || !kioskPendingCode[0]) return false;
+  kioskPhase = KIOSK_DISPENSING;
+  const bool ok = pickupRedeemAndDispense(kioskPendingCode);
+  if (ok) {
+    kioskPhase = KIOSK_SUCCESS;
+    kioskPreviewJson[0] = '\0';
+    kioskPendingCode[0] = '\0';
+    return true;
+  }
+  kioskPhase = KIOSK_ERROR;
+  strncpy(kioskSessionError, "dispense failed", sizeof(kioskSessionError) - 1);
+  return false;
+}
+
+void kioskSessionLoop() {
+  if (kioskPhase == KIOSK_SCANNING && kioskScanUntilMs > 0 && millis() > kioskScanUntilMs) {
+    kioskSessionReset();
+  }
+  if (kioskPhase == KIOSK_SUCCESS) {
+    if (kioskSuccessAtMs == 0) kioskSuccessAtMs = millis();
+    if (millis() - kioskSuccessAtMs > 3000) {
+      kioskSuccessAtMs = 0;
+      kioskSessionReset();
+    }
+  } else {
+    kioskSuccessAtMs = 0;
+  }
+}
+
+int kioskSessionCountdownSec() {
+  if (kioskPhase != KIOSK_SCANNING || kioskScanUntilMs == 0) return 0;
+  const long ms = static_cast<long>(kioskScanUntilMs - millis());
+  return ms <= 0 ? 0 : static_cast<int>((ms + 999) / 1000);
+}
+
+bool pickupRedeemAndDispense(const char* code) {
+  String response;
+  if (!postKioskTicketUrl(BACKEND_REDEEM_URL, code, nullptr, response)) {
+    Serial.println("[pickup] redeem failed");
+    return false;
+  }
 
   JsonDocument res;
   if (deserializeJson(res, response)) {
@@ -379,10 +511,11 @@ static void handleCamPayload(const uint8_t* data, int len) {
       JsonDocument qrDoc;
       if (!deserializeJson(qrDoc, payload)) {
         const char* code = qrDoc["code"] | "";
-        if (code[0]) pickupRedeemAndDispense(code);
+        const char* signature = qrDoc["signature"] | qrDoc["sig"] | "";
+        if (code[0]) kioskSessionOnQrCode(code, signature[0] ? signature : nullptr);
       }
     } else if (payload[0]) {
-      pickupRedeemAndDispense(payload);
+      kioskSessionOnQrCode(payload, nullptr);
     }
   }
   Serial.printf("[cam] ESP-NOW << %s\n", buf);
@@ -473,11 +606,6 @@ void camLinkLoop() {
     lastCamPingMs = now;
   }
 
-  if (camPeerReady && camOnline && now - lastScanMs >= 3000) {
-    sendCamMessage(CAM_MSG_SCAN);
-    lastScanMs = now;
-  }
-
   if (camOnline && now - lastCamRxMs > CAM_ESPNOW_TIMEOUT_MS) {
     camOnline = false;
   }
@@ -561,11 +689,19 @@ void handleCommandFromResponse(const String& response) {
   lastHeartbeatMs = millis();
 }
 
+void sendCorsHeaders() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  server.sendHeader("Access-Control-Allow-Headers", "Content-Type, X-Kiosk-Secret");
+}
+
 void handleHealth() {
+  sendCorsHeaders();
   server.send(200, "application/json", "{\"ok\":true,\"device\":\"esp32-s3\"}");
 }
 
 void handleStatus() {
+  sendCorsHeaders();
   JsonDocument doc;
   doc["online"] = WiFi.status() == WL_CONNECTED;
   doc["lat"] = KIOSK_LAT;
@@ -574,9 +710,57 @@ void handleStatus() {
   doc["device"] = "esp32-s3";
   doc["firmwareVersion"] = FIRMWARE_VERSION;
   doc["rssi"] = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
+  doc["camOnline"] = camOnline;
+  doc["phase"] = kioskPhaseName();
+  doc["dispenseBusy"] = dispenseBusy;
   String out;
   serializeJson(doc, out);
   server.send(200, "application/json", out);
+}
+
+void handleKioskSession() {
+  sendCorsHeaders();
+  JsonDocument doc;
+  doc["phase"] = kioskPhaseName();
+  doc["countdownSec"] = kioskSessionCountdownSec();
+  doc["camOnline"] = camOnline;
+  doc["dispenseBusy"] = dispenseBusy;
+  if (kioskSessionError[0]) doc["error"] = kioskSessionError;
+  if (kioskPreviewJson[0]) {
+    JsonDocument previewDoc;
+    if (!deserializeJson(previewDoc, kioskPreviewJson)) {
+      doc["preview"] = previewDoc.as<JsonObject>();
+    }
+  }
+  String out;
+  serializeJson(doc, out);
+  server.send(200, "application/json", out);
+}
+
+void handleScanStart() {
+  sendCorsHeaders();
+  kioskSessionStartScan();
+  server.send(200, "application/json", "{\"ok\":true,\"phase\":\"scanning\"}");
+}
+
+void handleScanCancel() {
+  sendCorsHeaders();
+  kioskSessionCancelScan();
+  server.send(200, "application/json", "{\"ok\":true,\"phase\":\"idle\"}");
+}
+
+void handlePickupConfirm() {
+  sendCorsHeaders();
+  if (kioskSessionConfirmPickup()) {
+    server.send(200, "application/json", "{\"ok\":true,\"phase\":\"success\"}");
+  } else {
+    server.send(500, "application/json", "{\"ok\":false,\"error\":\"confirm failed\"}");
+  }
+}
+
+void handleOptions() {
+  sendCorsHeaders();
+  server.send(204);
 }
 
 bool authorizeKioskRequest() {
@@ -585,6 +769,7 @@ bool authorizeKioskRequest() {
 }
 
 void handleDispense() {
+  sendCorsHeaders();
   if (!authorizeKioskRequest()) {
     server.send(401, "application/json", "{\"error\":\"Unauthorized\"}");
     return;
@@ -654,12 +839,21 @@ void setup() {
 
   server.on("/health", HTTP_GET, handleHealth);
   server.on("/status", HTTP_GET, handleStatus);
+  server.on("/kiosk/session", HTTP_GET, handleKioskSession);
+  server.on("/kiosk/scan/start", HTTP_POST, handleScanStart);
+  server.on("/kiosk/scan/cancel", HTTP_POST, handleScanCancel);
+  server.on("/kiosk/pickup/confirm", HTTP_POST, handlePickupConfirm);
+  server.on("/kiosk/session", HTTP_OPTIONS, handleOptions);
+  server.on("/kiosk/scan/start", HTTP_OPTIONS, handleOptions);
+  server.on("/kiosk/scan/cancel", HTTP_OPTIONS, handleOptions);
+  server.on("/kiosk/pickup/confirm", HTTP_OPTIONS, handleOptions);
   server.on("/dispense", HTTP_POST, handleDispense);
   server.onNotFound([]() {
+    sendCorsHeaders();
     server.send(404, "application/json", "{\"error\":\"not found\"}");
   });
   server.begin();
-  Serial.println("[http] /health /status /dispense on port 80");
+  Serial.println("[http] /health /status /kiosk/* on port 80");
   Serial.println("[diag] Serial commands: scan | test | test 0..9 | pulse <ch> <us> <ms>");
 
   sendHeartbeat();
@@ -670,6 +864,7 @@ void loop() {
   server.handleClient();
   handleSerialDiag();
   camLinkLoop();
+  kioskSessionLoop();
 
   if (WiFi.status() != WL_CONNECTED &&
       millis() - lastWifiRetryMs >= 15000) {

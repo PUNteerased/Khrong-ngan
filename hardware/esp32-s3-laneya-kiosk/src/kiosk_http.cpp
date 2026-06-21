@@ -3,6 +3,7 @@
 #include "drop_sensor.h"
 #include "cam_link.h"
 #include "dispenser.h"
+#include "kiosk_session.h"
 
 #include <WiFi.h>
 #include <WebServer.h>
@@ -15,6 +16,29 @@
 #endif
 
 static WebServer server(80);
+
+static const char* phaseName(KioskPhase p) {
+  switch (p) {
+    case KIOSK_IDLE: return "idle";
+    case KIOSK_SCANNING: return "scanning";
+    case KIOSK_PREVIEW: return "preview";
+    case KIOSK_DISPENSING: return "dispensing";
+    case KIOSK_SUCCESS: return "success";
+    case KIOSK_ERROR: return "error";
+    default: return "idle";
+  }
+}
+
+static void sendCorsHeaders() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  server.sendHeader("Access-Control-Allow-Headers", "Content-Type, X-Kiosk-Secret");
+}
+
+static void handleOptions() {
+  sendCorsHeaders();
+  server.send(204);
+}
 
 String kioskJsonStatus(bool online) {
   JsonDocument doc;
@@ -30,6 +54,8 @@ String kioskJsonStatus(bool online) {
   doc["dropRight"] = dropSensorRightCount();
   doc["irLeftBlocked"] = dropSensorLeftBlocked();
   doc["irRightBlocked"] = dropSensorRightBlocked();
+  doc["phase"] = phaseName(kioskSessionPhase());
+  doc["dispenseBusy"] = kioskSessionDispenseBusy();
 
   String out;
   serializeJson(doc, out);
@@ -37,11 +63,61 @@ String kioskJsonStatus(bool online) {
 }
 
 static void handleHealth() {
+  sendCorsHeaders();
   server.send(200, "application/json", "{\"ok\":true,\"device\":\"esp32-s3\"}");
 }
 
 static void handleStatus() {
+  sendCorsHeaders();
   server.send(200, "application/json", kioskJsonStatus(isWiFiConnected()));
+}
+
+static void handleKioskSession() {
+  sendCorsHeaders();
+  JsonDocument doc;
+  doc["phase"] = phaseName(kioskSessionPhase());
+  doc["countdownSec"] = kioskSessionCountdownSec();
+  doc["camOnline"] = camLinkOnline();
+  doc["dispenseBusy"] = kioskSessionDispenseBusy();
+
+  const char* err = kioskSessionError();
+  if (err && err[0]) {
+    doc["error"] = err;
+  }
+
+  const char* preview = kioskSessionPreviewJson();
+  if (preview && preview[0]) {
+    JsonDocument previewDoc;
+    if (!deserializeJson(previewDoc, preview)) {
+      doc["preview"] = previewDoc.as<JsonObject>();
+    }
+  }
+
+  String out;
+  serializeJson(doc, out);
+  server.send(200, "application/json", out);
+}
+
+static void handleScanStart() {
+  sendCorsHeaders();
+  kioskSessionStartScan();
+  server.send(200, "application/json", "{\"ok\":true,\"phase\":\"scanning\"}");
+}
+
+static void handleScanCancel() {
+  sendCorsHeaders();
+  kioskSessionCancelScan();
+  server.send(200, "application/json", "{\"ok\":true,\"phase\":\"idle\"}");
+}
+
+static void handlePickupConfirm() {
+  sendCorsHeaders();
+  const bool ok = kioskSessionConfirmPickup();
+  if (ok) {
+    server.send(200, "application/json", "{\"ok\":true,\"phase\":\"success\"}");
+  } else {
+    server.send(500, "application/json", "{\"ok\":false,\"error\":\"confirm failed\"}");
+  }
 }
 
 static bool authorizeKioskRequest() {
@@ -51,6 +127,7 @@ static bool authorizeKioskRequest() {
 }
 
 static void handleDispense() {
+  sendCorsHeaders();
   if (!authorizeKioskRequest()) {
     server.send(401, "application/json", "{\"error\":\"Unauthorized\"}");
     return;
@@ -81,12 +158,23 @@ static void handleDispense() {
 void kioskHttpSetup() {
   server.on("/health", HTTP_GET, handleHealth);
   server.on("/status", HTTP_GET, handleStatus);
+  server.on("/kiosk/session", HTTP_GET, handleKioskSession);
+  server.on("/kiosk/scan/start", HTTP_POST, handleScanStart);
+  server.on("/kiosk/scan/cancel", HTTP_POST, handleScanCancel);
+  server.on("/kiosk/pickup/confirm", HTTP_POST, handlePickupConfirm);
   server.on("/dispense", HTTP_POST, handleDispense);
+
+  server.on("/kiosk/session", HTTP_OPTIONS, handleOptions);
+  server.on("/kiosk/scan/start", HTTP_OPTIONS, handleOptions);
+  server.on("/kiosk/scan/cancel", HTTP_OPTIONS, handleOptions);
+  server.on("/kiosk/pickup/confirm", HTTP_OPTIONS, handleOptions);
+
   server.onNotFound([]() {
+    sendCorsHeaders();
     server.send(404, "application/json", "{\"error\":\"not found\"}");
   });
   server.begin();
-  Serial.println("[http] /health /status /dispense on port 80");
+  Serial.println("[http] /health /status /kiosk/* on port 80");
 }
 
 void kioskHttpLoop() {
