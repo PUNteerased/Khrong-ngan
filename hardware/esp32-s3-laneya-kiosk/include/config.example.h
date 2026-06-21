@@ -29,12 +29,21 @@
 #define SERVO_SPIN_US 1800
 #define SERVO_SPIN_US_REV 1200
 #define SERVO_SPIN_MS 3000
+#define SERVO_MAX_SPIN_MS 3500  // hard cap = SERVO_SPIN_MS + margin
 #define SERVO_ALL_GAP_MS 400
+
+// PCA9685 OE — GPIO + 10k pull-up to 3.3V (HIGH=disable PWM, LOW=enable)
+// -1 = legacy OE tied to GND (no firmware control)
+#define PCA9685_OE_PIN 11
+
+// 0 = reject dispense_all from heartbeat (production), 1 = lab only
+#define ALLOW_DISPENSE_ALL 0
 
 // --- IR Barrier — ตรวจยาร่วง ---
 #define IR_DROP_LEFT_PIN 4
 #define IR_DROP_RIGHT_PIN 5
 #define IR_DROP_ACTIVE_LOW 1
+#define IR_DROP_USE_PULLUP 1
 
 // --- ESP-NOW → ESP32-CAM (ไม่ต้องต่อสาย TX/RX) ---
 // ใส่ MAC 6 ไบต์ของ ESP32-CAM — ดูจาก Serial Monitor ตอน boot กล้อง

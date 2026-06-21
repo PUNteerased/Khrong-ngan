@@ -2,8 +2,12 @@
 
 #include <Arduino.h>
 
-// Phase 2 — PCA9685 + MG90S หมุนช่องยา
+// PCA9685 + MG90S 360° — ช่องจ่ายยา 0–9
+void dispenserPreBoot();
 void dispenserSetup();
 void dispenserLoop();
+bool dispenserIsBusy();
+bool dispenserPwmReady();
+bool dispenserServoSafe();
 bool dispenserDispenseSlot(uint8_t slotIndex);
 bool dispenserDispenseAll();

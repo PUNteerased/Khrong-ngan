@@ -1,6 +1,7 @@
 #include "kiosk_session.h"
 #include "cam_link.h"
 #include "pickup_redeem.h"
+#include "dispenser.h"
 
 #include <ArduinoJson.h>
 
@@ -10,7 +11,6 @@ static char sessionError[96] = {};
 static char previewJson[2048] = {};
 static char pendingCode[32] = {};
 static char pendingSignature[128] = {};
-static bool dispenseBusy = false;
 
 void kioskSessionReset() {
   phase = KIOSK_IDLE;
@@ -81,13 +81,15 @@ bool kioskSessionConfirmPickup() {
   if (phase != KIOSK_PREVIEW || !pendingCode[0]) {
     return false;
   }
+  if (dispenserIsBusy()) {
+    Serial.println("[kiosk] confirm rejected — dispense busy");
+    return false;
+  }
 
   phase = KIOSK_DISPENSING;
-  dispenseBusy = true;
   const bool ok = pickupRedeemAndDispense(
       pendingCode,
       pendingSignature[0] ? pendingSignature : nullptr);
-  dispenseBusy = false;
 
   if (ok) {
     phase = KIOSK_SUCCESS;
@@ -138,4 +140,4 @@ const char* kioskSessionError() { return sessionError; }
 
 const char* kioskSessionPreviewJson() { return previewJson; }
 
-bool kioskSessionDispenseBusy() { return dispenseBusy; }
+bool kioskSessionDispenseBusy() { return dispenserIsBusy(); }

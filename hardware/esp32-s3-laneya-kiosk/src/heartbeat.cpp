@@ -23,6 +23,10 @@ static struct {
   char error[64] = {};
 } pendingAck;
 
+#ifndef ALLOW_DISPENSE_ALL
+#define ALLOW_DISPENSE_ALL 0
+#endif
+
 static void queueAck(const char* id, bool ok, const char* errMsg = nullptr) {
   pendingAck.pending = true;
   strncpy(pendingAck.id, id, sizeof(pendingAck.id) - 1);
@@ -83,10 +87,26 @@ static void handleCommandFromResponse(const String& response) {
     return;
   }
 
+  if (dispenserIsBusy()) {
+    Serial.println("[web-cmd] rejected — dispense busy");
+    queueAck(id, false, "busy");
+    sendHeartbeat();
+    lastHeartbeatMs = millis();
+    return;
+  }
+
   bool ok = false;
   if (strcmp(action, "dispense_all") == 0) {
+#if !ALLOW_DISPENSE_ALL
+    Serial.println("[web-cmd] rejected dispense_all (disabled in production)");
+    queueAck(id, false, "dispense_all disabled");
+    sendHeartbeat();
+    lastHeartbeatMs = millis();
+    return;
+#else
     Serial.printf("[web-cmd] received dispense_all id=%s\n", id);
     ok = dispenserDispenseAll();
+#endif
   } else if (strcmp(action, "dispense") == 0 && slot >= 0 && slot <= 9) {
     Serial.printf("[web-cmd] received dispense slot=%d id=%s\n", slot, id);
     ok = dispenserDispenseSlot(static_cast<uint8_t>(slot));

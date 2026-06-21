@@ -6,6 +6,10 @@
 #include "config.example.h"
 #endif
 
+#ifndef IR_DROP_USE_PULLUP
+#define IR_DROP_USE_PULLUP 1
+#endif
+
 static unsigned long leftCount = 0;
 static unsigned long rightCount = 0;
 static bool leftPrevBlocked = false;
@@ -21,8 +25,13 @@ static bool isBlocked(uint8_t pin) {
 }
 
 void dropSensorSetup() {
+#if IR_DROP_USE_PULLUP
+  pinMode(IR_DROP_LEFT_PIN, INPUT_PULLUP);
+  pinMode(IR_DROP_RIGHT_PIN, INPUT_PULLUP);
+#else
   pinMode(IR_DROP_LEFT_PIN, INPUT);
   pinMode(IR_DROP_RIGHT_PIN, INPUT);
+#endif
   leftPrevBlocked = isBlocked(IR_DROP_LEFT_PIN);
   rightPrevBlocked = isBlocked(IR_DROP_RIGHT_PIN);
   Serial.printf("[drop] IR left=GPIO%d right=GPIO%d ready\n",

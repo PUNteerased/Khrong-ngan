@@ -56,6 +56,8 @@ String kioskJsonStatus(bool online) {
   doc["irRightBlocked"] = dropSensorRightBlocked();
   doc["phase"] = phaseName(kioskSessionPhase());
   doc["dispenseBusy"] = kioskSessionDispenseBusy();
+  doc["pwmReady"] = dispenserPwmReady();
+  doc["servoSafe"] = dispenserServoSafe();
 
   String out;
   serializeJson(doc, out);
@@ -79,6 +81,8 @@ static void handleKioskSession() {
   doc["countdownSec"] = kioskSessionCountdownSec();
   doc["camOnline"] = camLinkOnline();
   doc["dispenseBusy"] = kioskSessionDispenseBusy();
+  doc["pwmReady"] = dispenserPwmReady();
+  doc["servoSafe"] = dispenserServoSafe();
 
   const char* err = kioskSessionError();
   if (err && err[0]) {
@@ -112,6 +116,10 @@ static void handleScanCancel() {
 
 static void handlePickupConfirm() {
   sendCorsHeaders();
+  if (dispenserIsBusy()) {
+    server.send(409, "application/json", "{\"ok\":false,\"error\":\"dispense busy\"}");
+    return;
+  }
   const bool ok = kioskSessionConfirmPickup();
   if (ok) {
     server.send(200, "application/json", "{\"ok\":true,\"phase\":\"success\"}");
@@ -130,6 +138,10 @@ static void handleDispense() {
   sendCorsHeaders();
   if (!authorizeKioskRequest()) {
     server.send(401, "application/json", "{\"error\":\"Unauthorized\"}");
+    return;
+  }
+  if (dispenserIsBusy()) {
+    server.send(409, "application/json", "{\"error\":\"dispense busy\"}");
     return;
   }
 

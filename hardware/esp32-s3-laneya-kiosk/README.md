@@ -89,6 +89,7 @@ Flow: QR จาก CAM → `preview-ticket` (ยังไม่จ่าย) →
 |------|--------|
 | 9 | I2C SDA → PCA9685 |
 | 10 | I2C SCL → PCA9685 |
+| 11 | PCA9685 OE (+ 10k pull-up → 3.3V) |
 | 4 | IR ตรวจยาร่วง ซ้าย |
 | 5 | IR ตรวจยาร่วง ขวา |
 
@@ -102,7 +103,7 @@ Flow: QR จาก CAM → `preview-ticket` (ยังไม่จ่าย) →
 
 1. **ไฟ 5V ที่ขั้ว V+ ของ PCA9685** (ขั้วนอตด้าน side) — 3.3V จาก ESP32 ไป VCC เป็นแค่ logic ไม่พอหมุน servo
 2. **GND ร่วม** — ESP32 GND + PCA9685 GND + GND ของแหล่ง 5V ต้องต่อกัน
-3. **ขา OE** บน PCA9685 → ต่อ **GND** (OE ลอยหรือ HIGH = PWM ปิด)
+3. **ขา OE** บน PCA9685 → **GPIO 11** + **10kΩ pull-up ไป 3.3V** (ดู [`WIRING.md`](WIRING.md)) — **อย่า** ต่อ GND ตลอด
 4. **Servo เสียบช่อง 0** ตรงกับที่กด Admin (ส้ม→เหลือง, แดง→แดง, น้ำตาล→ดำ)
 5. **ทดสอบ servo ตรง** — สลับ servo ตัวอื่นหรือต่อกับแหล่ง 5V แยก
 
@@ -119,3 +120,23 @@ Flow: QR จาก CAM → `preview-ticket` (ยังไม่จ่าย) →
 - `scan` ไม่เจออะไร → สาย I2C หรือ PCA9685 logic power
 
 ตั้ง `BOOT_SERVO_TEST 0` ใน `.ino` เมื่อไม่ต้องการหมุนตอน boot
+
+## Hardware safety (firmware 1.0.0+)
+
+| ชั้นป้องกัน | รายละเอียด |
+|-------------|------------|
+| OE GPIO 11 | ปิด PWM ตอน boot + เมื่อ ESP32 ดับ (ต้อง rewire OE) |
+| Early boot | `dispenserPreBoot()` ก่อน Serial/delay |
+| Mutex | ปฏิเสธ dispense ซ้อน (HTTP 409 / ack `busy`) |
+| RAII guard | หยุด servo เสมอหลัง spin แม้ reset กลางทาง |
+| Idle stop | `stopAllServos()` ทุก ~30s ตอนไม่ busy |
+| Production | `ALLOW_DISPENSE_ALL 0` — ปิด dispense_all จาก Admin heartbeat |
+
+### Test checklist หลัง upload
+
+1. Serial: `[boot] reset reason: ...` + `[dispenser] all channels stopped` — ไม่มี servo หมุนตอน boot
+2. Admin test ch9 → หมุน 3s → หยุด
+3. ถอด USB (หลัง rewire OE) → ch9 **ไม่** หมุนค้าง
+4. กด test 2 ช่องพร้อมกัน → คำสั่งที่สอง reject `busy`
+5. `scan` → เห็น `0x40`
+6. `/status` → มี `pwmReady`, `servoSafe`

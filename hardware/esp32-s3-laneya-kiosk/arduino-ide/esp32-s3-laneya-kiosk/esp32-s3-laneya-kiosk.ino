@@ -38,7 +38,13 @@
 #define SERVO_SPIN_US 2000
 #define SERVO_SPIN_US_REV 1200
 #define SERVO_SPIN_MS 3000
+#define SERVO_MAX_SPIN_MS 3500
 #define SERVO_ALL_GAP_MS 400   // หน่วงระหว่างช่องตอน dispense_all
+
+// PCA9685 OE — GPIO 11 + 10k pull-up to 3.3V (HIGH=disable PWM)
+#define PCA9685_OE_PIN 11
+#define ALLOW_DISPENSE_ALL 0
+#define DISPENSER_IDLE_STOP_MS 30000
 
 // 1 = หมุนช่อง 0 ตอน boot | 0 = ปิด (แนะนำเมื่อใช้งานจริง)
 #define BOOT_SERVO_TEST 0
@@ -62,6 +68,7 @@
 #include <WiFiClientSecure.h>
 #include <Wire.h>
 #include <esp_now.h>
+#include <esp_system.h>
 #include <ArduinoJson.h>
 #include <Adafruit_PWMServoDriver.h>
 
@@ -72,6 +79,8 @@ unsigned long lastHeartbeatMs = 0;
 unsigned long lastWifiRetryMs = 0;
 bool pwmReady = false;
 bool dispenseBusy = false;
+bool pwmOutputsOn = false;
+unsigned long lastIdleStopMs = 0;
 
 uint8_t camPeerMac[6] = CAM_ESPNOW_MAC;
 bool camOnline = false;
@@ -171,6 +180,56 @@ void stopAllServos() {
   }
 }
 
+void pwmOutputsEnable(bool enable) {
+#if PCA9685_OE_PIN >= 0
+  pinMode(PCA9685_OE_PIN, OUTPUT);
+  digitalWrite(PCA9685_OE_PIN, enable ? LOW : HIGH);
+  pwmOutputsOn = enable;
+#else
+  (void)enable;
+  pwmOutputsOn = true;
+#endif
+}
+
+void spinWaitMs(uint16_t durationMs) {
+  const unsigned long deadline = millis() + durationMs;
+  while ((long)(millis() - deadline) < 0) {
+    yield();
+    server.handleClient();
+  }
+}
+
+class DispenseSlotGuard {
+ public:
+  explicit DispenseSlotGuard(uint8_t channel) : channel_(channel), active_(true) {
+    dispenseBusy = true;
+  }
+  ~DispenseSlotGuard() {
+    if (active_) {
+      writeServoStop(channel_);
+      dispenseBusy = false;
+    }
+  }
+  DispenseSlotGuard(const DispenseSlotGuard&) = delete;
+  DispenseSlotGuard& operator=(const DispenseSlotGuard&) = delete;
+
+ private:
+  uint8_t channel_;
+  bool active_;
+};
+
+void dispenserPreBoot() {
+#if PCA9685_OE_PIN >= 0
+  pinMode(PCA9685_OE_PIN, OUTPUT);
+  digitalWrite(PCA9685_OE_PIN, HIGH);
+  pwmOutputsOn = false;
+#endif
+}
+
+bool dispenserIsBusy() { return dispenseBusy; }
+bool dispenserPwmReady() { return pwmReady; }
+bool dispenserServoSafe() { return !dispenseBusy; }
+
 bool probeI2cDevice(uint8_t addr) {
   Wire.beginTransmission(addr);
   return Wire.endTransmission() == 0;
@@ -201,7 +260,7 @@ void spinChannel(uint8_t slotIndex, uint16_t pulseUs, uint16_t durationMs) {
 void runBootServoTest() {
   Serial.println("[diag] === BOOT SERVO TEST ch0 ===");
   Serial.println("[diag] ต้องมี: ไฟ 5V ที่ V+ ขั้วนอต PCA9685 + GND ร่วม + servo ช่อง 0");
-  Serial.println("[diag] ถ้าไม่หมุน → มักเป็นไฟ servo หรือ OE ไม่ต่อ GND");
+  Serial.println("[diag] ถ้าไม่หมุน → ตรวจไฟ 5V V+ / OE→GPIO11+pull-up / servo");
   delay(1000);
   spinChannel(0, SERVO_SPIN_US, 1500);
   delay(500);
@@ -261,6 +320,10 @@ void dispenserSetup() {
   Serial.printf("[dispenser] I2C SDA=GPIO%d SCL=GPIO%d slots=%d\n",
                 I2C_SDA_PIN, I2C_SCL_PIN, DISPENSER_SLOT_COUNT);
 
+#if PCA9685_OE_PIN >= 0
+  Serial.printf("[dispenser] OE on GPIO%d (HIGH=disable PWM)\n", PCA9685_OE_PIN);
+#endif
+
   scanI2cBus();
   if (!probeI2cDevice(PCA9685_I2C_ADDR)) {
     Serial.printf("[dispenser] ERROR: PCA9685 0x%02X not found on I2C!\n", PCA9685_I2C_ADDR);
@@ -277,14 +340,22 @@ void dispenserSetup() {
   pwm.setOscillatorFrequency(27000000);
   pwm.setPWMFreq(PCA9685_PWM_FREQ);
   pwmReady = true;
-  for (uint8_t ch = 0; ch < DISPENSER_SLOT_COUNT; ch++) {
-    writeServoStop(ch);
-  }
-  Serial.println("[dispenser] PCA9685 ready (channels 0-9)");
+  stopAllServos();
+  pwmOutputsEnable(true);
+  Serial.println("[dispenser] PCA9685 ready — all channels stopped");
   Serial.println("[dispenser] ⚠ servo ต้องมีไฟ 5V ที่ขั้ว V+ ของ PCA9685 (ไม่ใช่แค่ 3.3V logic)");
 #if BOOT_SERVO_TEST
   runBootServoTest();
 #endif
+  lastIdleStopMs = millis();
+}
+
+void dispenserLoop() {
+  if (dispenseBusy || !pwmReady) return;
+  const unsigned long now = millis();
+  if (now - lastIdleStopMs < DISPENSER_IDLE_STOP_MS) return;
+  stopAllServos();
+  lastIdleStopMs = now;
 }
 
 bool dispenserDispenseSlot(uint8_t slotIndex) {
@@ -292,15 +363,17 @@ bool dispenserDispenseSlot(uint8_t slotIndex) {
     Serial.println("[dispenser] ERROR: PCA9685 not ready — ไม่หมุน servo");
     return false;
   }
+  if (dispenseBusy) {
+    Serial.println("[dispenser] rejected — dispense busy");
+    return false;
+  }
   if (slotIndex >= DISPENSER_SLOT_COUNT) return false;
   Serial.printf("[web-cmd] spinning PCA9685 channel %u\n", slotIndex);
   Serial.printf("[dispenser] spin slot %u\n", slotIndex);
 
-  dispenseBusy = true;
+  DispenseSlotGuard guard(static_cast<uint8_t>(slotIndex));
   writeServoPulse(slotIndex, SERVO_SPIN_US);
-  delay(SERVO_SPIN_MS);
-  writeServoStop(slotIndex);
-  dispenseBusy = false;
+  spinWaitMs(SERVO_SPIN_MS);
   return true;
 }
 
@@ -309,11 +382,15 @@ bool dispenserDispenseAll() {
     Serial.println("[dispenser] ERROR: PCA9685 not ready — ไม่หมุน servo");
     return false;
   }
+  if (dispenseBusy) {
+    Serial.println("[dispenser] rejected — dispense busy");
+    return false;
+  }
   Serial.println("[web-cmd] dispense_all — spinning channels 0-9");
   bool allOk = true;
   for (uint8_t ch = 0; ch < DISPENSER_SLOT_COUNT; ch++) {
     if (!dispenserDispenseSlot(ch)) allOk = false;
-    if (ch + 1 < DISPENSER_SLOT_COUNT) delay(SERVO_ALL_GAP_MS);
+    if (ch + 1 < DISPENSER_SLOT_COUNT) spinWaitMs(SERVO_ALL_GAP_MS);
   }
   Serial.printf("[web-cmd] dispense_all done ok=%s\n", allOk ? "true" : "false");
   return allOk;
@@ -428,6 +505,10 @@ void kioskSessionCancelScan() {
 
 bool kioskSessionConfirmPickup() {
   if (kioskPhase != KIOSK_PREVIEW || !kioskPendingCode[0]) return false;
+  if (dispenserIsBusy()) {
+    Serial.println("[kiosk] confirm rejected — dispense busy");
+    return false;
+  }
   kioskPhase = KIOSK_DISPENSING;
   const bool ok = pickupRedeemAndDispense(kioskPendingCode);
   if (ok) {
@@ -671,10 +752,26 @@ void handleCommandFromResponse(const String& response) {
     return;
   }
 
+  if (dispenserIsBusy()) {
+    Serial.println("[web-cmd] rejected — dispense busy");
+    queueAck(id, false, "busy");
+    sendHeartbeat();
+    lastHeartbeatMs = millis();
+    return;
+  }
+
   bool ok = false;
   if (strcmp(action, "dispense_all") == 0) {
+#if !ALLOW_DISPENSE_ALL
+    Serial.println("[web-cmd] rejected dispense_all (disabled in production)");
+    queueAck(id, false, "dispense_all disabled");
+    sendHeartbeat();
+    lastHeartbeatMs = millis();
+    return;
+#else
     Serial.printf("[web-cmd] received dispense_all id=%s\n", id);
     ok = dispenserDispenseAll();
+#endif
   } else if (strcmp(action, "dispense") == 0 && slot >= 0 && slot <= 9) {
     Serial.printf("[web-cmd] received dispense slot=%d id=%s\n", slot, id);
     ok = dispenserDispenseSlot(static_cast<uint8_t>(slot));
@@ -712,7 +809,9 @@ void handleStatus() {
   doc["rssi"] = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
   doc["camOnline"] = camOnline;
   doc["phase"] = kioskPhaseName();
-  doc["dispenseBusy"] = dispenseBusy;
+  doc["dispenseBusy"] = dispenserIsBusy();
+  doc["pwmReady"] = dispenserPwmReady();
+  doc["servoSafe"] = dispenserServoSafe();
   String out;
   serializeJson(doc, out);
   server.send(200, "application/json", out);
@@ -724,7 +823,9 @@ void handleKioskSession() {
   doc["phase"] = kioskPhaseName();
   doc["countdownSec"] = kioskSessionCountdownSec();
   doc["camOnline"] = camOnline;
-  doc["dispenseBusy"] = dispenseBusy;
+  doc["dispenseBusy"] = dispenserIsBusy();
+  doc["pwmReady"] = dispenserPwmReady();
+  doc["servoSafe"] = dispenserServoSafe();
   if (kioskSessionError[0]) doc["error"] = kioskSessionError;
   if (kioskPreviewJson[0]) {
     JsonDocument previewDoc;
@@ -751,6 +852,10 @@ void handleScanCancel() {
 
 void handlePickupConfirm() {
   sendCorsHeaders();
+  if (dispenserIsBusy()) {
+    server.send(409, "application/json", "{\"ok\":false,\"error\":\"dispense busy\"}");
+    return;
+  }
   if (kioskSessionConfirmPickup()) {
     server.send(200, "application/json", "{\"ok\":true,\"phase\":\"success\"}");
   } else {
@@ -772,6 +877,10 @@ void handleDispense() {
   sendCorsHeaders();
   if (!authorizeKioskRequest()) {
     server.send(401, "application/json", "{\"error\":\"Unauthorized\"}");
+    return;
+  }
+  if (dispenserIsBusy()) {
+    server.send(409, "application/json", "{\"error\":\"dispense busy\"}");
     return;
   }
 
@@ -825,11 +934,26 @@ void sendHeartbeat() {
 }
 
 void setup() {
-  Serial.begin(115200);
-  delay(300);
-  Serial.println("[boot] LaneYa ESP32-S3 Kiosk (web-cmd + PCA9685 + ESP-NOW)");
-
+  dispenserPreBoot();
   dispenserSetup();
+
+  Serial.begin(115200);
+  delay(100);
+  const esp_reset_reason_t reason = esp_reset_reason();
+  const char* reasonText = "unknown";
+  switch (reason) {
+    case ESP_RST_POWERON: reasonText = "power_on"; break;
+    case ESP_RST_EXT: reasonText = "external"; break;
+    case ESP_RST_SW: reasonText = "software"; break;
+    case ESP_RST_PANIC: reasonText = "panic"; break;
+    case ESP_RST_INT_WDT: reasonText = "int_wdt"; break;
+    case ESP_RST_TASK_WDT: reasonText = "task_wdt"; break;
+    case ESP_RST_WDT: reasonText = "wdt"; break;
+    case ESP_RST_BROWNOUT: reasonText = "brownout"; break;
+    default: break;
+  }
+  Serial.printf("[boot] reset reason: %s\n", reasonText);
+  Serial.println("[boot] LaneYa ESP32-S3 Kiosk (web-cmd + PCA9685 + ESP-NOW)");
 
   connectWiFi();
   Serial.printf("[cam] S3 MAC %s\n", WiFi.macAddress().c_str());
@@ -865,6 +989,7 @@ void loop() {
   handleSerialDiag();
   camLinkLoop();
   kioskSessionLoop();
+  dispenserLoop();
 
   if (WiFi.status() != WL_CONNECTED &&
       millis() - lastWifiRetryMs >= 15000) {
