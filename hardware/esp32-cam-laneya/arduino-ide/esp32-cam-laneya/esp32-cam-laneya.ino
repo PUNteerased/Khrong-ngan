@@ -28,8 +28,9 @@
 #define MSG_IP_PREFIX "IP:"
 
 #define PREVIEW_HTTP_PORT 81
-#define PREVIEW_JPEG_QUALITY 4
-#define CLOUD_RELAY_MS 450
+#define PREVIEW_FRAME2JPEG_QUALITY 15
+#define PREVIEW_MAX_JPEG_BYTES 95000
+#define CLOUD_RELAY_MS 500
 
 #define BACKEND_CAMERA_FRAME_URL "https://khrong-ngan.onrender.com/api/kiosk/camera-frame"
 #define KIOSK_HEARTBEAT_SECRET "ilovevijai"
@@ -197,25 +198,17 @@ static void clearPreviewJpeg() {
   portEXIT_CRITICAL(&jpgMux);
 }
 
-static void restoreQrCameraSettings(sensor_t* s) {
-  if (!s) return;
-  s->set_pixformat(s, PIXFORMAT_GRAYSCALE);
-  s->set_framesize(s, FRAMESIZE_VGA);
+static bool isValidJpegBuffer(const uint8_t* data, size_t len) {
+  return data && len > 500 && len <= PREVIEW_MAX_JPEG_BYTES &&
+         data[0] == 0xFF && data[1] == 0xD8;
 }
 
 static void capturePreviewJpeg() {
   if (!scanning) return;
 
-  sensor_t* s = esp_camera_sensor_get();
-  if (s) {
-    s->set_pixformat(s, PIXFORMAT_JPEG);
-    s->set_framesize(s, FRAMESIZE_SVGA);
-    s->set_quality(s, PREVIEW_JPEG_QUALITY);
-  }
-
+  // ไม่สลับ pixformat — สลับโหมดทำให้ JPEG เสีย (แถบสีแนวตั้งบนจอ)
   camera_fb_t* fb = esp_camera_fb_get();
   if (!fb) {
-    restoreQrCameraSettings(s);
     const unsigned long now = millis();
     if (now - lastPreviewLogMs > 5000) {
       lastPreviewLogMs = now;
@@ -226,29 +219,16 @@ static void capturePreviewJpeg() {
 
   uint8_t* out = nullptr;
   size_t outLen = 0;
-
-  if (fb->format == PIXFORMAT_JPEG && fb->buf && fb->len > 0) {
-    outLen = fb->len;
-    out = static_cast<uint8_t*>(malloc(outLen));
-    if (out) {
-      memcpy(out, fb->buf, outLen);
-    }
-  } else {
-    const bool ok = frame2jpg(fb, PREVIEW_JPEG_QUALITY, &out, &outLen);
-    if (!ok) {
-      out = nullptr;
-      outLen = 0;
-    }
-  }
+  const bool ok =
+      frame2jpg(fb, PREVIEW_FRAME2JPEG_QUALITY, &out, &outLen);
   esp_camera_fb_return(fb);
-  restoreQrCameraSettings(s);
 
-  if (!out || outLen == 0) {
+  if (!ok || !isValidJpegBuffer(out, outLen)) {
     if (out) free(out);
     const unsigned long now = millis();
     if (now - lastPreviewLogMs > 5000) {
       lastPreviewLogMs = now;
-      Serial.println("[preview] jpeg encode failed");
+      Serial.println("[preview] frame2jpg failed or invalid");
     }
     return;
   }
@@ -291,7 +271,7 @@ static bool postPreviewToCloud() {
   if (strlen(BACKEND_CAMERA_FRAME_URL) == 0) return false;
 
   portENTER_CRITICAL(&jpgMux);
-  if (!jpgBuf || jpgLen < 100) {
+  if (!jpgBuf || jpgLen < 100 || jpgLen > PREVIEW_MAX_JPEG_BYTES) {
     portEXIT_CRITICAL(&jpgMux);
     return false;
   }

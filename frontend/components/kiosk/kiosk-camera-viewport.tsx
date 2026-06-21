@@ -68,7 +68,7 @@ export function KioskCameraViewport({
         if (!res.ok) return
 
         const blob = await res.blob()
-        if (cancelled || !blob.size) return
+        if (cancelled || blob.size < 500) return
 
         const next = URL.createObjectURL(blob)
         const img = new Image()
