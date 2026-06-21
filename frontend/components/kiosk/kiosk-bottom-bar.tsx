@@ -48,9 +48,11 @@ export function KioskBottomBar({
 export function KioskStatusOverlay({
   t,
   phase,
+  errorMessage,
 }: {
   t: KioskMessages
   phase: "dispensing" | "success" | "error"
+  errorMessage?: string
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
@@ -67,7 +69,9 @@ export function KioskStatusOverlay({
         </>
       )}
       {phase === "error" && (
-        <p className="text-xl font-semibold text-destructive">{t.error}</p>
+        <p className="text-xl font-semibold text-destructive">
+          {errorMessage || t.error}
+        </p>
       )}
     </div>
   )

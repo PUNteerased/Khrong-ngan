@@ -58,7 +58,14 @@ async function kioskFetch<T>(
     cache: "no-store",
   })
   if (!res.ok) {
-    throw new Error(`Kiosk API ${path} failed: ${res.status}`)
+    let detail = `${res.status}`
+    try {
+      const body = (await res.json()) as { error?: string }
+      if (body.error) detail = body.error
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail)
   }
   return res.json() as Promise<T>
 }

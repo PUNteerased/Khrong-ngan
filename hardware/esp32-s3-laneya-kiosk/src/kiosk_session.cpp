@@ -22,21 +22,38 @@ void kioskSessionReset() {
   camLinkRequestScanStop();
 }
 
-void kioskSessionStartScan() {
-  if (phase == KIOSK_DISPENSING) return;
+bool kioskSessionStartScan() {
+  if (phase == KIOSK_DISPENSING) return false;
   sessionError[0] = '\0';
   previewJson[0] = '\0';
   pendingCode[0] = '\0';
   pendingSignature[0] = '\0';
+  if (!camLinkRequestScan()) return false;
   phase = KIOSK_SCANNING;
   scanUntilMs = millis() + 45000;
-  camLinkRequestScan();
   Serial.println("[kiosk] scan started (45s)");
+  return true;
 }
 
 void kioskSessionCancelScan() {
   kioskSessionReset();
   Serial.println("[kiosk] scan cancelled");
+}
+
+void kioskSessionOnScanError(const char* msg) {
+  if (phase != KIOSK_SCANNING) return;
+  phase = KIOSK_ERROR;
+  scanUntilMs = 0;
+  if (msg && msg[0] && strcmp(msg, "timeout") == 0) {
+    strncpy(sessionError, "scan timeout", sizeof(sessionError) - 1);
+  } else if (msg && msg[0]) {
+    strncpy(sessionError, msg, sizeof(sessionError) - 1);
+  } else {
+    strncpy(sessionError, "scan timeout", sizeof(sessionError) - 1);
+  }
+  sessionError[sizeof(sessionError) - 1] = '\0';
+  camLinkRequestScanStop();
+  Serial.printf("[kiosk] scan error: %s\n", sessionError);
 }
 
 bool kioskSessionOnQrCode(const char* code, const char* signature) {
@@ -55,9 +72,16 @@ bool kioskSessionOnQrCode(const char* code, const char* signature) {
   }
 
   String previewBody;
-  if (!pickupPreviewTicket(pendingCode, pendingSignature[0] ? pendingSignature : nullptr, previewBody)) {
+  String previewError;
+  if (!pickupPreviewTicket(
+          pendingCode,
+          pendingSignature[0] ? pendingSignature : nullptr,
+          previewBody,
+          previewError)) {
     phase = KIOSK_ERROR;
-    strncpy(sessionError, "preview failed", sizeof(sessionError) - 1);
+    const char* err = previewError.length() ? previewError.c_str() : "preview failed";
+    strncpy(sessionError, err, sizeof(sessionError) - 1);
+    sessionError[sizeof(sessionError) - 1] = '\0';
     camLinkRequestScanStop();
     return false;
   }
@@ -65,6 +89,7 @@ bool kioskSessionOnQrCode(const char* code, const char* signature) {
   if (previewBody.length() >= sizeof(previewJson)) {
     phase = KIOSK_ERROR;
     strncpy(sessionError, "preview too large", sizeof(sessionError) - 1);
+    sessionError[sizeof(sessionError) - 1] = '\0';
     return false;
   }
 
@@ -102,6 +127,7 @@ bool kioskSessionConfirmPickup() {
 
   phase = KIOSK_ERROR;
   strncpy(sessionError, "dispense failed", sizeof(sessionError) - 1);
+  sessionError[sizeof(sessionError) - 1] = '\0';
   Serial.println("[kiosk] dispense failed");
   return false;
 }
@@ -110,9 +136,7 @@ static unsigned long successAtMs = 0;
 
 void kioskSessionLoop() {
   if (phase == KIOSK_SCANNING && scanUntilMs > 0 && millis() > scanUntilMs) {
-    phase = KIOSK_IDLE;
-    scanUntilMs = 0;
-    camLinkRequestScanStop();
+    kioskSessionOnScanError("timeout");
     Serial.println("[kiosk] scan timeout");
   }
 

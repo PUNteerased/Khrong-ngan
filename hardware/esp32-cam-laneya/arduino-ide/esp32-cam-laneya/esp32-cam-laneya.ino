@@ -225,6 +225,7 @@ static void handlePayload(const uint8_t* data, int len) {
   } else if (strcmp(buf, MSG_CAPTURE) == 0) {
     sendToS3(MSG_OK);
   } else if (strcmp(buf, MSG_SCAN) == 0) {
+    sendToS3(MSG_OK);
     startScan();
   } else if (strcmp(buf, MSG_SCAN_STOP) == 0) {
     stopScan(nullptr);
@@ -351,7 +352,7 @@ void loop() {
   }
 
   struct QRCodeData qrCodeData;
-  if (qrReader.receiveQrCode(&qrCodeData, 100)) {
+  if (qrReader.receiveQrCode(&qrCodeData, 300)) {
     if (qrCodeData.valid && !qrSentThisScan) {
       Serial.println("[qr] decoded");
       if (handleDecodedQr(reinterpret_cast<const char*>(qrCodeData.payload))) {

@@ -717,6 +717,13 @@ export const thMessages = {
     langEn: "EN",
     noDrugImage: "ไม่มีรูปยา",
     fallbackSummary: "ยาที่แนะนำจากการประเมินอาการเบื้องต้น",
+    mixedContentTitle: "ไม่สามารถเชื่อมตู้จาก HTTPS ได้",
+    mixedContentBody:
+      "เปิดจาก Vercel (HTTPS) เรียก ESP32 ใน WiFi ไม่ได้ — ใช้ http://IP-คอม:3000/th/admin/kiosk บน WiFi เดียวกับตู้",
+    s3OfflineTitle: "เชื่อมตู้จ่ายยาไม่ได้",
+    s3OfflineBody: "ตรวจ WiFi เดียวกับ ESP32-S3 และ NEXT_PUBLIC_KIOSK_S3_URL",
+    camOnline: "กล้องพร้อมสแกน",
+    camOffline: "กล้องไม่เชื่อมต่อ — ตรวจ ESP-NOW",
   },
 } as const
 
@@ -1433,5 +1440,12 @@ export const enMessages = {
     langEn: "EN",
     noDrugImage: "No drug image",
     fallbackSummary: "Medicine recommended from preliminary assessment",
+    mixedContentTitle: "Cannot reach cabinet from HTTPS",
+    mixedContentBody:
+      "Vercel (HTTPS) cannot call LAN ESP32 — use http://PC-IP:3000/th/admin/kiosk on the same WiFi",
+    s3OfflineTitle: "Cannot connect to cabinet",
+    s3OfflineBody: "Check same WiFi as ESP32-S3 and NEXT_PUBLIC_KIOSK_S3_URL",
+    camOnline: "Camera ready to scan",
+    camOffline: "Camera offline — check ESP-NOW",
   },
 } as const

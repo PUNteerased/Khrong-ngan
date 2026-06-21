@@ -12,8 +12,9 @@ enum KioskPhase : uint8_t {
 };
 
 void kioskSessionReset();
-void kioskSessionStartScan();
+bool kioskSessionStartScan();
 void kioskSessionCancelScan();
+void kioskSessionOnScanError(const char* msg);
 bool kioskSessionOnQrCode(const char* code, const char* signature);
 bool kioskSessionConfirmPickup();
 void kioskSessionLoop();

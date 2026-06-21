@@ -104,7 +104,18 @@ static void handleKioskSession() {
 
 static void handleScanStart() {
   sendCorsHeaders();
-  kioskSessionStartScan();
+  if (!camLinkOnline()) {
+    server.send(503, "application/json", "{\"error\":\"cam offline\"}");
+    return;
+  }
+  if (!camLinkPeerReady()) {
+    server.send(503, "application/json", "{\"error\":\"cam peer not ready\"}");
+    return;
+  }
+  if (!kioskSessionStartScan()) {
+    server.send(503, "application/json", "{\"error\":\"scan start failed\"}");
+    return;
+  }
   server.send(200, "application/json", "{\"ok\":true,\"phase\":\"scanning\"}");
 }
 

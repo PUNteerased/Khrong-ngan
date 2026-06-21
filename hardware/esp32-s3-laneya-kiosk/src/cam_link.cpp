@@ -58,6 +58,10 @@ static void handleCamPayload(const uint8_t* data, int len) {
     camOnline = true;
     lastCamRxMs = millis();
     camLinkOnQrPayload(buf + strlen(CAM_MSG_QR_PREFIX));
+  } else if (strncmp(buf, CAM_MSG_ERR_PREFIX, strlen(CAM_MSG_ERR_PREFIX)) == 0) {
+    camOnline = true;
+    lastCamRxMs = millis();
+    kioskSessionOnScanError(buf + strlen(CAM_MSG_ERR_PREFIX));
   }
   Serial.printf("[cam] ESP-NOW << %s\n", buf);
 }
@@ -117,10 +121,12 @@ static bool addCamPeer() {
   return true;
 }
 
-static void sendCamMessage(const char* msg) {
-  if (!camPeerReady) return;
-  esp_now_send(camPeerMac, reinterpret_cast<const uint8_t*>(msg), strlen(msg));
-  Serial.printf("[cam] ESP-NOW >> %s\n", msg);
+static bool sendCamMessage(const char* msg) {
+  if (!camPeerReady || !msg || !msg[0]) return false;
+  const esp_err_t err =
+      esp_now_send(camPeerMac, reinterpret_cast<const uint8_t*>(msg), strlen(msg));
+  Serial.printf("[cam] ESP-NOW >> %s (%s)\n", msg, err == ESP_OK ? "ok" : "fail");
+  return err == ESP_OK;
 }
 
 void camLinkSetup() {
@@ -159,12 +165,19 @@ void camLinkLoop() {
 
 bool camLinkOnline() { return camOnline; }
 
+bool camLinkPeerReady() { return camPeerReady; }
+
 void camLinkRequestCapture() {
   sendCamMessage(CAM_MSG_CAPTURE);
 }
 
-void camLinkRequestScan() {
-  sendCamMessage(CAM_MSG_SCAN);
+bool camLinkRequestScan() {
+  for (int attempt = 0; attempt < 3; attempt++) {
+    if (sendCamMessage(CAM_MSG_SCAN)) return true;
+    delay(50);
+  }
+  Serial.println("[cam] SCAN send failed after retries");
+  return false;
 }
 
 void camLinkRequestScanStop() {

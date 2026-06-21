@@ -1,9 +1,11 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { toast } from "sonner"
 import { KioskShell } from "@/components/kiosk/kiosk-shell"
 import { KioskHeader } from "@/components/kiosk/kiosk-header"
 import { KioskEmergencyBanner } from "@/components/kiosk/kiosk-emergency-banner"
+import { KioskConnectivityBanner } from "@/components/kiosk/kiosk-connectivity-banner"
 import { KioskScanPanel } from "@/components/kiosk/kiosk-scan-panel"
 import { KioskScanCountdown } from "@/components/kiosk/kiosk-scan-countdown"
 import { KioskVerificationPanel } from "@/components/kiosk/kiosk-verification-panel"
@@ -18,6 +20,10 @@ import {
   startKioskScan,
   type KioskLocale,
 } from "@/lib/kiosk-api"
+import {
+  isKioskMixedContentBlocked,
+  mapKioskSessionError,
+} from "@/lib/kiosk-connectivity"
 import { getKioskMessages } from "@/lib/kiosk-i18n"
 
 function speak(text: string, locale: KioskLocale) {
@@ -38,8 +44,22 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
   const [locale, setLocale] = useState<KioskLocale>("th")
   const [ttsOn, setTtsOn] = useState(false)
   const [busy, setBusy] = useState(false)
-  const { session, phase } = useKioskSession(500)
+  const [mixedContent, setMixedContent] = useState(false)
+  const { session, connected, phase } = useKioskSession(500)
   const t = useMemo(() => getKioskMessages(locale), [locale])
+
+  useEffect(() => {
+    setMixedContent(isKioskMixedContentBlocked())
+  }, [])
+
+  const scanBlocked = mixedContent || !connected
+  const scanDisabledReason = mixedContent
+    ? t.mixedContentBody
+    : !connected
+      ? t.s3OfflineBody
+      : undefined
+
+  const errorMessage = mapKioskSessionError(session.error, locale)
 
   const uiPhase =
     phase === "preview"
@@ -62,13 +82,17 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
   }, [uiPhase, ttsOn, locale, t, session.preview])
 
   const handleOpenScan = useCallback(async () => {
+    if (scanBlocked) return
     setBusy(true)
     try {
       await startKioskScan()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : t.error
+      toast.error(mapKioskSessionError(msg, locale))
     } finally {
       setBusy(false)
     }
-  }, [])
+  }, [scanBlocked, locale, t.error])
 
   const handleCancel = useCallback(async () => {
     setBusy(true)
@@ -91,17 +115,33 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
   const main = (() => {
     if (uiPhase === "scanning") {
       return (
-        <KioskScanCountdown t={t} seconds={session.countdownSec || 45} />
+        <KioskScanCountdown
+          t={t}
+          seconds={session.countdownSec || 45}
+          camOnline={session.camOnline}
+        />
       )
     }
     if (uiPhase === "verification" && session.preview) {
       return <KioskVerificationPanel t={t} preview={session.preview} />
     }
     if (uiPhase === "dispensing" || uiPhase === "success" || uiPhase === "error") {
-      return <KioskStatusOverlay t={t} phase={uiPhase} />
+      return (
+        <KioskStatusOverlay
+          t={t}
+          phase={uiPhase}
+          errorMessage={uiPhase === "error" ? errorMessage : undefined}
+        />
+      )
     }
     return (
-      <KioskScanPanel t={t} onOpenScan={handleOpenScan} loading={busy} />
+      <KioskScanPanel
+        t={t}
+        onOpenScan={handleOpenScan}
+        loading={busy}
+        disabled={scanBlocked}
+        disabledReason={scanDisabledReason}
+      />
     )
   })()
 
@@ -118,7 +158,16 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
           onTtsToggle={() => setTtsOn((v) => !v)}
         />
       }
-      banner={<KioskEmergencyBanner t={t} />}
+      banner={
+        <>
+          <KioskConnectivityBanner
+            t={t}
+            mixedContent={mixedContent}
+            connected={connected}
+          />
+          <KioskEmergencyBanner t={t} />
+        </>
+      }
       main={main}
       footer={
         <KioskBottomBar

@@ -83,6 +83,26 @@ Flow: QR จาก CAM → `preview-ticket` (ยังไม่จ่าย) →
 
 ดู frontend: [`../../frontend/KIOSK.md`](../../frontend/KIOSK.md)
 
+## Troubleshooting — แสกน QR ไม่ติด
+
+**แท็บเล็ตต้องเปิด UI ผ่าน HTTP บน LAN** — ไม่ใช่ `https://...vercel.app` (mixed content บล็อก fetch ไป ESP32)
+
+ลำดับเช็ค:
+
+1. แท็บเล็ต + S3 + CAM อยู่ WiFi เดียวกัน
+2. `GET http://<S3-IP>/status` → `"camOnline": true`
+3. `POST /kiosk/scan/start` — ถ้า CAM offline ได้ **503** `{"error":"cam offline"}`
+4. Serial S3 หลังกดสแกน: `[cam] ESP-NOW >> SCAN (ok)` + `[kiosk] scan started`
+5. Serial CAM: `[scan] started (45s)` + `[espnow] >> OK`
+6. ถือ QR ใกล้กล้อง → CAM: `[qr] decoded` → S3: `[pickup] preview ok`
+7. หมดเวลา 45s → CAM ส่ง `ERR:timeout` → S3 phase `error`, `session.error` = `scan timeout`
+
+| HTTP preview | `session.error` บนแท็บเล็ต |
+|--------------|---------------------------|
+| 401 | `unauthorized` — `KIOSK_HEARTBEAT_SECRET` ไม่ตรง |
+| 404 | `ticket not found` |
+| 410 | `ticket expired` |
+
 ## พิน GPIO (สรุป)
 
 | GPIO | ใช้กับ |

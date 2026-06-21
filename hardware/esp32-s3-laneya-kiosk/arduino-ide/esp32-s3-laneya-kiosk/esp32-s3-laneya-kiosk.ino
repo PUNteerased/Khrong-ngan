@@ -60,6 +60,7 @@
 #define CAM_MSG_SCAN_STOP "SCAN_STOP"
 #define CAM_MSG_OK "OK"
 #define CAM_MSG_QR_PREFIX "QR:"
+#define CAM_MSG_ERR_PREFIX "ERR:"
 // ================================================
 
 #include <WiFi.h>
@@ -412,7 +413,20 @@ const char* kioskPhaseName() {
   }
 }
 
-void sendCamMessage(const char* msg);
+bool sendCamMessage(const char* msg);
+
+bool camLinkPeerReady() { return camPeerReady; }
+
+bool camLinkOnline() { return camOnline; }
+
+bool camLinkRequestScan() {
+  for (int attempt = 0; attempt < 3; attempt++) {
+    if (sendCamMessage(CAM_MSG_SCAN)) return true;
+    delay(50);
+  }
+  Serial.println("[cam] SCAN send failed after retries");
+  return false;
+}
 
 void camLinkRequestScanStop() {
   sendCamMessage(CAM_MSG_SCAN_STOP);
@@ -428,8 +442,33 @@ void kioskSessionReset() {
   camLinkRequestScanStop();
 }
 
-bool postKioskTicketUrl(const char* url, const char* code, const char* signature, String& response) {
-  if (WiFi.status() != WL_CONNECTED || !code || !code[0]) return false;
+static void mapHttpError(int status, String& errorOut) {
+  switch (status) {
+    case 401:
+      errorOut = "unauthorized";
+      break;
+    case 404:
+      errorOut = "ticket not found";
+      break;
+    case 410:
+      errorOut = "ticket expired";
+      break;
+    default:
+      errorOut = "preview failed";
+      break;
+  }
+}
+
+bool postKioskTicketUrl(
+    const char* url,
+    const char* code,
+    const char* signature,
+    String& response,
+    String& errorOut) {
+  if (WiFi.status() != WL_CONNECTED || !code || !code[0]) {
+    errorOut = "preview failed";
+    return false;
+  }
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
@@ -443,20 +482,38 @@ bool postKioskTicketUrl(const char* url, const char* code, const char* signature
   String body;
   serializeJson(doc, body);
   const int status = http.POST(body);
+  response = http.getString();
   if (status < 200 || status >= 300) {
+    Serial.printf("[pickup] HTTP %d (%s) body=%s\n", status, url, response.c_str());
     http.end();
+    mapHttpError(status, errorOut);
     return false;
   }
-  response = http.getString();
   http.end();
   return true;
 }
 
-bool pickupPreviewTicket(const char* code, const char* signature, String& outJson) {
+bool pickupPreviewTicket(
+    const char* code,
+    const char* signature,
+    String& outJson,
+    String& errorOut) {
+  errorOut = "";
   String response;
-  if (!postKioskTicketUrl(BACKEND_PREVIEW_URL, code, signature, response)) return false;
+  if (!postKioskTicketUrl(BACKEND_PREVIEW_URL, code, signature, response, errorOut)) {
+    if (errorOut.length() == 0) errorOut = "preview failed";
+    return false;
+  }
   JsonDocument res;
-  if (deserializeJson(res, response) || !res["ok"].as<bool>()) return false;
+  if (deserializeJson(res, response)) {
+    errorOut = "preview failed";
+    return false;
+  }
+  if (!res["ok"].as<bool>()) {
+    const char* err = res["error"] | "preview failed";
+    errorOut = err;
+    return false;
+  }
   outJson = response;
   return true;
 }
@@ -473,13 +530,25 @@ bool kioskSessionOnQrCode(const char* code, const char* signature) {
     kioskPendingSignature[0] = '\0';
   }
   String previewBody;
-  if (!pickupPreviewTicket(kioskPendingCode, kioskPendingSignature[0] ? kioskPendingSignature : nullptr, previewBody)) {
+  String previewError;
+  if (!pickupPreviewTicket(
+          kioskPendingCode,
+          kioskPendingSignature[0] ? kioskPendingSignature : nullptr,
+          previewBody,
+          previewError)) {
     kioskPhase = KIOSK_ERROR;
-    strncpy(kioskSessionError, "preview failed", sizeof(kioskSessionError) - 1);
+    const char* err = previewError.length() ? previewError.c_str() : "preview failed";
+    strncpy(kioskSessionError, err, sizeof(kioskSessionError) - 1);
+    kioskSessionError[sizeof(kioskSessionError) - 1] = '\0';
     camLinkRequestScanStop();
     return false;
   }
-  if (previewBody.length() >= sizeof(kioskPreviewJson)) return false;
+  if (previewBody.length() >= sizeof(kioskPreviewJson)) {
+    kioskPhase = KIOSK_ERROR;
+    strncpy(kioskSessionError, "preview too large", sizeof(kioskSessionError) - 1);
+    kioskSessionError[sizeof(kioskSessionError) - 1] = '\0';
+    return false;
+  }
   strncpy(kioskPreviewJson, previewBody.c_str(), sizeof(kioskPreviewJson) - 1);
   kioskPreviewJson[sizeof(kioskPreviewJson) - 1] = '\0';
   kioskPhase = KIOSK_PREVIEW;
@@ -488,15 +557,33 @@ bool kioskSessionOnQrCode(const char* code, const char* signature) {
   return true;
 }
 
-void kioskSessionStartScan() {
-  if (kioskPhase == KIOSK_DISPENSING) return;
+void kioskSessionOnScanError(const char* msg) {
+  if (kioskPhase != KIOSK_SCANNING) return;
+  kioskPhase = KIOSK_ERROR;
+  kioskScanUntilMs = 0;
+  if (msg && msg[0] && strcmp(msg, "timeout") == 0) {
+    strncpy(kioskSessionError, "scan timeout", sizeof(kioskSessionError) - 1);
+  } else if (msg && msg[0]) {
+    strncpy(kioskSessionError, msg, sizeof(kioskSessionError) - 1);
+  } else {
+    strncpy(kioskSessionError, "scan timeout", sizeof(kioskSessionError) - 1);
+  }
+  kioskSessionError[sizeof(kioskSessionError) - 1] = '\0';
+  camLinkRequestScanStop();
+  Serial.printf("[kiosk] scan error: %s\n", kioskSessionError);
+}
+
+bool kioskSessionStartScan() {
+  if (kioskPhase == KIOSK_DISPENSING) return false;
   kioskSessionError[0] = '\0';
   kioskPreviewJson[0] = '\0';
   kioskPendingCode[0] = '\0';
   kioskPendingSignature[0] = '\0';
+  if (!camLinkRequestScan()) return false;
   kioskPhase = KIOSK_SCANNING;
   kioskScanUntilMs = millis() + 45000;
-  sendCamMessage(CAM_MSG_SCAN);
+  Serial.println("[kiosk] scan started (45s)");
+  return true;
 }
 
 void kioskSessionCancelScan() {
@@ -524,7 +611,8 @@ bool kioskSessionConfirmPickup() {
 
 void kioskSessionLoop() {
   if (kioskPhase == KIOSK_SCANNING && kioskScanUntilMs > 0 && millis() > kioskScanUntilMs) {
-    kioskSessionReset();
+    kioskSessionOnScanError("timeout");
+    Serial.println("[kiosk] scan timeout");
   }
   if (kioskPhase == KIOSK_SUCCESS) {
     if (kioskSuccessAtMs == 0) kioskSuccessAtMs = millis();
@@ -545,7 +633,8 @@ int kioskSessionCountdownSec() {
 
 bool pickupRedeemAndDispense(const char* code) {
   String response;
-  if (!postKioskTicketUrl(BACKEND_REDEEM_URL, code, nullptr, response)) {
+  String errorOut;
+  if (!postKioskTicketUrl(BACKEND_REDEEM_URL, code, nullptr, response, errorOut)) {
     Serial.println("[pickup] redeem failed");
     return false;
   }
@@ -598,6 +687,10 @@ static void handleCamPayload(const uint8_t* data, int len) {
     } else if (payload[0]) {
       kioskSessionOnQrCode(payload, nullptr);
     }
+  } else if (strncmp(buf, CAM_MSG_ERR_PREFIX, strlen(CAM_MSG_ERR_PREFIX)) == 0) {
+    camOnline = true;
+    lastCamRxMs = millis();
+    kioskSessionOnScanError(buf + strlen(CAM_MSG_ERR_PREFIX));
   }
   Serial.printf("[cam] ESP-NOW << %s\n", buf);
 }
@@ -642,10 +735,12 @@ bool addCamPeer() {
   return true;
 }
 
-void sendCamMessage(const char* msg) {
-  if (!espNowStarted || !camPeerReady) return;
-  esp_now_send(camPeerMac, reinterpret_cast<const uint8_t*>(msg), strlen(msg));
-  Serial.printf("[cam] ESP-NOW >> %s\n", msg);
+bool sendCamMessage(const char* msg) {
+  if (!espNowStarted || !camPeerReady || !msg || !msg[0]) return false;
+  const esp_err_t err =
+      esp_now_send(camPeerMac, reinterpret_cast<const uint8_t*>(msg), strlen(msg));
+  Serial.printf("[cam] ESP-NOW >> %s (%s)\n", msg, err == ESP_OK ? "ok" : "fail");
+  return err == ESP_OK;
 }
 
 void camLinkStart() {
@@ -840,7 +935,18 @@ void handleKioskSession() {
 
 void handleScanStart() {
   sendCorsHeaders();
-  kioskSessionStartScan();
+  if (!camLinkOnline()) {
+    server.send(503, "application/json", "{\"error\":\"cam offline\"}");
+    return;
+  }
+  if (!camLinkPeerReady()) {
+    server.send(503, "application/json", "{\"error\":\"cam peer not ready\"}");
+    return;
+  }
+  if (!kioskSessionStartScan()) {
+    server.send(503, "application/json", "{\"error\":\"scan start failed\"}");
+    return;
+  }
   server.send(200, "application/json", "{\"ok\":true,\"phase\":\"scanning\"}");
 }
 

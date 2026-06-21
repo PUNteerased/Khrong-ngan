@@ -3,7 +3,8 @@
 void camLinkSetup();
 void camLinkLoop();
 bool camLinkOnline();
+bool camLinkPeerReady();
 void camLinkRequestCapture();
-void camLinkRequestScan();
+bool camLinkRequestScan();
 void camLinkRequestScanStop();
 void camLinkOnQrPayload(const char* payload);

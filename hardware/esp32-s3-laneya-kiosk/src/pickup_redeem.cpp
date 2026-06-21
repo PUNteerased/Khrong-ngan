@@ -21,13 +21,37 @@
 #define BACKEND_PREVIEW_URL "https://khrong-ngan.onrender.com/api/kiosk/preview-ticket"
 #endif
 
-static bool postKioskTicket(const char* url, const char* code, const char* signature, String& response) {
+static void mapHttpError(int status, String& errorOut) {
+  switch (status) {
+    case 401:
+      errorOut = "unauthorized";
+      break;
+    case 404:
+      errorOut = "ticket not found";
+      break;
+    case 410:
+      errorOut = "ticket expired";
+      break;
+    default:
+      errorOut = "preview failed";
+      break;
+  }
+}
+
+static bool postKioskTicket(
+    const char* url,
+    const char* code,
+    const char* signature,
+    String& response,
+    String& errorOut) {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("[pickup] WiFi not connected");
+    errorOut = "preview failed";
     return false;
   }
   if (!code || !code[0]) {
     Serial.println("[pickup] missing code");
+    errorOut = "preview failed";
     return false;
   }
 
@@ -49,30 +73,40 @@ static bool postKioskTicket(const char* url, const char* code, const char* signa
   serializeJson(doc, body);
 
   const int status = http.POST(body);
+  response = http.getString();
   if (status < 200 || status >= 300) {
-    Serial.printf("[pickup] HTTP %d (%s)\n", status, url);
+    Serial.printf("[pickup] HTTP %d (%s) body=%s\n", status, url, response.c_str());
     http.end();
+    mapHttpError(status, errorOut);
     return false;
   }
 
-  response = http.getString();
   http.end();
   return true;
 }
 
-bool pickupPreviewTicket(const char* code, const char* signature, String& outJson) {
+bool pickupPreviewTicket(
+    const char* code,
+    const char* signature,
+    String& outJson,
+    String& errorOut) {
+  errorOut = "";
   String response;
-  if (!postKioskTicket(BACKEND_PREVIEW_URL, code, signature, response)) {
+  if (!postKioskTicket(BACKEND_PREVIEW_URL, code, signature, response, errorOut)) {
+    if (errorOut.length() == 0) errorOut = "preview failed";
     return false;
   }
 
   JsonDocument res;
   if (deserializeJson(res, response)) {
     Serial.println("[pickup] invalid preview JSON");
+    errorOut = "preview failed";
     return false;
   }
   if (!res["ok"].as<bool>()) {
-    Serial.println("[pickup] preview not ok");
+    const char* err = res["error"] | "preview failed";
+    errorOut = err;
+    Serial.printf("[pickup] preview not ok: %s\n", err);
     return false;
   }
 
@@ -83,7 +117,8 @@ bool pickupPreviewTicket(const char* code, const char* signature, String& outJso
 
 bool pickupRedeemAndDispense(const char* code, const char* signature) {
   String response;
-  if (!postKioskTicket(BACKEND_REDEEM_URL, code, signature, response)) {
+  String errorOut;
+  if (!postKioskTicket(BACKEND_REDEEM_URL, code, signature, response, errorOut)) {
     return false;
   }
 
