@@ -70,13 +70,24 @@ Serial จะแสดง `[web-cmd] LAN POST /dispense slot=0`
 
 ### API สำหรับแท็บเล็ต Kiosk Display
 
-แท็บเล็ต poll ผ่าน WiFi LAN (CORS เปิดแล้ว):
+**Production (Vercel HTTPS — cloud relay):** แท็บเล็ตเรียก Render ไม่เรียก S3 ตรง
+
+| Method | Render path | S3 รับคำสั่งผ่าน |
+|--------|-------------|------------------|
+| GET | `/api/kiosk/display/session` | heartbeat + session-sync |
+| POST | `/api/kiosk/display/scan/start` | command `scan_start` |
+| POST | `/api/kiosk/display/scan/cancel` | command `scan_cancel` |
+| POST | `/api/kiosk/display/confirm` | command `confirm_pickup` |
+
+S3 ส่ง `session` ใน heartbeat และ POST `/api/kiosk/session-sync` เมื่อ phase เปลี่ยน
+
+**LAN fallback** — แท็บเล็ต poll ผ่าน WiFi LAN (CORS เปิดแล้ว):
 
 | Method | Path | หน้าที่ |
 |--------|------|---------|
 | GET | `/kiosk/session` | สถานะ phase, countdown, preview |
 | POST | `/kiosk/scan/start` | เปิดกล้อง CAM สแกน 45 วิ |
-| POST | `/kiosk/scan/cancel` | ยกเลิก + ปิด flash |
+| POST / GET | `/kiosk/scan/cancel` | ยกเลิก + ปิด flash |
 | POST | `/kiosk/pickup/confirm` | redeem backend + หมุนมอเตอร์ |
 
 Flow: QR จาก CAM → `preview-ticket` (ยังไม่จ่าย) → ผู้ป่วยยืนยันบนแท็บเล็ต → confirm → dispense
@@ -85,7 +96,9 @@ Flow: QR จาก CAM → `preview-ticket` (ยังไม่จ่าย) →
 
 ## Troubleshooting — แสกน QR ไม่ติด
 
-**แท็บเล็ตต้องเปิด UI ผ่าน HTTP บน LAN** — ไม่ใช่ `https://...vercel.app` (mixed content บล็อก fetch ไป ESP32)
+**Production:** แท็บเล็ตใช้ `https://khrong-ngan.vercel.app/kiosk` (cloud relay)
+
+**LAN fallback:** แท็บเล็ตเปิด UI ผ่าน HTTP บน LAN — `http://<S3-IP>/kiosk`
 
 ลำดับเช็ค:
 

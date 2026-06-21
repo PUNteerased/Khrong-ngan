@@ -11,6 +11,42 @@ static char sessionError[96] = {};
 static char previewJson[2048] = {};
 static char pendingCode[32] = {};
 static char pendingSignature[128] = {};
+static bool cloudDirty = false;
+
+static void markCloudDirty() { cloudDirty = true; }
+
+const char* kioskSessionPhaseName() {
+  switch (phase) {
+    case KIOSK_SCANNING: return "scanning";
+    case KIOSK_PREVIEW: return "preview";
+    case KIOSK_DISPENSING: return "dispensing";
+    case KIOSK_SUCCESS: return "success";
+    case KIOSK_ERROR: return "error";
+    default: return "idle";
+  }
+}
+
+void kioskSessionAppendCloudJson(JsonObject sessionOut) {
+  sessionOut["phase"] = kioskSessionPhaseName();
+  sessionOut["countdownSec"] = kioskSessionCountdownSec();
+  sessionOut["camOnline"] = camLinkOnline();
+  sessionOut["dispenseBusy"] = kioskSessionDispenseBusy();
+  const char* err = kioskSessionError();
+  if (err && err[0] && phase == KIOSK_ERROR) {
+    sessionOut["error"] = err;
+  }
+  const char* preview = kioskSessionPreviewJson();
+  if (preview && preview[0] && phase == KIOSK_PREVIEW) {
+    JsonDocument previewDoc;
+    if (!deserializeJson(previewDoc, preview)) {
+      sessionOut["preview"] = previewDoc.as<JsonObject>();
+    }
+  }
+}
+
+bool kioskSessionCloudDirty() { return cloudDirty; }
+
+void kioskSessionClearCloudDirty() { cloudDirty = false; }
 
 void kioskSessionReset() {
   phase = KIOSK_IDLE;
@@ -20,6 +56,7 @@ void kioskSessionReset() {
   pendingCode[0] = '\0';
   pendingSignature[0] = '\0';
   camLinkRequestScanStop();
+  markCloudDirty();
 }
 
 bool kioskSessionStartScan() {
@@ -32,12 +69,14 @@ bool kioskSessionStartScan() {
   phase = KIOSK_SCANNING;
   scanUntilMs = millis() + 45000;
   Serial.println("[kiosk] scan started (45s)");
+  markCloudDirty();
   return true;
 }
 
 void kioskSessionCancelScan() {
   kioskSessionReset();
   Serial.println("[kiosk] scan cancelled");
+  markCloudDirty();
 }
 
 void kioskSessionOnScanError(const char* msg) {
@@ -54,6 +93,7 @@ void kioskSessionOnScanError(const char* msg) {
   sessionError[sizeof(sessionError) - 1] = '\0';
   camLinkRequestScanStop();
   Serial.printf("[kiosk] scan error: %s\n", sessionError);
+  markCloudDirty();
 }
 
 bool kioskSessionOnQrCode(const char* code, const char* signature) {
@@ -83,6 +123,7 @@ bool kioskSessionOnQrCode(const char* code, const char* signature) {
     strncpy(sessionError, err, sizeof(sessionError) - 1);
     sessionError[sizeof(sessionError) - 1] = '\0';
     camLinkRequestScanStop();
+    markCloudDirty();
     return false;
   }
 
@@ -90,6 +131,7 @@ bool kioskSessionOnQrCode(const char* code, const char* signature) {
     phase = KIOSK_ERROR;
     strncpy(sessionError, "preview too large", sizeof(sessionError) - 1);
     sessionError[sizeof(sessionError) - 1] = '\0';
+    markCloudDirty();
     return false;
   }
 
@@ -99,6 +141,7 @@ bool kioskSessionOnQrCode(const char* code, const char* signature) {
   scanUntilMs = 0;
   camLinkRequestScanStop();
   Serial.println("[kiosk] preview ready");
+  markCloudDirty();
   return true;
 }
 
@@ -112,6 +155,7 @@ bool kioskSessionConfirmPickup() {
   }
 
   phase = KIOSK_DISPENSING;
+  markCloudDirty();
   const bool ok = pickupRedeemAndDispense(
       pendingCode,
       pendingSignature[0] ? pendingSignature : nullptr);
@@ -122,6 +166,7 @@ bool kioskSessionConfirmPickup() {
     pendingCode[0] = '\0';
     pendingSignature[0] = '\0';
     Serial.println("[kiosk] dispense success");
+    markCloudDirty();
     return true;
   }
 
@@ -129,10 +174,12 @@ bool kioskSessionConfirmPickup() {
   strncpy(sessionError, "dispense failed", sizeof(sessionError) - 1);
   sessionError[sizeof(sessionError) - 1] = '\0';
   Serial.println("[kiosk] dispense failed");
+  markCloudDirty();
   return false;
 }
 
 static unsigned long successAtMs = 0;
+static unsigned long errorAtMs = 0;
 
 void kioskSessionLoop() {
   if (phase == KIOSK_SCANNING && scanUntilMs > 0 && millis() > scanUntilMs) {
@@ -148,6 +195,17 @@ void kioskSessionLoop() {
     }
   } else {
     successAtMs = 0;
+  }
+
+  if (phase == KIOSK_ERROR) {
+    if (errorAtMs == 0) errorAtMs = millis();
+    if (millis() - errorAtMs > 8000) {
+      errorAtMs = 0;
+      kioskSessionReset();
+      Serial.println("[kiosk] error cleared → idle");
+    }
+  } else {
+    errorAtMs = 0;
   }
 }
 

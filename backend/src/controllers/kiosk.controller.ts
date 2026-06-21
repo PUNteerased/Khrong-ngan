@@ -7,6 +7,7 @@ import {
   ackCommand,
   takePendingCommand,
 } from "../services/kioskCommand.service.js"
+import { syncCabinetSession } from "../services/kioskDisplay.service.js"
 
 export async function getPublicKioskStatus(_req: Request, res: Response) {
   const status = await getKioskStatus()
@@ -35,6 +36,14 @@ export async function postKioskHeartbeat(req: Request, res: Response) {
       ok?: boolean
       error?: string
     }
+    session?: {
+      phase?: unknown
+      countdownSec?: unknown
+      camOnline?: unknown
+      dispenseBusy?: unknown
+      error?: unknown
+      preview?: unknown
+    }
   }
 
   if (body.commandAck?.id) {
@@ -43,6 +52,10 @@ export async function postKioskHeartbeat(req: Request, res: Response) {
       body.commandAck.ok !== false,
       body.commandAck.error
     )
+  }
+
+  if (body.session && typeof body.session === "object") {
+    syncCabinetSession(body.session)
   }
 
   recordKioskHeartbeat({

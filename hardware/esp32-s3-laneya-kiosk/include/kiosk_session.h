@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 
 enum KioskPhase : uint8_t {
   KIOSK_IDLE = 0,
@@ -20,7 +21,12 @@ bool kioskSessionConfirmPickup();
 void kioskSessionLoop();
 
 KioskPhase kioskSessionPhase();
+const char* kioskSessionPhaseName();
 int kioskSessionCountdownSec();
 const char* kioskSessionError();
 const char* kioskSessionPreviewJson();
 bool kioskSessionDispenseBusy();
+
+void kioskSessionAppendCloudJson(JsonObject sessionOut);
+bool kioskSessionCloudDirty();
+void kioskSessionClearCloudDirty();

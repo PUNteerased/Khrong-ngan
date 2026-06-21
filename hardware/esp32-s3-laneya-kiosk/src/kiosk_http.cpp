@@ -8,6 +8,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ArduinoJson.h>
+#include "kiosk_page.h"
 
 #if __has_include("config.h")
 #include "config.h"
@@ -64,6 +65,10 @@ String kioskJsonStatus(bool online) {
   return out;
 }
 
+static void handleKioskPage() {
+  server.send_P(200, "text/html; charset=utf-8", KIOSK_PAGE_HTML);
+}
+
 static void handleHealth() {
   sendCorsHeaders();
   server.send(200, "application/json", "{\"ok\":true,\"device\":\"esp32-s3\"}");
@@ -83,6 +88,11 @@ static void handleKioskSession() {
   doc["dispenseBusy"] = kioskSessionDispenseBusy();
   doc["pwmReady"] = dispenserPwmReady();
   doc["servoSafe"] = dispenserServoSafe();
+
+  const char* previewUrl = camLinkPreviewUrl();
+  if (previewUrl && previewUrl[0] && kioskSessionPhase() == KIOSK_SCANNING) {
+    doc["camPreviewUrl"] = previewUrl;
+  }
 
   const char* err = kioskSessionError();
   if (err && err[0]) {
@@ -104,13 +114,12 @@ static void handleKioskSession() {
 
 static void handleScanStart() {
   sendCorsHeaders();
-  if (!camLinkOnline()) {
-    server.send(503, "application/json", "{\"error\":\"cam offline\"}");
-    return;
-  }
   if (!camLinkPeerReady()) {
     server.send(503, "application/json", "{\"error\":\"cam peer not ready\"}");
     return;
+  }
+  if (!camLinkOnline()) {
+    Serial.println("[kiosk] scan start — cam not pinged yet, trying SCAN anyway");
   }
   if (!kioskSessionStartScan()) {
     server.send(503, "application/json", "{\"error\":\"scan start failed\"}");
@@ -179,11 +188,14 @@ static void handleDispense() {
 }
 
 void kioskHttpSetup() {
+  server.on("/kiosk", HTTP_GET, handleKioskPage);
+  server.on("/kiosk/", HTTP_GET, handleKioskPage);
   server.on("/health", HTTP_GET, handleHealth);
   server.on("/status", HTTP_GET, handleStatus);
   server.on("/kiosk/session", HTTP_GET, handleKioskSession);
   server.on("/kiosk/scan/start", HTTP_POST, handleScanStart);
   server.on("/kiosk/scan/cancel", HTTP_POST, handleScanCancel);
+  server.on("/kiosk/scan/cancel", HTTP_GET, handleScanCancel);
   server.on("/kiosk/pickup/confirm", HTTP_POST, handlePickupConfirm);
   server.on("/dispense", HTTP_POST, handleDispense);
 
@@ -197,7 +209,7 @@ void kioskHttpSetup() {
     server.send(404, "application/json", "{\"error\":\"not found\"}");
   });
   server.begin();
-  Serial.println("[http] /health /status /kiosk/* on port 80");
+  Serial.println("[http] /kiosk /health /status /kiosk/* on port 80");
 }
 
 void kioskHttpLoop() {

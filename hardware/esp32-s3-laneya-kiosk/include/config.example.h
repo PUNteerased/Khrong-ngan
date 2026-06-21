@@ -10,6 +10,7 @@
 #define KIOSK_NAME "LaneYa Kiosk"
 
 #define BACKEND_HEARTBEAT_URL "https://khrong-ngan.onrender.com/api/kiosk/heartbeat"
+#define BACKEND_SESSION_SYNC_URL "https://khrong-ngan.onrender.com/api/kiosk/session-sync"
 #define BACKEND_REDEEM_URL "https://khrong-ngan.onrender.com/api/kiosk/redeem-ticket"
 #define BACKEND_PREVIEW_URL "https://khrong-ngan.onrender.com/api/kiosk/preview-ticket"
 #define KIOSK_HEARTBEAT_SECRET "change-me-kiosk-secret"

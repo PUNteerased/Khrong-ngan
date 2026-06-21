@@ -70,7 +70,20 @@ CAM สแกนแล้วส่ง ESP-NOW → S3: `QR:A1-0001-XYZABC`
 
 Serial ต้องเห็น MAC จริง — **ถ้าเป็น `00:00:00:00:00:00` ไม่ถูกต้อง** (reset / เปลี่ยนสาย USB)
 
-เมื่อ S3 ส่ง `SCAN` กล้องสแกน QR 10 วินาที — ดู `[espnow] >> QR:...` บน Serial ของ CAM
+เมื่อ S3 ส่ง `SCAN` กล้องสแกน QR 45 วินาที — ดู `[espnow] >> QR:...` บน Serial ของ CAM
+
+## Preview ภาพกล้อง (port 81)
+
+Firmware ล่าสุดเปิด HTTP preview ขณะสแกน:
+
+| URL | หน้าที่ |
+|-----|---------|
+| `http://<CAM-IP>:81/jpg` | JPEG snapshot ล่าสุด (ขณะ scanning เท่านั้น) |
+| `http://<CAM-IP>:81/health` | `{"scanning":true/false}` |
+
+Serial boot: `[preview] http://10.x.x.x:81/jpg`
+
+CAM ส่ง `IP:10.x.x.x` ไป S3 ผ่าน ESP-NOW → หน้า `/kiosk` บน S3 แสดงภาพกล้องอัตโนมัติ
 
 ### IDE ค้าง / upload ไม่จบ (Windows + ESP32-CAM)
 

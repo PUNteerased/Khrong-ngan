@@ -8,3 +8,4 @@
 #define CAM_MSG_OK "OK"
 #define CAM_MSG_QR_PREFIX "QR:"
 #define CAM_MSG_ERR_PREFIX "ERR:"
+#define CAM_MSG_IP_PREFIX "IP:"

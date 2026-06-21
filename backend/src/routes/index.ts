@@ -17,6 +17,7 @@ import * as contactController from "../controllers/contact.controller.js"
 import * as kioskController from "../controllers/kiosk.controller.js"
 import * as adminKioskController from "../controllers/adminKiosk.controller.js"
 import * as kioskPickupController from "../controllers/kioskPickup.controller.js"
+import * as kioskDisplayController from "../controllers/kioskDisplay.controller.js"
 import * as ticketController from "../controllers/ticket.controller.js"
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth.js"
 import { adminAuthMiddleware, adminOrKeyMiddleware } from "../middleware/adminAuth.js"
@@ -47,6 +48,13 @@ const chatLimiter = rateLimit({
 const contactLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+const kioskDisplayLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
   standardHeaders: true,
   legacyHeaders: false,
 })
@@ -93,6 +101,27 @@ router.post(
 router.post(
   "/api/kiosk/redeem-ticket",
   kioskPickupController.postKioskRedeemTicket
+)
+router.post("/api/kiosk/session-sync", kioskDisplayController.postKioskSessionSync)
+router.get(
+  "/api/kiosk/display/session",
+  kioskDisplayLimiter,
+  kioskDisplayController.getKioskDisplaySession
+)
+router.post(
+  "/api/kiosk/display/scan/start",
+  kioskDisplayLimiter,
+  kioskDisplayController.postKioskDisplayScanStart
+)
+router.post(
+  "/api/kiosk/display/scan/cancel",
+  kioskDisplayLimiter,
+  kioskDisplayController.postKioskDisplayScanCancel
+)
+router.post(
+  "/api/kiosk/display/confirm",
+  kioskDisplayLimiter,
+  kioskDisplayController.postKioskDisplayConfirm
 )
 
 router.get(

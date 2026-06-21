@@ -7,9 +7,16 @@ export type KioskCommandStatus =
   | "failed"
   | "expired"
 
+export type KioskCommandAction =
+  | "dispense"
+  | "dispense_all"
+  | "scan_start"
+  | "scan_cancel"
+  | "confirm_pickup"
+
 export type KioskCommandRecord = {
   id: string
-  action: "dispense" | "dispense_all"
+  action: KioskCommandAction
   slot: number
   status: KioskCommandStatus
   createdAt: string
@@ -34,23 +41,23 @@ function expireIfNeeded(): void {
   }
 }
 
-export function queueServoTest(slot: number): KioskCommandRecord {
+function commandInProgress(): boolean {
+  return Boolean(
+    activeCommand &&
+      (activeCommand.status === "pending" || activeCommand.status === "delivered")
+  )
+}
+
+function queueCommand(action: KioskCommandAction, slot: number): KioskCommandRecord {
   expireIfNeeded()
 
-  if (!Number.isInteger(slot) || slot < 0 || slot > MAX_SLOT) {
-    throw new Error("INVALID_SLOT")
-  }
-
-  if (
-    activeCommand &&
-    (activeCommand.status === "pending" || activeCommand.status === "delivered")
-  ) {
+  if (commandInProgress()) {
     throw new Error("COMMAND_IN_PROGRESS")
   }
 
   activeCommand = {
     id: randomUUID(),
-    action: "dispense",
+    action,
     slot,
     status: "pending",
     createdAt: new Date().toISOString(),
@@ -63,29 +70,27 @@ export function queueServoTest(slot: number): KioskCommandRecord {
   return activeCommand
 }
 
+export function queueServoTest(slot: number): KioskCommandRecord {
+  if (!Number.isInteger(slot) || slot < 0 || slot > MAX_SLOT) {
+    throw new Error("INVALID_SLOT")
+  }
+  return queueCommand("dispense", slot)
+}
+
 export function queueServoTestAll(): KioskCommandRecord {
-  expireIfNeeded()
+  return queueCommand("dispense_all", -1)
+}
 
-  if (
-    activeCommand &&
-    (activeCommand.status === "pending" || activeCommand.status === "delivered")
-  ) {
-    throw new Error("COMMAND_IN_PROGRESS")
-  }
+export function queueDisplayScanStart(): KioskCommandRecord {
+  return queueCommand("scan_start", -1)
+}
 
-  activeCommand = {
-    id: randomUUID(),
-    action: "dispense_all",
-    slot: -1,
-    status: "pending",
-    createdAt: new Date().toISOString(),
-    deliveredAt: null,
-    ackAt: null,
-    result: null,
-    error: null,
-  }
+export function queueDisplayScanCancel(): KioskCommandRecord {
+  return queueCommand("scan_cancel", -1)
+}
 
-  return activeCommand
+export function queueDisplayConfirmPickup(): KioskCommandRecord {
+  return queueCommand("confirm_pickup", -1)
 }
 
 export function takePendingCommand(): KioskCommandRecord | null {
@@ -114,7 +119,7 @@ export function ackCommand(
     status: ok ? "acked" : "failed",
     ackAt: new Date().toISOString(),
     result: ok,
-    error: ok ? null : error?.trim() || "dispense failed",
+    error: ok ? null : error?.trim() || "command failed",
   }
   return activeCommand
 }

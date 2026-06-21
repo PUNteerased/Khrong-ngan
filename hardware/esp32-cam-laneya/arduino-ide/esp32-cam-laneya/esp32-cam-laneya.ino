@@ -14,8 +14,8 @@
 #define S3_ESPNOW_MAC {0xE0, 0x72, 0xA1, 0xF6, 0xF9, 0xA0}
 
 // ต้อง WiFi เดียวกับ S3 — sync channel ให้ ESP-NOW ถึงกัน (ไม่ใช้ internet)
-#define WIFI_SSID "hah"
-#define WIFI_PASSWORD "Araina555"
+#define WIFI_SSID "SAENEE UNTA 2.4G"
+#define WIFI_PASSWORD "0819534686"
 
 #define MSG_PING "PING"
 #define MSG_PONG "PONG"
@@ -25,16 +25,23 @@
 #define MSG_OK "OK"
 #define MSG_QR_PREFIX "QR:"
 #define MSG_ERR_PREFIX "ERR:"
+#define MSG_IP_PREFIX "IP:"
 
-#define SCAN_DURATION_MS 45000
-#define FLASH_LED_PIN 4
+#define PREVIEW_HTTP_PORT 81
+#define PREVIEW_JPEG_QUALITY 12
+#define PREVIEW_CAPTURE_MS 400
 
 #include <WiFi.h>
+#include <WebServer.h>
 #include <esp_mac.h>
 #include <esp_log.h>
 #include <esp_now.h>
+#include <esp_camera.h>
+#include <img_converters.h>
 #include <ArduinoJson.h>
 #include <ESP32QRCodeReader.h>
+
+WebServer previewServer(PREVIEW_HTTP_PORT);
 
 uint8_t s3PeerMac[6] = S3_ESPNOW_MAC;
 
@@ -44,6 +51,15 @@ static bool scanning = false;
 static unsigned long scanUntilMs = 0;
 static bool qrSentThisScan = false;
 static unsigned long lastHeartbeatMs = 0;
+static unsigned long lastPreviewCaptureMs = 0;
+static char lastSentIp[16] = {};
+
+static uint8_t* jpgBuf = nullptr;
+static size_t jpgLen = 0;
+static portMUX_TYPE jpgMux = portMUX_INITIALIZER_UNLOCKED;
+
+#define SCAN_DURATION_MS 45000
+#define FLASH_LED_PIN 4
 
 bool addS3Peer();
 
@@ -128,6 +144,85 @@ static void sendToS3(const char* msg) {
   Serial.printf("[espnow] >> %s\n", msg);
 }
 
+static void sendCamIpToS3() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  const String ip = WiFi.localIP().toString();
+  if (ip == lastSentIp) return;
+  char buf[24];
+  snprintf(buf, sizeof(buf), "%s%s", MSG_IP_PREFIX, ip.c_str());
+  sendToS3(buf);
+  strncpy(lastSentIp, ip.c_str(), sizeof(lastSentIp) - 1);
+  lastSentIp[sizeof(lastSentIp) - 1] = '\0';
+}
+
+static void clearPreviewJpeg() {
+  portENTER_CRITICAL(&jpgMux);
+  if (jpgBuf) {
+    free(jpgBuf);
+    jpgBuf = nullptr;
+  }
+  jpgLen = 0;
+  portEXIT_CRITICAL(&jpgMux);
+}
+
+static void capturePreviewJpeg() {
+  if (!scanning) return;
+  camera_fb_t* fb = esp_camera_fb_get();
+  if (!fb) return;
+
+  uint8_t* out = nullptr;
+  size_t outLen = 0;
+  const bool ok = frame2jpg(fb, PREVIEW_JPEG_QUALITY, &out, &outLen);
+  esp_camera_fb_return(fb);
+
+  if (!ok || !out || outLen == 0) {
+    if (out) free(out);
+    return;
+  }
+
+  portENTER_CRITICAL(&jpgMux);
+  if (jpgBuf) free(jpgBuf);
+  jpgBuf = out;
+  jpgLen = outLen;
+  portEXIT_CRITICAL(&jpgMux);
+}
+
+static void handlePreviewJpg() {
+  previewServer.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  previewServer.sendHeader("Access-Control-Allow-Origin", "*");
+
+  portENTER_CRITICAL(&jpgMux);
+  if (!scanning || !jpgBuf || jpgLen == 0) {
+    portEXIT_CRITICAL(&jpgMux);
+    previewServer.send(404, "text/plain", "no preview");
+    return;
+  }
+  const uint8_t* data = jpgBuf;
+  const size_t len = jpgLen;
+  portEXIT_CRITICAL(&jpgMux);
+
+  previewServer.setContentLength(len);
+  previewServer.send(200, "image/jpeg", "");
+  previewServer.sendContent(reinterpret_cast<const char*>(data), len);
+}
+
+static void handlePreviewHealth() {
+  previewServer.sendHeader("Access-Control-Allow-Origin", "*");
+  previewServer.send(200, "application/json",
+                     scanning ? "{\"scanning\":true}" : "{\"scanning\":false}");
+}
+
+static void setupPreviewServer() {
+  previewServer.on("/jpg", HTTP_GET, handlePreviewJpg);
+  previewServer.on("/health", HTTP_GET, handlePreviewHealth);
+  previewServer.onNotFound([]() {
+    previewServer.send(404, "text/plain", "not found");
+  });
+  previewServer.begin();
+  Serial.printf("[preview] http://%s:%d/jpg\n",
+                WiFi.localIP().toString().c_str(), PREVIEW_HTTP_PORT);
+}
+
 static bool isTicketCode(const char* code) {
   if (!code) return false;
   const size_t len = strlen(code);
@@ -197,13 +292,16 @@ static void startScan() {
   scanning = true;
   qrSentThisScan = false;
   scanUntilMs = millis() + SCAN_DURATION_MS;
+  lastPreviewCaptureMs = 0;
   digitalWrite(FLASH_LED_PIN, HIGH);
+  sendCamIpToS3();
   Serial.println("[scan] started (45s)");
 }
 
 static void stopScan(const char* errMsg) {
   scanning = false;
   digitalWrite(FLASH_LED_PIN, LOW);
+  clearPreviewJpeg();
   if (errMsg && !qrSentThisScan) {
     char buf[32];
     snprintf(buf, sizeof(buf), "%s%s", MSG_ERR_PREFIX, errMsg);
@@ -222,6 +320,7 @@ static void handlePayload(const uint8_t* data, int len) {
 
   if (strcmp(buf, MSG_PING) == 0) {
     sendToS3(MSG_PONG);
+    sendCamIpToS3();
   } else if (strcmp(buf, MSG_CAPTURE) == 0) {
     sendToS3(MSG_OK);
   } else if (strcmp(buf, MSG_SCAN) == 0) {
@@ -323,20 +422,29 @@ void setup() {
   } else {
     Serial.println("[espnow] รอ PING จาก S3 เพื่อจับคู่อัตโนมัติ");
   }
+  if (WiFi.status() == WL_CONNECTED) {
+    setupPreviewServer();
+    sendCamIpToS3();
+  }
   Serial.println("[boot] done — heartbeat ทุก 5s");
 }
 
 void loop() {
+  previewServer.handleClient();
+
   if (!isPlaceholderMac(s3PeerMac) && !esp_now_is_peer_exist(s3PeerMac)) {
     addS3Peer();
   }
 
+  const unsigned long now = millis();
+
   if (!scanning) {
-    const unsigned long now = millis();
     if (now - lastHeartbeatMs >= 5000) {
       lastHeartbeatMs = now;
       if (WiFi.status() == WL_CONNECTED) {
-        Serial.printf("[cam] alive ch=%d\n", WiFi.channel());
+        Serial.printf("[cam] alive ch=%d ip=%s\n",
+                      WiFi.channel(), WiFi.localIP().toString().c_str());
+        sendCamIpToS3();
       } else {
         Serial.println("[cam] alive (wifi down)");
       }
@@ -345,10 +453,15 @@ void loop() {
     return;
   }
 
-  if (millis() > scanUntilMs) {
+  if (now > scanUntilMs) {
     stopScan("timeout");
     delay(10);
     return;
+  }
+
+  if (now - lastPreviewCaptureMs >= PREVIEW_CAPTURE_MS) {
+    lastPreviewCaptureMs = now;
+    capturePreviewJpeg();
   }
 
   struct QRCodeData qrCodeData;

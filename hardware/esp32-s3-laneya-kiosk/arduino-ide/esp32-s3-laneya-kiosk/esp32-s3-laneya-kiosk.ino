@@ -11,14 +11,15 @@
  */
 
 // ============ CONFIG — แก้ก่อน upload ============
-#define WIFI_SSID "hah"
-#define WIFI_PASSWORD "Araina555"
+#define WIFI_SSID "SAENEE UNTA 2.4G"
+#define WIFI_PASSWORD "0819534686"
 
 #define KIOSK_LAT 17.0147929
 #define KIOSK_LNG 99.820863
 #define KIOSK_NAME "LaneYa Kiosk"
 
 #define BACKEND_HEARTBEAT_URL "https://khrong-ngan.onrender.com/api/kiosk/heartbeat"
+#define BACKEND_SESSION_SYNC_URL "https://khrong-ngan.onrender.com/api/kiosk/session-sync"
 #define BACKEND_REDEEM_URL "https://khrong-ngan.onrender.com/api/kiosk/redeem-ticket"
 #define BACKEND_PREVIEW_URL "https://khrong-ngan.onrender.com/api/kiosk/preview-ticket"
 #define KIOSK_HEARTBEAT_SECRET "ilovevijai"
@@ -27,6 +28,7 @@
 // รับคำสั่ง Admin เร็วขึ้น — ESP32 ดึง command ทุกครั้งที่ POST heartbeat นี้
 // production อาจใช้ 15000–30000 ถ้าไม่อยากยิง Render บ่อย
 #define HEARTBEAT_INTERVAL_MS 5000
+#define HEARTBEAT_ACTIVE_INTERVAL_MS 2500
 
 #define I2C_SDA_PIN 9
 #define I2C_SCL_PIN 10
@@ -61,6 +63,7 @@
 #define CAM_MSG_OK "OK"
 #define CAM_MSG_QR_PREFIX "QR:"
 #define CAM_MSG_ERR_PREFIX "ERR:"
+#define CAM_MSG_IP_PREFIX "IP:"
 // ================================================
 
 #include <WiFi.h>
@@ -72,6 +75,7 @@
 #include <esp_system.h>
 #include <ArduinoJson.h>
 #include <Adafruit_PWMServoDriver.h>
+#include "kiosk_page.h"
 
 WebServer server(80);
 Adafruit_PWMServoDriver pwm(PCA9685_I2C_ADDR);
@@ -90,6 +94,7 @@ bool espNowStarted = false;
 unsigned long lastCamRxMs = 0;
 unsigned long lastCamPingMs = 0;
 unsigned long lastScanMs = 0;
+static char camPreviewUrl[48] = {};
 
 enum KioskPhase : uint8_t {
   KIOSK_IDLE = 0,
@@ -103,6 +108,27 @@ enum KioskPhase : uint8_t {
 static KioskPhase kioskPhase = KIOSK_IDLE;
 static unsigned long kioskScanUntilMs = 0;
 static unsigned long kioskSuccessAtMs = 0;
+static unsigned long kioskErrorAtMs = 0;
+static bool kioskCloudDirty = false;
+
+static void kioskMarkCloudDirty() { kioskCloudDirty = true; }
+
+static void kioskAppendCloudJson(JsonObject sessionOut) {
+  sessionOut["phase"] = kioskPhaseName();
+  sessionOut["countdownSec"] = kioskSessionCountdownSec();
+  sessionOut["camOnline"] = camLinkOnline();
+  sessionOut["dispenseBusy"] = dispenserIsBusy();
+  const char* err = kioskSessionError;
+  if (err && err[0] && kioskPhase == KIOSK_ERROR) {
+    sessionOut["error"] = err;
+  }
+  if (kioskPreviewJson[0] && kioskPhase == KIOSK_PREVIEW) {
+    JsonDocument previewDoc;
+    if (!deserializeJson(previewDoc, kioskPreviewJson)) {
+      sessionOut["preview"] = previewDoc.as<JsonObject>();
+    }
+  }
+}
 static char kioskSessionError[96] = {};
 static char kioskPreviewJson[2048] = {};
 static char kioskPendingCode[32] = {};
@@ -419,6 +445,10 @@ bool camLinkPeerReady() { return camPeerReady; }
 
 bool camLinkOnline() { return camOnline; }
 
+const char* camLinkPreviewUrl() {
+  return camPreviewUrl[0] ? camPreviewUrl : nullptr;
+}
+
 bool camLinkRequestScan() {
   for (int attempt = 0; attempt < 3; attempt++) {
     if (sendCamMessage(CAM_MSG_SCAN)) return true;
@@ -440,6 +470,7 @@ void kioskSessionReset() {
   kioskPendingCode[0] = '\0';
   kioskPendingSignature[0] = '\0';
   camLinkRequestScanStop();
+  kioskMarkCloudDirty();
 }
 
 static void mapHttpError(int status, String& errorOut) {
@@ -541,12 +572,14 @@ bool kioskSessionOnQrCode(const char* code, const char* signature) {
     strncpy(kioskSessionError, err, sizeof(kioskSessionError) - 1);
     kioskSessionError[sizeof(kioskSessionError) - 1] = '\0';
     camLinkRequestScanStop();
+    kioskMarkCloudDirty();
     return false;
   }
   if (previewBody.length() >= sizeof(kioskPreviewJson)) {
     kioskPhase = KIOSK_ERROR;
     strncpy(kioskSessionError, "preview too large", sizeof(kioskSessionError) - 1);
     kioskSessionError[sizeof(kioskSessionError) - 1] = '\0';
+    kioskMarkCloudDirty();
     return false;
   }
   strncpy(kioskPreviewJson, previewBody.c_str(), sizeof(kioskPreviewJson) - 1);
@@ -554,6 +587,7 @@ bool kioskSessionOnQrCode(const char* code, const char* signature) {
   kioskPhase = KIOSK_PREVIEW;
   kioskScanUntilMs = 0;
   camLinkRequestScanStop();
+  kioskMarkCloudDirty();
   return true;
 }
 
@@ -571,6 +605,7 @@ void kioskSessionOnScanError(const char* msg) {
   kioskSessionError[sizeof(kioskSessionError) - 1] = '\0';
   camLinkRequestScanStop();
   Serial.printf("[kiosk] scan error: %s\n", kioskSessionError);
+  kioskMarkCloudDirty();
 }
 
 bool kioskSessionStartScan() {
@@ -583,11 +618,13 @@ bool kioskSessionStartScan() {
   kioskPhase = KIOSK_SCANNING;
   kioskScanUntilMs = millis() + 45000;
   Serial.println("[kiosk] scan started (45s)");
+  kioskMarkCloudDirty();
   return true;
 }
 
 void kioskSessionCancelScan() {
   kioskSessionReset();
+  kioskMarkCloudDirty();
 }
 
 bool kioskSessionConfirmPickup() {
@@ -597,15 +634,18 @@ bool kioskSessionConfirmPickup() {
     return false;
   }
   kioskPhase = KIOSK_DISPENSING;
+  kioskMarkCloudDirty();
   const bool ok = pickupRedeemAndDispense(kioskPendingCode);
   if (ok) {
     kioskPhase = KIOSK_SUCCESS;
     kioskPreviewJson[0] = '\0';
     kioskPendingCode[0] = '\0';
+    kioskMarkCloudDirty();
     return true;
   }
   kioskPhase = KIOSK_ERROR;
   strncpy(kioskSessionError, "dispense failed", sizeof(kioskSessionError) - 1);
+  kioskMarkCloudDirty();
   return false;
 }
 
@@ -622,6 +662,16 @@ void kioskSessionLoop() {
     }
   } else {
     kioskSuccessAtMs = 0;
+  }
+  if (kioskPhase == KIOSK_ERROR) {
+    if (kioskErrorAtMs == 0) kioskErrorAtMs = millis();
+    if (millis() - kioskErrorAtMs > 8000) {
+      kioskErrorAtMs = 0;
+      kioskSessionReset();
+      Serial.println("[kiosk] error cleared → idle");
+    }
+  } else {
+    kioskErrorAtMs = 0;
   }
 }
 
@@ -691,6 +741,12 @@ static void handleCamPayload(const uint8_t* data, int len) {
     camOnline = true;
     lastCamRxMs = millis();
     kioskSessionOnScanError(buf + strlen(CAM_MSG_ERR_PREFIX));
+  } else if (strncmp(buf, CAM_MSG_IP_PREFIX, strlen(CAM_MSG_IP_PREFIX)) == 0) {
+    camOnline = true;
+    lastCamRxMs = millis();
+    const char* ip = buf + strlen(CAM_MSG_IP_PREFIX);
+    snprintf(camPreviewUrl, sizeof(camPreviewUrl), "http://%s:81/jpg", ip);
+    Serial.printf("[cam] preview url %s\n", camPreviewUrl);
   }
   Serial.printf("[cam] ESP-NOW << %s\n", buf);
 }
@@ -712,19 +768,28 @@ bool addCamPeer() {
     Serial.println("[cam] ตั้ง CAM_ESPNOW_MAC จาก MAC บน Serial ของ ESP32-CAM");
     return false;
   }
+
+  const uint8_t ch = (WiFi.status() == WL_CONNECTED) ? WiFi.channel() : 1;
+
   if (esp_now_is_peer_exist(camPeerMac)) {
-    camPeerReady = true;
-    return true;
+    esp_now_peer_info_t existing = {};
+    if (esp_now_get_peer(camPeerMac, &existing) == ESP_OK && existing.channel == ch) {
+      camPeerReady = true;
+      return true;
+    }
+    esp_now_del_peer(camPeerMac);
+    Serial.printf("[cam] peer channel changed → re-add ch=%d\n", ch);
   }
 
   esp_now_peer_info_t peer = {};
   memcpy(peer.peer_addr, camPeerMac, 6);
-  peer.channel = (WiFi.status() == WL_CONNECTED) ? WiFi.channel() : 1;
+  peer.channel = ch;
   peer.encrypt = false;
   peer.ifidx = WIFI_IF_STA;
 
   if (esp_now_add_peer(&peer) != ESP_OK) {
     Serial.println("[cam] esp_now_add_peer failed");
+    camPeerReady = false;
     return false;
   }
 
@@ -809,6 +874,9 @@ String buildHeartbeatBody() {
   doc["firmwareVersion"] = FIRMWARE_VERSION;
   doc["rssi"] = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
 
+  JsonObject session = doc["session"].to<JsonObject>();
+  kioskAppendCloudJson(session);
+
   if (pendingAck.pending) {
     JsonObject ack = doc["commandAck"].to<JsonObject>();
     ack["id"] = pendingAck.id;
@@ -826,7 +894,73 @@ String buildHeartbeatBody() {
   return out;
 }
 
+String buildSessionSyncBody() {
+  JsonDocument doc;
+  JsonObject session = doc["session"].to<JsonObject>();
+  kioskAppendCloudJson(session);
+  String out;
+  serializeJson(doc, out);
+  return out;
+}
+
+bool postCloudJson(const char* url, const String& body) {
+  if (WiFi.status() != WL_CONNECTED) return false;
+  if (strlen(KIOSK_HEARTBEAT_SECRET) == 0) return false;
+  if (!url || !url[0]) return false;
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  http.begin(client, url);
+  http.setTimeout(20000);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-Kiosk-Secret", KIOSK_HEARTBEAT_SECRET);
+  const int code = http.POST(body);
+  const bool ok = code >= 200 && code < 300;
+  if (!ok && code > 0) {
+    Serial.printf("[cloud-sync] HTTP %d (%s)\n", code, url);
+  }
+  http.end();
+  return ok;
+}
+
+void pushSessionSyncIfDirty() {
+  if (!kioskCloudDirty) return;
+  const String body = buildSessionSyncBody();
+  if (postCloudJson(BACKEND_SESSION_SYNC_URL, body)) {
+    kioskCloudDirty = false;
+    Serial.println("[cloud-sync] session pushed");
+  }
+}
+
 void sendHeartbeat();
+
+void handleDisplayCommand(const char* id, const char* action) {
+  bool ok = false;
+  const char* errMsg = nullptr;
+
+  if (strcmp(action, "scan_start") == 0) {
+    Serial.printf("[web-cmd] received scan_start id=%s\n", id);
+    ok = kioskSessionStartScan();
+    if (!ok) errMsg = "scan start failed";
+  } else if (strcmp(action, "scan_cancel") == 0) {
+    Serial.printf("[web-cmd] received scan_cancel id=%s\n", id);
+    kioskSessionCancelScan();
+    ok = true;
+  } else if (strcmp(action, "confirm_pickup") == 0) {
+    Serial.printf("[web-cmd] received confirm_pickup id=%s\n", id);
+    ok = kioskSessionConfirmPickup();
+    if (!ok) errMsg = "confirm failed";
+  } else {
+    Serial.println("[web-cmd] ignored invalid command");
+    return;
+  }
+
+  queueAck(id, ok, ok ? nullptr : errMsg);
+  pushSessionSyncIfDirty();
+  sendHeartbeat();
+  lastHeartbeatMs = millis();
+}
 
 void handleCommandFromResponse(const String& response) {
   JsonDocument doc;
@@ -844,6 +978,21 @@ void handleCommandFromResponse(const String& response) {
 
   if (!id[0]) {
     Serial.println("[web-cmd] ignored invalid command");
+    return;
+  }
+
+  if (strcmp(action, "scan_start") == 0 ||
+      strcmp(action, "scan_cancel") == 0 ||
+      strcmp(action, "confirm_pickup") == 0) {
+    if (dispenserIsBusy() && strcmp(action, "scan_cancel") != 0 &&
+        strcmp(action, "confirm_pickup") != 0) {
+      Serial.println("[web-cmd] rejected — dispense busy");
+      queueAck(id, false, "busy");
+      sendHeartbeat();
+      lastHeartbeatMs = millis();
+      return;
+    }
+    handleDisplayCommand(id, action);
     return;
   }
 
@@ -876,7 +1025,6 @@ void handleCommandFromResponse(const String& response) {
   }
 
   queueAck(id, ok, ok ? nullptr : "dispense failed");
-  // ส่ง ack ทันที — ไม่รอ heartbeat รอบถัดไป (ลด "รอมอเตอร์หมุน" บนเว็บ)
   sendHeartbeat();
   lastHeartbeatMs = millis();
 }
@@ -885,6 +1033,10 @@ void sendCorsHeaders() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
   server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   server.sendHeader("Access-Control-Allow-Headers", "Content-Type, X-Kiosk-Secret");
+}
+
+void handleKioskPage() {
+  server.send_P(200, "text/html; charset=utf-8", KIOSK_PAGE_HTML);
 }
 
 void handleHealth() {
@@ -921,6 +1073,10 @@ void handleKioskSession() {
   doc["dispenseBusy"] = dispenserIsBusy();
   doc["pwmReady"] = dispenserPwmReady();
   doc["servoSafe"] = dispenserServoSafe();
+  const char* previewUrl = camLinkPreviewUrl();
+  if (previewUrl && previewUrl[0] && kioskPhase == KIOSK_SCANNING) {
+    doc["camPreviewUrl"] = previewUrl;
+  }
   if (kioskSessionError[0]) doc["error"] = kioskSessionError;
   if (kioskPreviewJson[0]) {
     JsonDocument previewDoc;
@@ -935,13 +1091,12 @@ void handleKioskSession() {
 
 void handleScanStart() {
   sendCorsHeaders();
-  if (!camLinkOnline()) {
-    server.send(503, "application/json", "{\"error\":\"cam offline\"}");
-    return;
-  }
   if (!camLinkPeerReady()) {
     server.send(503, "application/json", "{\"error\":\"cam peer not ready\"}");
     return;
+  }
+  if (!camLinkOnline()) {
+    Serial.println("[kiosk] scan start — cam not pinged yet, trying SCAN anyway");
   }
   if (!kioskSessionStartScan()) {
     server.send(503, "application/json", "{\"error\":\"scan start failed\"}");
@@ -1067,11 +1222,14 @@ void setup() {
     camLinkStart();
   }
 
+  server.on("/kiosk", HTTP_GET, handleKioskPage);
+  server.on("/kiosk/", HTTP_GET, handleKioskPage);
   server.on("/health", HTTP_GET, handleHealth);
   server.on("/status", HTTP_GET, handleStatus);
   server.on("/kiosk/session", HTTP_GET, handleKioskSession);
   server.on("/kiosk/scan/start", HTTP_POST, handleScanStart);
   server.on("/kiosk/scan/cancel", HTTP_POST, handleScanCancel);
+  server.on("/kiosk/scan/cancel", HTTP_GET, handleScanCancel);
   server.on("/kiosk/pickup/confirm", HTTP_POST, handlePickupConfirm);
   server.on("/kiosk/session", HTTP_OPTIONS, handleOptions);
   server.on("/kiosk/scan/start", HTTP_OPTIONS, handleOptions);
@@ -1083,7 +1241,7 @@ void setup() {
     server.send(404, "application/json", "{\"error\":\"not found\"}");
   });
   server.begin();
-  Serial.println("[http] /health /status /kiosk/* on port 80");
+  Serial.println("[http] /kiosk /health /status /kiosk/* on port 80");
   Serial.println("[diag] Serial commands: scan | test | test 0..9 | pulse <ch> <us> <ms>");
 
   sendHeartbeat();
@@ -1103,7 +1261,14 @@ void loop() {
     lastWifiRetryMs = millis();
   }
 
-  if (millis() - lastHeartbeatMs >= HEARTBEAT_INTERVAL_MS) {
+  pushSessionSyncIfDirty();
+
+  unsigned long hbInterval = HEARTBEAT_INTERVAL_MS;
+  if (kioskPhase != KIOSK_IDLE) {
+    hbInterval = HEARTBEAT_ACTIVE_INTERVAL_MS;
+  }
+
+  if (millis() - lastHeartbeatMs >= hbInterval) {
     sendHeartbeat();
     lastHeartbeatMs = millis();
   }

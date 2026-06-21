@@ -2,6 +2,7 @@
 #include "kiosk_http.h"
 #include "wifi_manager.h"
 #include "dispenser.h"
+#include "kiosk_session.h"
 
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
@@ -12,6 +13,14 @@
 #include "config.h"
 #else
 #include "config.example.h"
+#endif
+
+#ifndef BACKEND_SESSION_SYNC_URL
+#define BACKEND_SESSION_SYNC_URL "https://khrong-ngan.onrender.com/api/kiosk/session-sync"
+#endif
+
+#ifndef HEARTBEAT_ACTIVE_INTERVAL_MS
+#define HEARTBEAT_ACTIVE_INTERVAL_MS 2500
 #endif
 
 static unsigned long lastHeartbeatMs = 0;
@@ -39,6 +48,15 @@ static void queueAck(const char* id, bool ok, const char* errMsg = nullptr) {
   Serial.printf("[web-cmd] done %s — ack queued id=%s\n", ok ? "ok" : "fail", id);
 }
 
+static String buildSessionSyncBody() {
+  JsonDocument doc;
+  JsonObject session = doc["session"].to<JsonObject>();
+  kioskSessionAppendCloudJson(session);
+  String out;
+  serializeJson(doc, out);
+  return out;
+}
+
 static String buildHeartbeatBody() {
   JsonDocument doc;
   doc["online"] = true;
@@ -48,6 +66,9 @@ static String buildHeartbeatBody() {
   doc["device"] = "esp32-s3";
   doc["firmwareVersion"] = FIRMWARE_VERSION;
   doc["rssi"] = isWiFiConnected() ? WiFi.RSSI() : 0;
+
+  JsonObject session = doc["session"].to<JsonObject>();
+  kioskSessionAppendCloudJson(session);
 
   if (pendingAck.pending) {
     JsonObject ack = doc["commandAck"].to<JsonObject>();
@@ -67,6 +88,67 @@ static String buildHeartbeatBody() {
 }
 
 static void sendHeartbeat();
+static void handleCommandFromResponse(const String& response);
+
+static bool postCloudJson(const char* url, const String& body) {
+  if (!isWiFiConnected()) return false;
+  if (strlen(KIOSK_HEARTBEAT_SECRET) == 0) return false;
+  if (!url || !url[0]) return false;
+
+  WiFiClientSecure client;
+  client.setInsecure();
+
+  HTTPClient http;
+  http.begin(client, url);
+  http.setTimeout(20000);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-Kiosk-Secret", KIOSK_HEARTBEAT_SECRET);
+
+  const int code = http.POST(body);
+  const bool ok = code >= 200 && code < 300;
+  if (!ok && code > 0) {
+    Serial.printf("[cloud-sync] HTTP %d (%s)\n", code, url);
+  }
+  http.end();
+  return ok;
+}
+
+void heartbeatPushSessionIfDirty() {
+  if (!kioskSessionCloudDirty()) return;
+
+  const String body = buildSessionSyncBody();
+  if (postCloudJson(BACKEND_SESSION_SYNC_URL, body)) {
+    kioskSessionClearCloudDirty();
+    Serial.println("[cloud-sync] session pushed");
+  }
+}
+
+static void handleDisplayCommand(const char* id, const char* action) {
+  bool ok = false;
+  const char* errMsg = nullptr;
+
+  if (strcmp(action, "scan_start") == 0) {
+    Serial.printf("[web-cmd] received scan_start id=%s\n", id);
+    ok = kioskSessionStartScan();
+    if (!ok) errMsg = "scan start failed";
+  } else if (strcmp(action, "scan_cancel") == 0) {
+    Serial.printf("[web-cmd] received scan_cancel id=%s\n", id);
+    kioskSessionCancelScan();
+    ok = true;
+  } else if (strcmp(action, "confirm_pickup") == 0) {
+    Serial.printf("[web-cmd] received confirm_pickup id=%s\n", id);
+    ok = kioskSessionConfirmPickup();
+    if (!ok) errMsg = "confirm failed";
+  } else {
+    Serial.println("[web-cmd] ignored invalid command");
+    return;
+  }
+
+  queueAck(id, ok, ok ? nullptr : errMsg);
+  heartbeatPushSessionIfDirty();
+  sendHeartbeat();
+  lastHeartbeatMs = millis();
+}
 
 static void handleCommandFromResponse(const String& response) {
   JsonDocument doc;
@@ -84,6 +166,21 @@ static void handleCommandFromResponse(const String& response) {
 
   if (!id[0]) {
     Serial.println("[web-cmd] ignored invalid command");
+    return;
+  }
+
+  if (strcmp(action, "scan_start") == 0 ||
+      strcmp(action, "scan_cancel") == 0 ||
+      strcmp(action, "confirm_pickup") == 0) {
+    if (dispenserIsBusy() && strcmp(action, "confirm_pickup") != 0 &&
+        strcmp(action, "scan_cancel") != 0) {
+      Serial.println("[web-cmd] rejected — dispense busy");
+      queueAck(id, false, "busy");
+      sendHeartbeat();
+      lastHeartbeatMs = millis();
+      return;
+    }
+    handleDisplayCommand(id, action);
     return;
   }
 
@@ -155,7 +252,14 @@ void heartbeatSetup() {
 }
 
 void heartbeatLoop() {
-  if (millis() - lastHeartbeatMs < HEARTBEAT_INTERVAL_MS) return;
+  heartbeatPushSessionIfDirty();
+
+  unsigned long interval = HEARTBEAT_INTERVAL_MS;
+  if (kioskSessionPhase() != KIOSK_IDLE) {
+    interval = HEARTBEAT_ACTIVE_INTERVAL_MS;
+  }
+
+  if (millis() - lastHeartbeatMs < interval) return;
   sendHeartbeat();
   lastHeartbeatMs = millis();
 }

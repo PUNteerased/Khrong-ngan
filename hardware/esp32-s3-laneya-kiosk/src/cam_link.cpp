@@ -22,6 +22,7 @@ static bool camOnline = false;
 static bool camPeerReady = false;
 static unsigned long lastCamRxMs = 0;
 static unsigned long lastCamPingMs = 0;
+static char camPreviewUrl[48] = {};
 
 static bool isPlaceholderMac(const uint8_t* mac) {
   return mac[0] == 0xFF && mac[1] == 0xFF && mac[2] == 0xFF &&
@@ -62,6 +63,12 @@ static void handleCamPayload(const uint8_t* data, int len) {
     camOnline = true;
     lastCamRxMs = millis();
     kioskSessionOnScanError(buf + strlen(CAM_MSG_ERR_PREFIX));
+  } else if (strncmp(buf, CAM_MSG_IP_PREFIX, strlen(CAM_MSG_IP_PREFIX)) == 0) {
+    camOnline = true;
+    lastCamRxMs = millis();
+    const char* ip = buf + strlen(CAM_MSG_IP_PREFIX);
+    snprintf(camPreviewUrl, sizeof(camPreviewUrl), "http://%s:81/jpg", ip);
+    Serial.printf("[cam] preview url %s\n", camPreviewUrl);
   }
   Serial.printf("[cam] ESP-NOW << %s\n", buf);
 }
@@ -98,19 +105,27 @@ static bool addCamPeer() {
     return false;
   }
 
+  const uint8_t ch = WiFi.channel();
+
   if (esp_now_is_peer_exist(camPeerMac)) {
-    camPeerReady = true;
-    return true;
+    esp_now_peer_info_t existing = {};
+    if (esp_now_get_peer(camPeerMac, &existing) == ESP_OK && existing.channel == ch) {
+      camPeerReady = true;
+      return true;
+    }
+    esp_now_del_peer(camPeerMac);
+    Serial.printf("[cam] peer channel changed → re-add ch=%d\n", ch);
   }
 
   esp_now_peer_info_t peer = {};
   memcpy(peer.peer_addr, camPeerMac, 6);
-  peer.channel = WiFi.channel();
+  peer.channel = ch;
   peer.encrypt = false;
   peer.ifidx = WIFI_IF_STA;
 
   if (esp_now_add_peer(&peer) != ESP_OK) {
     Serial.println("[cam] esp_now_add_peer failed");
+    camPeerReady = false;
     return false;
   }
 
@@ -182,4 +197,8 @@ bool camLinkRequestScan() {
 
 void camLinkRequestScanStop() {
   sendCamMessage(CAM_MSG_SCAN_STOP);
+}
+
+const char* camLinkPreviewUrl() {
+  return camPreviewUrl[0] ? camPreviewUrl : nullptr;
 }
