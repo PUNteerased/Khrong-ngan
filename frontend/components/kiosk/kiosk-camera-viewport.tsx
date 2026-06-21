@@ -5,7 +5,7 @@ import { getKioskCameraFrameUrl } from "@/lib/kiosk-api"
 import { isKioskLanMode } from "@/lib/kiosk-connectivity"
 import type { KioskMessages } from "@/lib/kiosk-i18n"
 
-const POLL_MS = 500
+const POLL_MS = 350
 
 type Props = {
   t: KioskMessages
@@ -25,6 +25,7 @@ export function KioskCameraViewport({
   const [hasFrame, setHasFrame] = useState(false)
   const [lanLoadFailed, setLanLoadFailed] = useState(false)
   const blobRef = useRef<string | null>(null)
+  const pollInFlightRef = useRef(false)
 
   const lanSrc =
     active && isKioskLanMode() && camPreviewUrl
@@ -45,7 +46,17 @@ export function KioskCameraViewport({
 
     let cancelled = false
 
+    const commitBlobUrl = (next: string) => {
+      const prev = blobRef.current
+      blobRef.current = next
+      setCloudBlobUrl(next)
+      setHasFrame(true)
+      if (prev && prev !== next) URL.revokeObjectURL(prev)
+    }
+
     const pollCloudFrame = async () => {
+      if (pollInFlightRef.current) return
+      pollInFlightRef.current = true
       try {
         const res = await fetch(
           `${getKioskCameraFrameUrl()}?t=${Date.now()}`,
@@ -60,12 +71,20 @@ export function KioskCameraViewport({
         if (cancelled || !blob.size) return
 
         const next = URL.createObjectURL(blob)
-        if (blobRef.current) URL.revokeObjectURL(blobRef.current)
-        blobRef.current = next
-        setCloudBlobUrl(next)
-        setHasFrame(true)
+        const img = new Image()
+        img.onload = () => {
+          if (cancelled) {
+            URL.revokeObjectURL(next)
+            return
+          }
+          commitBlobUrl(next)
+        }
+        img.onerror = () => URL.revokeObjectURL(next)
+        img.src = next
       } catch {
         /* retry on next poll */
+      } finally {
+        pollInFlightRef.current = false
       }
     }
 
@@ -73,6 +92,7 @@ export function KioskCameraViewport({
     const id = window.setInterval(() => void pollCloudFrame(), POLL_MS)
     return () => {
       cancelled = true
+      pollInFlightRef.current = false
       window.clearInterval(id)
       if (blobRef.current) {
         URL.revokeObjectURL(blobRef.current)
@@ -102,7 +122,7 @@ export function KioskCameraViewport({
         <img
           src={displaySrc}
           alt=""
-          className="block h-full w-full object-cover"
+          className="block h-full w-full object-cover [image-rendering:auto]"
           onLoad={() => {
             setHasFrame(true)
             setLanLoadFailed(false)

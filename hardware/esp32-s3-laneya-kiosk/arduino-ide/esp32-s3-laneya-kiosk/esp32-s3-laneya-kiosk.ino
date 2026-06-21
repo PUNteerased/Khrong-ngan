@@ -820,6 +820,14 @@ static void handleCamPayload(const uint8_t* data, int len) {
     const char* ip = buf + strlen(CAM_MSG_IP_PREFIX);
     snprintf(camPreviewUrl, sizeof(camPreviewUrl), "http://%s:81/jpg", ip);
     Serial.printf("[cam] preview url %s\n", camPreviewUrl);
+    if (kioskPhase == KIOSK_SCANNING) {
+      Serial.println("[cam] IP during scan → arm CAM");
+      camHttpScanControl(true);
+      for (int i = 0; i < 5; i++) {
+        sendCamMessage(CAM_MSG_SCAN);
+        delay(40);
+      }
+    }
   }
   Serial.printf("[cam] ESP-NOW << %s\n", buf);
 }
@@ -1061,11 +1069,26 @@ void relayCameraFrameIfScanning() {
     delay(150);
   }
   if (camCode != HTTP_CODE_OK) {
-    if (camCode != 503) {
-      camRelayWarnf("[cam-relay] CAM GET HTTP %d\n", camCode);
+    if (camCode == 404 && kioskPhase == KIOSK_SCANNING) {
+      camHttp.end();
+      Serial.println("[cam-relay] CAM not scanning → arm via HTTP+ESP-NOW");
+      camHttpScanControl(true);
+      for (int i = 0; i < 5; i++) {
+        sendCamMessage(CAM_MSG_SCAN);
+        delay(40);
+      }
+      delay(350);
+      camHttp.begin(camClient, previewUrl);
+      camHttp.setTimeout(8000);
+      camCode = camHttp.GET();
     }
-    camHttp.end();
-    return;
+    if (camCode != HTTP_CODE_OK) {
+      if (camCode != 503 && camCode != 404) {
+        camRelayWarnf("[cam-relay] CAM GET HTTP %d\n", camCode);
+      }
+      camHttp.end();
+      return;
+    }
   }
 
   WiFiClient* stream = camHttp.getStreamPtr();

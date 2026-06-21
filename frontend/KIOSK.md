@@ -35,14 +35,17 @@ Tablet (Vercel HTTPS)
 ESP32-S3
   → POST /api/kiosk/heartbeat + session (Render)
   → POST /api/kiosk/session-sync เมื่อ phase เปลี่ยน
-  → ตอน scanning: GET http://CAM:81/jpg ทุก ~500ms → POST /api/kiosk/camera-frame
+  → ตอน scanning (fallback): GET http://CAM:81/jpg → POST /api/kiosk/camera-frame
   ↔ ESP-NOW ESP32-CAM (QR scan — local only)
   → POST /api/kiosk/preview-ticket + redeem-ticket (Render)
+ESP32-CAM
+  → ตอน scanning: capture JPEG → POST /api/kiosk/camera-frame ทุก ~800ms (primary)
+  → HTTP :81/jpg สำหรับ LAN preview / S3 relay fallback
 ```
 
 **Live camera preview**
 - **LAN** (`NEXT_PUBLIC_KIOSK_MODE=lan`): แท็บเล็ตโหลด `camPreviewUrl` จาก session ตรง (`http://CAM:81/jpg`)
-- **Cloud (Vercel)**: S3 relay JPEG ไป Render → แท็บเล็ต poll `GET /api/kiosk/display/camera-frame` (หลีก mixed content)
+- **Cloud (Vercel)**: **CAM** อัปโหลด JPEG ไป Render โดยตรง → แท็บเล็ต poll `GET /api/kiosk/display/camera-frame` (S3 relay เป็น fallback)
 
 ## Environment
 
@@ -58,6 +61,12 @@ KIOSK_DISPLAY_TOKEN=change-me-kiosk-display
 ### Render (backend)
 ```env
 KIOSK_HEARTBEAT_SECRET=...   # ตรงกับ firmware S3
+```
+
+### ESP32-CAM firmware
+```cpp
+BACKEND_CAMERA_FRAME_URL=https://khrong-ngan.onrender.com/api/kiosk/camera-frame
+KIOSK_HEARTBEAT_SECRET=...   // ตรงกับ S3 + Render
 ```
 
 ### ESP32-S3 firmware
@@ -93,10 +102,11 @@ Cloud mode: กด **ยกเลิก** หรือ **ลองใหม่**
 | Banner ตู้ offline บน Vercel | S3 ยังไม่ heartbeat ไป Render / WiFi ขาด |
 | กดสแกนแล้วไม่เริ่ม | รอ heartbeat 2–5s / firmware เก่าไม่รองรับ scan_start |
 | scan timeout | QR ไม่ถูกอ่าน — ดู Serial CAM |
-| กล้อง preview ไม่ขึ้นบน Vercel | รอ S3 relay ~1s / ตรวจ `BACKEND_CAMERA_FRAME_URL` ใน firmware |
+| กล้อง preview ไม่ขึ้นบน Vercel | อัปโหลด CAM firmware ล่าสุด — ดู Serial `[cloud-relay] posted N bytes HTTP 200` |
 | `409 command in progress` | คำสั่ง scan ค้าง — กดยกเลิกหรือรอ 8s แล้วลองใหม่ (backend ล้าง stale อัตโนมัติ) |
-| S3 Serial `CAM GET HTTP -1` | S3 เชื่อม CAM ไม่ได้ — ปิด AP isolation บน router / ทดสอบ `http://<CAM-IP>:81/health` จาก PC |
-| CAM `/health` เป็น `scanning:false` ตอนสแกน | CAM ไม่ได้รับ SCAN — อัปโหลด firmware CAM+S3 ล่าสุด / ดู Serial CAM ต้องมี `[espnow] << SCAN` |
+| S3 Serial `CAM GET HTTP -1` | S3→CAM HTTP ล้มเหลว — ไม่กระทบ cloud preview ถ้า CAM upload เองแล้ว / ทดสอบ `curl http://<CAM-IP>:81/health` จาก PC |
+| CAM reboot / ตัวอักษรแปลกๆ | firmware เก่าใช้กล้องพร้อม QR — อัปโหลด CAM ล่าสุด (pause QR ก่อน capture) |
+| CAM `/health` เป็น `scanning:false` ตอนสแกน | CAM ไม่ได้รับ SCAN — ดู Serial CAM ต้องมี `[espnow] << SCAN` → `[scan] started` |
 | mixed content (LAN mode) | ตั้ง `NEXT_PUBLIC_KIOSK_MODE` ไม่ใช่ `lan` บน Vercel |
 
 ## Deploy checklist

@@ -70,6 +70,9 @@ static void handleCamPayload(const uint8_t* data, int len) {
     const char* ip = buf + strlen(CAM_MSG_IP_PREFIX);
     snprintf(camPreviewUrl, sizeof(camPreviewUrl), "http://%s:81/jpg", ip);
     Serial.printf("[cam] preview url %s\n", camPreviewUrl);
+    if (kioskSessionPhase() == KIOSK_SCANNING) {
+      camLinkArmScanRemote();
+    }
   }
   Serial.printf("[cam] ESP-NOW << %s\n", buf);
 }
@@ -246,6 +249,16 @@ void camLinkRequestScanStop() {
 
 void camLinkHttpScanKeepalive() {
   camHttpScanControl(true);
+}
+
+void camLinkArmScanRemote() {
+  if (kioskSessionPhase() != KIOSK_SCANNING) return;
+  Serial.println("[cam] arm remote scan (HTTP + ESP-NOW)");
+  camHttpScanControl(true);
+  for (int i = 0; i < 5; i++) {
+    sendCamMessage(CAM_MSG_SCAN);
+    delay(40);
+  }
 }
 
 const char* camLinkPreviewUrl() {

@@ -206,11 +206,21 @@ static void relayCameraFrameIfScanning() {
     delay(150);
   }
   if (camCode != HTTP_CODE_OK) {
-    if (camCode != 503) {
-      camRelayWarnf("[cam-relay] CAM GET HTTP %d\n", camCode);
+    if (camCode == 404 && kioskSessionPhase() == KIOSK_SCANNING) {
+      camHttp.end();
+      camLinkArmScanRemote();
+      delay(350);
+      camHttp.begin(camClient, previewUrl);
+      camHttp.setTimeout(8000);
+      camCode = camHttp.GET();
     }
-    camHttp.end();
-    return;
+    if (camCode != HTTP_CODE_OK) {
+      if (camCode != 503 && camCode != 404) {
+        camRelayWarnf("[cam-relay] CAM GET HTTP %d\n", camCode);
+      }
+      camHttp.end();
+      return;
+    }
   }
 
   WiFiClient* stream = camHttp.getStreamPtr();

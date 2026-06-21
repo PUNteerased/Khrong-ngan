@@ -70,20 +70,44 @@ CAM สแกนแล้วส่ง ESP-NOW → S3: `QR:A1-0001-XYZABC`
 
 Serial ต้องเห็น MAC จริง — **ถ้าเป็น `00:00:00:00:00:00` ไม่ถูกต้อง** (reset / เปลี่ยนสาย USB)
 
-เมื่อ S3 ส่ง `SCAN` กล้องสแกน QR 45 วินาที — ดู `[espnow] >> QR:...` บน Serial ของ CAM
+เมื่อ S3 ส่ง `SCAN` กล้องสแกน QR **60 วินาที** — ดู `[espnow] << SCAN` แล้ว `[scan] started (60s)` บน Serial ของ CAM
 
-## Preview ภาพกล้อง (port 81)
+## ตั้งค่า cloud preview (Vercel)
 
-Firmware ล่าสุดเปิด HTTP preview ขณะสแกน:
+CAM อัปโหลด JPEG ตรงไป Render ระหว่างสแกน (ไม่พึ่ง S3→CAM HTTP):
+
+```cpp
+#define BACKEND_CAMERA_FRAME_URL "https://khrong-ngan.onrender.com/api/kiosk/camera-frame"
+#define KIOSK_HEARTBEAT_SECRET "..."   // ตรงกับ S3 + Render
+```
+
+Serial ระหว่างสแกน: `[cloud-relay] posted N bytes HTTP 200`
+
+## Preview ภาพกล้อง (port 81 + cloud)
+
+Firmware ล่าสุด:
+- **หยุด QR reader ชั่วคราว** ก่อน capture preview (กัน crash / SW_RESET)
+- อัปโหลด JPEG ไป Render ทุก ~800ms ขณะ `scanning`
+- HTTP preview บน LAN (fallback ถ้า S3 relay ใช้ได้)
 
 | URL | หน้าที่ |
 |-----|---------|
 | `http://<CAM-IP>:81/jpg` | JPEG snapshot ล่าสุด (ขณะ scanning เท่านั้น) |
-| `http://<CAM-IP>:81/health` | `{"scanning":true/false}` |
+| `http://<CAM-IP>:81/health` | `{"scanning":true/false,"hasFrame":...,"jpgBytes":...}` |
+| `http://<CAM-IP>:81/scan/start` | เริ่มสแกน (fallback ถ้า ESP-NOW หลุด) |
 
-Serial boot: `[preview] http://10.x.x.x:81/jpg`
+ทดสอบจาก PC (WiFi เดียวกัน):
 
-CAM ส่ง `IP:10.x.x.x` ไป S3 ผ่าน ESP-NOW → หน้า `/kiosk` บน S3 แสดงภาพกล้องอัตโนมัติ
+```powershell
+curl.exe http://192.168.1.13:81/health
+```
+
+- ตอนยังไม่สแกน: `"scanning":false` = ปกติ
+- ระหว่างสแกนบนคีออส: ต้องเป็น `"scanning":true`
+
+Serial boot: `[preview] http://192.168.x.x:81/jpg`
+
+CAM ส่ง `IP:192.168.x.x` ไป S3 ผ่าน ESP-NOW → S3 LAN kiosk แสดงภาพจาก `camPreviewUrl`
 
 ### IDE ค้าง / upload ไม่จบ (Windows + ESP32-CAM)
 

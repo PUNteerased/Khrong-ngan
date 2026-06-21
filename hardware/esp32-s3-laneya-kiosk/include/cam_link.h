@@ -9,5 +9,6 @@ bool camLinkRequestScan();
 void camLinkResendScan();
 void camLinkRequestScanStop();
 void camLinkHttpScanKeepalive();
+void camLinkArmScanRemote();
 void camLinkOnQrPayload(const char* payload);
 const char* camLinkPreviewUrl();
