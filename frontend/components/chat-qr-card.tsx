@@ -140,47 +140,29 @@ export function ChatQrCard({
   }
 
   return (
-    <div className="mt-3 w-full rounded-lg border border-primary/30 bg-primary/5 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <p className="text-xs font-medium text-primary">{tChat("qrPickupTitle")}</p>
-          <p className="text-xs text-muted-foreground">{tChat("qrPickupHint")}</p>
-        </div>
-        {showQr ? (
-          <div className="flex shrink-0 gap-1">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={downloading}
-              onClick={() => void handleDownload()}
-            >
-              <Download className="mr-1 h-3.5 w-3.5" />
-              {downloading ? tTicket("downloadBusy") : tTicket("download")}
-            </Button>
-            {onOpenFull ? (
-              <Button type="button" variant="secondary" size="sm" onClick={onOpenFull}>
-                <Expand className="h-3.5 w-3.5 mr-1" />
-                {tChat("qrOpenFullscreen")}
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
+    <div className="mt-3 w-full max-w-sm rounded-xl border border-primary/25 bg-gradient-to-b from-primary/5 to-background p-4 shadow-sm">
+      <div className="space-y-1 text-center">
+        <p className="text-sm font-semibold text-primary">{tChat("qrPickupTitle")}</p>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {tChat("qrPickupHint")}
+        </p>
       </div>
-      <div className="mt-2 flex items-center justify-between text-xs">
-        <div className="flex items-center gap-1 text-muted-foreground">
-          <QrCode className="h-3.5 w-3.5" />
-          <span>{ticket.drug.name}</span>
-          <span className="text-muted-foreground/70">({ticket.drug.slotId})</span>
+
+      <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-background/80 px-3 py-2 text-xs">
+        <div className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+          <QrCode className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate font-medium text-foreground">{ticket.drug.name}</span>
+          <span className="shrink-0 text-muted-foreground/70">({ticket.drug.slotId})</span>
         </div>
         <span
-          className={
+          className={cn(
+            "shrink-0 font-medium tabular-nums",
             redeemed
               ? "text-muted-foreground"
               : expired
                 ? "text-destructive"
                 : "text-primary"
-          }
+          )}
         >
           {redeemed
             ? tChat("qrRedeemed")
@@ -189,15 +171,50 @@ export function ChatQrCard({
               : tChat("qrTimeLeft", { time: formatMMSS(remainingSeconds) })}
         </span>
       </div>
+
       {showQr ? (
         <>
-          <div className="mt-3 flex justify-center rounded-lg bg-white p-3">
-            <QRCode value={ticket.code} size={168} level="M" />
+          <div className="mt-4 flex justify-center rounded-xl border border-primary/10 bg-white p-4 shadow-inner">
+            <QRCode value={ticket.code} size={176} level="M" />
           </div>
-          <p className="mt-2 text-center text-xs text-muted-foreground">{ticket.code}</p>
+          <p className="mt-2 text-center font-mono text-xs tracking-wide text-muted-foreground">
+            {ticket.code}
+          </p>
+          <div
+            className={cn(
+              "mt-3 grid gap-2",
+              onOpenFull ? "grid-cols-2" : "grid-cols-1"
+            )}
+          >
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-10 w-full text-xs"
+              disabled={downloading}
+              onClick={() => void handleDownload()}
+            >
+              <Download className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+              {downloading ? tTicket("downloadBusy") : tTicket("download")}
+            </Button>
+            {onOpenFull ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-10 w-full text-xs"
+                onClick={onOpenFull}
+              >
+                <Expand className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+                {tChat("qrOpenFullscreen")}
+              </Button>
+            ) : null}
+          </div>
         </>
       ) : (
-        <p className="mt-2 text-center text-xs text-muted-foreground">{ticket.code}</p>
+        <p className="mt-3 text-center font-mono text-xs text-muted-foreground">
+          {ticket.code}
+        </p>
       )}
 
       {showQr ? (

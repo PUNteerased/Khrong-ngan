@@ -22,6 +22,7 @@ export function KioskScanCountdown({
         t={t}
         active
         camPreviewUrl={camPreviewUrl}
+        camOnline={camOnline}
       />
       <p className="text-xl font-semibold text-primary">{t.cameraOn}</p>
       <p

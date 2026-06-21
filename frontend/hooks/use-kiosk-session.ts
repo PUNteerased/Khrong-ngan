@@ -7,7 +7,19 @@ import {
   type KioskSessionPhase,
 } from "@/lib/kiosk-api"
 
-export function useKioskSession(pollMs = 500) {
+function isRateLimitedError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false
+  return err.message === "429" || err.message.toLowerCase().includes("too many")
+}
+
+function pollIntervalFor(phase: KioskSessionPhase): number {
+  if (phase === "scanning" || phase === "preview" || phase === "dispensing") {
+    return 600
+  }
+  return 1000
+}
+
+export function useKioskSession() {
   const [session, setSession] = useState<KioskSession>({
     phase: "idle",
     countdownSec: 0,
@@ -20,16 +32,21 @@ export function useKioskSession(pollMs = 500) {
       const data = await getKioskSession()
       setSession(data)
       setConnected(data.connected !== false)
-    } catch {
+    } catch (err) {
+      if (isRateLimitedError(err)) return
       setConnected(false)
     }
   }, [])
 
   useEffect(() => {
     void refresh()
+  }, [refresh])
+
+  useEffect(() => {
+    const pollMs = pollIntervalFor(session.phase as KioskSessionPhase)
     const id = window.setInterval(() => void refresh(), pollMs)
     return () => window.clearInterval(id)
-  }, [pollMs, refresh])
+  }, [session.phase, refresh])
 
   return { session, connected, refresh, phase: session.phase as KioskSessionPhase }
 }

@@ -46,7 +46,7 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
   const [ttsOn, setTtsOn] = useState(false)
   const [busy, setBusy] = useState(false)
   const [mixedContent, setMixedContent] = useState(false)
-  const { session, connected, phase } = useKioskSession(500)
+  const { session, connected, phase } = useKioskSession()
   const t = useMemo(() => getKioskMessages(locale), [locale])
 
   useEffect(() => {

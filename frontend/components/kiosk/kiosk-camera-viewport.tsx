@@ -1,62 +1,120 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { getKioskCameraFrameUrl } from "@/lib/kiosk-api"
 import { isKioskLanMode } from "@/lib/kiosk-connectivity"
 import type { KioskMessages } from "@/lib/kiosk-i18n"
 
-const POLL_MS = 400
+const POLL_MS = 500
 
 type Props = {
   t: KioskMessages
   active: boolean
   camPreviewUrl?: string
+  camOnline?: boolean
 }
 
-export function KioskCameraViewport({ t, active, camPreviewUrl }: Props) {
-  const [tick, setTick] = useState(0)
-  const [imageFailed, setImageFailed] = useState(false)
+export function KioskCameraViewport({
+  t,
+  active,
+  camPreviewUrl,
+  camOnline,
+}: Props) {
+  const [lanTick, setLanTick] = useState(0)
+  const [cloudBlobUrl, setCloudBlobUrl] = useState<string | null>(null)
+  const [hasFrame, setHasFrame] = useState(false)
+  const [lanLoadFailed, setLanLoadFailed] = useState(false)
+  const blobRef = useRef<string | null>(null)
 
-  const src = useMemo(() => {
-    if (!active) return null
-    const base = isKioskLanMode()
-      ? camPreviewUrl
-      : getKioskCameraFrameUrl()
-    if (!base) return null
-    const sep = base.includes("?") ? "&" : "?"
-    return `${base}${sep}t=${tick}`
-  }, [active, camPreviewUrl, tick])
+  const lanSrc =
+    active && isKioskLanMode() && camPreviewUrl
+      ? `${camPreviewUrl}${camPreviewUrl.includes("?") ? "&" : "?"}t=${lanTick}`
+      : null
 
   useEffect(() => {
-    if (!active) {
-      setImageFailed(false)
-      return
-    }
-    setImageFailed(false)
-    const id = window.setInterval(() => {
-      setTick(Date.now())
-    }, POLL_MS)
+    if (!active || !isKioskLanMode() || !camPreviewUrl) return
+    const id = window.setInterval(() => setLanTick(Date.now()), POLL_MS)
     return () => window.clearInterval(id)
   }, [active, camPreviewUrl])
 
-  const showPlaceholder = !src || imageFailed
+  useEffect(() => {
+    if (!active || isKioskLanMode()) {
+      setHasFrame(false)
+      return
+    }
+
+    let cancelled = false
+
+    const pollCloudFrame = async () => {
+      try {
+        const res = await fetch(
+          `${getKioskCameraFrameUrl()}?t=${Date.now()}`,
+          { cache: "no-store" }
+        )
+        if (cancelled) return
+        if (res.status === 404) return
+        if (res.status === 429) return
+        if (!res.ok) return
+
+        const blob = await res.blob()
+        if (cancelled || !blob.size) return
+
+        const next = URL.createObjectURL(blob)
+        if (blobRef.current) URL.revokeObjectURL(blobRef.current)
+        blobRef.current = next
+        setCloudBlobUrl(next)
+        setHasFrame(true)
+      } catch {
+        /* retry on next poll */
+      }
+    }
+
+    void pollCloudFrame()
+    const id = window.setInterval(() => void pollCloudFrame(), POLL_MS)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+      if (blobRef.current) {
+        URL.revokeObjectURL(blobRef.current)
+        blobRef.current = null
+      }
+      setCloudBlobUrl(null)
+      setHasFrame(false)
+    }
+  }, [active])
+
+  const displaySrc = lanSrc ?? cloudBlobUrl
+  const showPlaceholder =
+    !displaySrc ||
+    (lanSrc ? lanLoadFailed : !hasFrame)
+
+  const placeholderText =
+    camOnline === false
+      ? t.camOffline
+      : showPlaceholder
+        ? t.camConnecting
+        : null
 
   return (
     <div className="relative w-full max-w-xl overflow-hidden rounded-2xl bg-[#0a1628] shadow-lg aspect-[16/10]">
-      {src ? (
+      {displaySrc && !showPlaceholder ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          key={src}
-          src={src}
+          src={displaySrc}
           alt=""
-          className={`h-full w-full object-cover ${showPlaceholder ? "hidden" : "block"}`}
-          onLoad={() => setImageFailed(false)}
-          onError={() => setImageFailed(true)}
+          className="block h-full w-full object-cover"
+          onLoad={() => {
+            setHasFrame(true)
+            setLanLoadFailed(false)
+          }}
+          onError={() => {
+            if (lanSrc) setLanLoadFailed(true)
+          }}
         />
       ) : null}
-      {showPlaceholder ? (
+      {placeholderText ? (
         <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-base text-slate-400">
-          {t.camConnecting}
+          {placeholderText}
         </div>
       ) : null}
       <div className="pointer-events-none absolute inset-0" aria-hidden>

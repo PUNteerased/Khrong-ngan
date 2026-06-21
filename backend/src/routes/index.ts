@@ -55,7 +55,14 @@ const contactLimiter = rateLimit({
 
 const kioskDisplayLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 120,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+const kioskCameraFrameLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 600,
   standardHeaders: true,
   legacyHeaders: false,
 })
@@ -127,7 +134,7 @@ router.post(
 router.post("/api/kiosk/camera-frame", kioskCameraFrameController.postKioskCameraFrame)
 router.get(
   "/api/kiosk/display/camera-frame",
-  kioskDisplayLimiter,
+  kioskCameraFrameLimiter,
   kioskCameraFrameController.getKioskDisplayCameraFrame
 )
 
