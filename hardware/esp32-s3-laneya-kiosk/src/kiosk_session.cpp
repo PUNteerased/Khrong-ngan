@@ -5,6 +5,10 @@
 
 #include <ArduinoJson.h>
 
+#ifndef KIOSK_SCAN_DURATION_MS
+#define KIOSK_SCAN_DURATION_MS 60000
+#endif
+
 static KioskPhase phase = KIOSK_IDLE;
 static unsigned long scanUntilMs = 0;
 static char sessionError[96] = {};
@@ -73,8 +77,8 @@ bool kioskSessionStartScan() {
   pendingSignature[0] = '\0';
   if (!camLinkRequestScan()) return false;
   phase = KIOSK_SCANNING;
-  scanUntilMs = millis() + 45000;
-  Serial.println("[kiosk] scan started (45s)");
+  scanUntilMs = millis() + KIOSK_SCAN_DURATION_MS;
+  Serial.printf("[kiosk] scan started (%us)\n", KIOSK_SCAN_DURATION_MS / 1000);
   markCloudDirty();
   return true;
 }

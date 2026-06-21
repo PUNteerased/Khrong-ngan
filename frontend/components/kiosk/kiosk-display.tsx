@@ -26,6 +26,7 @@ import {
   mapKioskSessionError,
 } from "@/lib/kiosk-connectivity"
 import { getKioskMessages } from "@/lib/kiosk-i18n"
+import { KIOSK_SCAN_DURATION_SEC } from "@/lib/kiosk-constants"
 
 function speak(text: string, locale: KioskLocale) {
   if (typeof window === "undefined" || !window.speechSynthesis) return
@@ -124,7 +125,7 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
       return (
         <KioskScanCountdown
           t={t}
-          seconds={session.countdownSec || 45}
+          seconds={session.countdownSec || KIOSK_SCAN_DURATION_SEC}
           camOnline={session.camOnline}
           camPreviewUrl={session.camPreviewUrl}
         />

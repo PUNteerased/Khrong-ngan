@@ -58,7 +58,7 @@ static uint8_t* jpgBuf = nullptr;
 static size_t jpgLen = 0;
 static portMUX_TYPE jpgMux = portMUX_INITIALIZER_UNLOCKED;
 
-#define SCAN_DURATION_MS 45000
+#define SCAN_DURATION_MS 60000
 #define FLASH_LED_PIN 4
 
 bool addS3Peer();
@@ -295,7 +295,7 @@ static void startScan() {
   lastPreviewCaptureMs = 0;
   digitalWrite(FLASH_LED_PIN, HIGH);
   sendCamIpToS3();
-  Serial.println("[scan] started (45s)");
+  Serial.println("[scan] started (60s)");
 }
 
 static void stopScan(const char* errMsg) {

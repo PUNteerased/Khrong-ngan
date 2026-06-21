@@ -2,6 +2,8 @@
 
 import type { KioskMessages } from "@/lib/kiosk-i18n"
 import { KioskCameraViewport } from "@/components/kiosk/kiosk-camera-viewport"
+import { KIOSK_SCAN_DURATION_SEC } from "@/lib/kiosk-constants"
+import { useSmoothCountdown } from "@/hooks/use-smooth-countdown"
 
 type Props = {
   t: KioskMessages
@@ -16,6 +18,8 @@ export function KioskScanCountdown({
   camOnline,
   camPreviewUrl,
 }: Props) {
+  const displaySeconds = useSmoothCountdown(seconds, true)
+
   return (
     <div className="flex h-full flex-col items-center justify-center gap-5 px-6 text-center">
       <KioskCameraViewport
@@ -38,12 +42,14 @@ export function KioskScanCountdown({
         className="flex h-28 w-28 items-center justify-center rounded-full border-8 border-primary/20 bg-primary/5 text-[4rem] font-bold tabular-nums text-primary"
         aria-live="polite"
       >
-        {seconds}
+        {displaySeconds}
       </div>
       <div className="h-3 w-48 overflow-hidden rounded-full bg-muted">
         <div
-          className="h-full bg-primary transition-all duration-500"
-          style={{ width: `${Math.max(0, (seconds / 45) * 100)}%` }}
+          className="h-full bg-primary transition-all duration-1000 ease-linear"
+          style={{
+            width: `${Math.max(0, (displaySeconds / KIOSK_SCAN_DURATION_SEC) * 100)}%`,
+          }}
         />
       </div>
     </div>

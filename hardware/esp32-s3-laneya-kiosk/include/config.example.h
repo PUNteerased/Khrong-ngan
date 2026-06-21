@@ -19,6 +19,10 @@
 #define FIRMWARE_VERSION "1.0.0"
 #define HEARTBEAT_INTERVAL_MS 5000  // 5000=รับคำสั่งเร็ว, 60000=ประหยัด traffic
 
+#ifndef KIOSK_SCAN_DURATION_MS
+#define KIOSK_SCAN_DURATION_MS 60000
+#endif
+
 // --- I2C → PCA9685 (มอเตอร์ MG996R 360° ช่อง 0–9) ---
 #define I2C_SDA_PIN 9
 #define I2C_SCL_PIN 10

@@ -31,6 +31,7 @@
 #define HEARTBEAT_INTERVAL_MS 5000
 #define HEARTBEAT_ACTIVE_INTERVAL_MS 2500
 #define CAMERA_FRAME_INTERVAL_MS 500
+#define KIOSK_SCAN_DURATION_MS 60000
 
 #define I2C_SDA_PIN 9
 #define I2C_SCL_PIN 10
@@ -632,8 +633,8 @@ bool kioskSessionStartScan() {
   kioskPendingSignature[0] = '\0';
   if (!camLinkRequestScan()) return false;
   kioskPhase = KIOSK_SCANNING;
-  kioskScanUntilMs = millis() + 45000;
-  Serial.println("[kiosk] scan started (45s)");
+  kioskScanUntilMs = millis() + KIOSK_SCAN_DURATION_MS;
+  Serial.printf("[kiosk] scan started (%us)\n", KIOSK_SCAN_DURATION_MS / 1000);
   kioskMarkCloudDirty();
   return true;
 }
