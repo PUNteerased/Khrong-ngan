@@ -441,7 +441,7 @@ export const thMessages = {
     tabInventory: "สต็อก",
     tabLogs: "ประวัติ",
     tabHardware: "ฮาร์ดแวร์",
-    tabKiosk: "Kiosk",
+    tabKiosk: "คีออส",
     tabUsers: "ผู้ใช้",
     tabKnowledge: "คลังข้อมูล",
     topDrugsTitle: "ยาที่ถูกอ้างอิงในแชท (สะสม)",
@@ -471,10 +471,10 @@ export const thMessages = {
     servoTestHint: "กดช่อง 0–9 เพื่อหมุนทดสอบ (คำสั่งส่งผ่าน heartbeat ไปตู้)",
     servoSlot: "ช่อง {slot}",
     servoTestAll: "หมุนทุกช่อง",
-    openKioskDisplay: "เปิดจอ Kiosk",
+    openKioskDisplay: "เปิดจอคีออส",
     openKioskDisplayHint:
       "จอแสดงผลสำหรับแท็บเล็ตบนตู้ — ต้อง WiFi เดียวกับ ESP32-S3",
-    kioskTabTitle: "จอ Kiosk บนตู้จ่ายยา",
+    kioskTabTitle: "จอคีออสบนตู้จ่ายยา",
     kioskTabDescription:
       "หน้าจอสำหรับแท็บเล็ต 11 นิ้วแนวตั้ง — สแกน QR ยืนยันตัวตน แล้วจ่ายยาจากตู้",
     kioskS3UrlLabel: "ESP32-S3 (LAN)",
@@ -487,7 +487,7 @@ export const thMessages = {
     kioskTabletUrlHint:
       "แท็บเล็ตติดตั้งถาวร: bookmark /kiosk?token=... (ตั้ง KIOSK_DISPLAY_TOKEN ใน env)",
     kioskAuthRequired: "ต้องเข้าสู่ระบบผู้ดูแลก่อน",
-    kioskAuthHint: "เข้าสู่ระบบที่หน้า Admin แล้วเปิดจอ Kiosk อีกครั้ง",
+    kioskAuthHint: "เข้าสู่ระบบที่หน้า Admin แล้วเปิดจอคีออสอีกครั้ง",
     backToAdmin: "กลับ Admin",
     servoSuccessAll: "ทดสอบทุกช่อง 0–9 สำเร็จ",
     servoQueued: "ส่งคำสั่งแล้ว — รอตู้รับคำสั่ง",
@@ -696,7 +696,7 @@ export const thMessages = {
     s5d: "อาการเจ็บบริเวณลำคอ",
   },
   Kiosk: {
-    title: "LaneYa Kiosk",
+    title: "LaneYa คีออส",
     emergencyBanner:
       "⚠️ หากท่านมีอาการป่วยฉุกเฉินรุนแรง (เช่น แน่นหน้าอก, หายใจไม่ออก, หมดสติ) โปรดอย่าใช้ตู้นี้ และโทรสายด่วน 1669 ทันที",
     scanCaption:

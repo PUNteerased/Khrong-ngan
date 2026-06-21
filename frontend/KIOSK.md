@@ -13,7 +13,7 @@ https://<your-host>/kiosk?token=<KIOSK_DISPLAY_TOKEN>
 ```
 https://<your-host>/admin/kiosk
 ```
-หรือจาก Admin → แท็บ **Kiosk** → **เปิดจอ Kiosk**
+หรือจาก Admin → แท็บ **คีออส** → **เปิดจอคีออส**
 
 ครั้งแรกใส่ `?token=` แล้ว cookie จะถูกตั้ง — bookmark URL หลัง redirect ได้
 
