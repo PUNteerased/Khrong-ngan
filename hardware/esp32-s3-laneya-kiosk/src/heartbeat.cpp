@@ -31,7 +31,7 @@
 #endif
 
 #ifndef CAMERA_FRAME_INTERVAL_MS
-#define CAMERA_FRAME_INTERVAL_MS 500
+#define CAMERA_FRAME_INTERVAL_MS 1000
 #endif
 
 static unsigned long lastHeartbeatMs = 0;

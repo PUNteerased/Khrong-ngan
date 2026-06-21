@@ -28,9 +28,9 @@
 #define MSG_IP_PREFIX "IP:"
 
 #define PREVIEW_HTTP_PORT 81
-#define PREVIEW_FRAME2JPEG_QUALITY 15
-#define PREVIEW_MAX_JPEG_BYTES 95000
-#define CLOUD_RELAY_MS 500
+#define PREVIEW_FRAME2JPEG_QUALITY 38
+#define PREVIEW_MAX_JPEG_BYTES 48000
+#define CLOUD_RELAY_MS 1000
 
 #define BACKEND_CAMERA_FRAME_URL "https://khrong-ngan.onrender.com/api/kiosk/camera-frame"
 #define KIOSK_HEARTBEAT_SECRET "ilovevijai"

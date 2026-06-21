@@ -5,7 +5,7 @@ import { getKioskCameraFrameUrl } from "@/lib/kiosk-api"
 import { isKioskLanMode } from "@/lib/kiosk-connectivity"
 import type { KioskMessages } from "@/lib/kiosk-i18n"
 
-const POLL_MS = 350
+const POLL_MS = 900
 
 type Props = {
   t: KioskMessages
