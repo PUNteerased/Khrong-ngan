@@ -1,18 +1,21 @@
 /*
- * LaneYa — ESP32-CAM + OV3630 (AI-Thinker pin map)
+ * LaneYa — ESP32-CAM-MB + OV3660 (AI-Thinker pin map)
  * QR scan → ESP-NOW "QR:A1-0001-XYZABC" → ESP32-S3 dispense
  *
- * Library (Arduino IDE): ESP32 QRCode Reader by alvarowolfx
- *   Sketch → Include Library → Manage Libraries → "ESP32 QRCode Reader"
+ * Library QR — scripts/install-qrcode-lib.ps1 (ดู README.md)
  *
  * Pairing:
- * 1. Upload → Serial shows CAM MAC
- * 2. Put CAM MAC in S3 .ino → CAM_ESPNOW_MAC
- * 3. Upload S3 → Serial shows S3 MAC
- * 4. Set S3_ESPNOW_MAC below → re-upload CAM
+ * 1. ใส่ CAM MAC ใน S3 → CAM_ESPNOW_MAC (ด้านล่างใน S3 .ino)
+ * 2. Upload S3 + CAM — กล้องจับคู่ S3 อัตโนมัติเมื่อได้รับ PING
+ *    (หรือใส่ S3_ESPNOW_MAC เองถ้าต้องการ)
  */
 
-#define S3_ESPNOW_MAC {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+// ESP32-S3 MAC: E0:72:A1:F6:F9:A0 (byte แรก = 0xE0 ไม่ใช่ 0xC0)
+#define S3_ESPNOW_MAC {0xE0, 0x72, 0xA1, 0xF6, 0xF9, 0xA0}
+
+// ต้อง WiFi เดียวกับ S3 — sync channel ให้ ESP-NOW ถึงกัน (ไม่ใช้ internet)
+#define WIFI_SSID "hah"
+#define WIFI_PASSWORD "Araina555"
 
 #define MSG_PING "PING"
 #define MSG_PONG "PONG"
@@ -26,28 +29,96 @@
 #define FLASH_LED_PIN 4
 
 #include <WiFi.h>
+#include <esp_mac.h>
+#include <esp_log.h>
 #include <esp_now.h>
-#include <esp_camera.h>
 #include <ArduinoJson.h>
-
-#if __has_include(<ESP32QRCodeReader.h>)
 #include <ESP32QRCodeReader.h>
-#define HAS_QR_READER 1
-#endif
 
 uint8_t s3PeerMac[6] = S3_ESPNOW_MAC;
 
-#ifdef HAS_QR_READER
-static ESP32QRCodeReader qrReader = ESP32QRCodeReader();
-#endif
+static ESP32QRCodeReader qrReader = ESP32QRCodeReader(FRAMESIZE_VGA);
 
 static bool scanning = false;
 static unsigned long scanUntilMs = 0;
 static bool qrSentThisScan = false;
+static unsigned long lastHeartbeatMs = 0;
+
+bool addS3Peer();
+
+static uint8_t espNowChannel() {
+  if (WiFi.status() == WL_CONNECTED) {
+    return WiFi.channel();
+  }
+  return 1;
+}
+
+static bool connectWifiForEspNow() {
+  WiFi.mode(WIFI_STA);
+  WiFi.persistent(false);
+  WiFi.setSleep(false);
+  WiFi.disconnect(true);
+  delay(100);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.printf("[wifi] connecting \"%s\" (sync ESP-NOW channel)...\n", WIFI_SSID);
+
+  const unsigned long start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < 20000) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.printf("[wifi] OK IP %s ch=%d RSSI=%d\n",
+                  WiFi.localIP().toString().c_str(), WiFi.channel(), WiFi.RSSI());
+    return true;
+  }
+  Serial.println("[wifi] failed — ESP-NOW อาจไม่ถึง S3 (ตรวจ SSID/password/2.4GHz)");
+  return false;
+}
 
 static bool isPlaceholderMac(const uint8_t* mac) {
   return mac[0] == 0xFF && mac[1] == 0xFF && mac[2] == 0xFF &&
          mac[3] == 0xFF && mac[4] == 0xFF && mac[5] == 0xFF;
+}
+
+static bool isZeroMac(const uint8_t* mac) {
+  return mac[0] == 0 && mac[1] == 0 && mac[2] == 0 &&
+         mac[3] == 0 && mac[4] == 0 && mac[5] == 0;
+}
+
+static void printStaMac() {
+  uint8_t mac[6] = {};
+  esp_err_t err = esp_read_mac(mac, ESP_MAC_WIFI_STA);
+  if (err != ESP_OK || isZeroMac(mac)) {
+    WiFi.mode(WIFI_STA);
+    WiFi.persistent(false);
+    delay(100);
+    String wifiMac = WiFi.macAddress();
+    Serial.printf("[cam] MAC %s\n", wifiMac.c_str());
+    if (wifiMac == "00:00:00:00:00:00") {
+      Serial.println("[cam] MAC invalid — ลอง reset หรือเปลี่ยนสาย USB / ไฟ 5V");
+    }
+    return;
+  }
+  Serial.printf("[cam] MAC %02X:%02X:%02X:%02X:%02X:%02X\n",
+                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
+static void printMacLine(const char* label, const uint8_t* mac) {
+  Serial.printf("%s %02X:%02X:%02X:%02X:%02X:%02X\n",
+                label, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
+static bool ensureS3PeerFromSender(const uint8_t* senderMac) {
+  if (!senderMac || isZeroMac(senderMac)) return false;
+  if (!isPlaceholderMac(s3PeerMac)) {
+    return memcmp(s3PeerMac, senderMac, 6) == 0;
+  }
+  memcpy(s3PeerMac, senderMac, 6);
+  printMacLine("[espnow] auto-paired S3 MAC", s3PeerMac);
+  return addS3Peer();
 }
 
 static void sendToS3(const char* msg) {
@@ -159,98 +230,82 @@ static void handlePayload(const uint8_t* data, int len) {
 
 #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
 void onEspNowRecv(const esp_now_recv_info_t* info, const uint8_t* data, int len) {
-  (void)info;
+  if (info && info->src_addr) {
+    ensureS3PeerFromSender(info->src_addr);
+  }
   handlePayload(data, len);
 }
 #else
 void onEspNowRecv(const uint8_t* mac, const uint8_t* data, int len) {
-  (void)mac;
+  if (mac) {
+    ensureS3PeerFromSender(mac);
+  }
   handlePayload(data, len);
+}
+#endif
+
+#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+void onEspNowSent(const wifi_tx_info_t* info, esp_now_send_status_t status) {
+  (void)info;
+  if (status != ESP_NOW_SEND_SUCCESS) {
+    Serial.printf("[espnow] send failed (%d)\n", status);
+  }
+}
+#else
+void onEspNowSent(const uint8_t* mac, esp_now_send_status_t status) {
+  (void)mac;
+  if (status != ESP_NOW_SEND_SUCCESS) {
+    Serial.printf("[espnow] send failed (%d)\n", status);
+  }
 }
 #endif
 
 bool addS3Peer() {
   if (isPlaceholderMac(s3PeerMac)) {
-    Serial.println("[espnow] ตั้ง S3_ESPNOW_MAC จาก MAC บน Serial ของ ESP32-S3");
     return false;
   }
-  if (esp_now_is_peer_exist(s3PeerMac)) return true;
+  if (esp_now_is_peer_exist(s3PeerMac)) {
+    esp_now_del_peer(s3PeerMac);
+  }
 
   esp_now_peer_info_t peer = {};
   memcpy(peer.peer_addr, s3PeerMac, 6);
-  peer.channel = 0;
+  peer.channel = espNowChannel();
   peer.encrypt = false;
   peer.ifidx = WIFI_IF_STA;
-  return esp_now_add_peer(&peer) == ESP_OK;
-}
-
-static bool initCamera() {
-  camera_config_t config = {};
-  config.ledc_channel = LEDC_CHANNEL_0;
-  config.ledc_timer = LEDC_TIMER_0;
-  // AI-Thinker ESP32-CAM — OV3630 / OV2640 / OV3660 ใช้ pin map เดียวกัน
-  config.pin_d0 = 5;
-  config.pin_d1 = 18;
-  config.pin_d2 = 19;
-  config.pin_d3 = 21;
-  config.pin_d4 = 36;
-  config.pin_d5 = 39;
-  config.pin_d6 = 34;
-  config.pin_d7 = 35;
-  config.pin_xclk = 0;
-  config.pin_pclk = 22;
-  config.pin_vsync = 25;
-  config.pin_href = 23;
-  config.pin_sccb_sda = 26;
-  config.pin_sccb_scl = 27;
-  config.pin_pwdn = 32;
-  config.pin_reset = -1;
-  config.xclk_freq_hz = 20000000;
-  config.pixel_format = PIXFORMAT_GRAYSCALE;
-  config.frame_size = FRAMESIZE_VGA;
-  config.jpeg_quality = 12;
-  config.fb_count = 2;
-  config.grab_mode = CAMERA_GRAB_LATEST;
-
-  const esp_err_t err = esp_camera_init(&config);
-  if (err != ESP_OK) {
-    Serial.printf("[cam] OV3630 init failed 0x%x\n", err);
+  if (esp_now_add_peer(&peer) != ESP_OK) {
     return false;
   }
-
-  sensor_t* s = esp_camera_sensor_get();
-  if (s) {
-    s->set_framesize(s, FRAMESIZE_VGA);
-    s->set_vflip(s, 0);
-    s->set_hmirror(s, 0);
-  }
-
-  Serial.println("[cam] OV3630 init ok");
+  Serial.printf("[espnow] peer S3 ch=%d ", peer.channel);
+  printMacLine("", s3PeerMac);
   return true;
 }
 
 void setup() {
+  // ลด log จาก ESP-IDF ตอน boot — กัน Serial Monitor / IDE ค้างหลังกด RST
+  esp_log_level_set("*", ESP_LOG_ERROR);
+
   Serial.begin(115200);
-  delay(500);
+  delay(300);
+  Serial.println();
+  Serial.println("[boot] start — ถ้าไม่เห็นบรรทัดนี้: ปล่อย IO0 แล้วกด RST");
+
   pinMode(FLASH_LED_PIN, OUTPUT);
   digitalWrite(FLASH_LED_PIN, LOW);
 
-  WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
+  Serial.println("[boot] LaneYa ESP32-CAM-MB OV3660 (QR + ESP-NOW)");
+  connectWifiForEspNow();
+  printStaMac();
 
-  Serial.println("[boot] LaneYa ESP32-CAM OV3630 (QR + ESP-NOW)");
-  Serial.printf("[cam] MAC %s\n", WiFi.macAddress().c_str());
-
-  if (!initCamera()) {
-    Serial.println("[cam] camera required for QR scan");
+  const QRCodeReaderSetupErr qrSetup = qrReader.setup();
+  if (qrSetup == SETUP_OK) {
+    qrReader.beginOnCore(1);
+    Serial.println("[qr] ESP32QRCodeReader ready");
+  } else if (qrSetup == SETUP_NO_PSRAM_ERROR) {
+    Serial.println("[qr] PSRAM not found — ใช้บอร์ด AI Thinker ESP32-CAM");
+  } else {
+    Serial.println("[qr] camera init failed — ถอด USB แล้ว reset");
   }
-
-#ifdef HAS_QR_READER
-  qrReader.setup();
-  Serial.println("[qr] ESP32QRCodeReader ready");
-#else
-  Serial.println("[qr] install library: ESP32 QRCode Reader (alvarowolfx)");
-#endif
 
   if (esp_now_init() != ESP_OK) {
     Serial.println("[espnow] init failed");
@@ -258,7 +313,13 @@ void setup() {
   }
 
   esp_now_register_recv_cb(onEspNowRecv);
-  addS3Peer();
+  esp_now_register_send_cb(onEspNowSent);
+  if (addS3Peer()) {
+    Serial.println("[espnow] S3 peer ready (fixed MAC)");
+  } else {
+    Serial.println("[espnow] รอ PING จาก S3 เพื่อจับคู่อัตโนมัติ");
+  }
+  Serial.println("[boot] done — heartbeat ทุก 5s");
 }
 
 void loop() {
@@ -267,6 +328,15 @@ void loop() {
   }
 
   if (!scanning) {
+    const unsigned long now = millis();
+    if (now - lastHeartbeatMs >= 5000) {
+      lastHeartbeatMs = now;
+      if (WiFi.status() == WL_CONNECTED) {
+        Serial.printf("[cam] alive ch=%d\n", WiFi.channel());
+      } else {
+        Serial.println("[cam] alive (wifi down)");
+      }
+    }
     delay(10);
     return;
   }
@@ -277,7 +347,6 @@ void loop() {
     return;
   }
 
-#ifdef HAS_QR_READER
   struct QRCodeData qrCodeData;
   if (qrReader.receiveQrCode(&qrCodeData, 100)) {
     if (qrCodeData.valid && !qrSentThisScan) {
@@ -288,7 +357,4 @@ void loop() {
       }
     }
   }
-#else
-  delay(50);
-#endif
 }

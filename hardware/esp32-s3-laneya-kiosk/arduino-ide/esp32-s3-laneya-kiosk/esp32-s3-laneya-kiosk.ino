@@ -42,9 +42,9 @@
 // 1 = หมุนช่อง 0 ตอน boot | 0 = ปิด (แนะนำเมื่อใช้งานจริง)
 #define BOOT_SERVO_TEST 0
 
-// ESP-NOW → ESP32-CAM (ใส่ MAC 6 ไบต์จาก Serial Monitor ของกล้อง)
-#define CAM_ESPNOW_MAC {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
-#define CAM_ESPNOW_PING_MS 30000
+// ESP32-CAM MAC: 28:05:A5:24:16:AC (byte แรก = 0x28 ไม่ใช่ 0x2B)
+#define CAM_ESPNOW_MAC {0x28, 0x05, 0xA5, 0x24, 0x16, 0xAC}
+#define CAM_ESPNOW_PING_MS 10000
 #define CAM_ESPNOW_TIMEOUT_MS 90000
 
 #define CAM_MSG_PING "PING"
@@ -74,6 +74,7 @@ bool dispenseBusy = false;
 uint8_t camPeerMac[6] = CAM_ESPNOW_MAC;
 bool camOnline = false;
 bool camPeerReady = false;
+bool espNowStarted = false;
 unsigned long lastCamRxMs = 0;
 unsigned long lastCamPingMs = 0;
 unsigned long lastScanMs = 0;
@@ -98,6 +99,8 @@ const char* wifiStatusText(wl_status_t s) {
   }
 }
 
+void camLinkStart();
+
 bool connectWiFi(unsigned long timeoutMs = 20000) {
   if (WiFi.status() == WL_CONNECTED) return true;
 
@@ -118,6 +121,7 @@ bool connectWiFi(unsigned long timeoutMs = 20000) {
   if (WiFi.status() == WL_CONNECTED) {
     Serial.printf("[wifi] OK — IP %s  RSSI %d dBm\n",
                   WiFi.localIP().toString().c_str(), WiFi.RSSI());
+    camLinkStart();
     return true;
   }
 
@@ -408,7 +412,7 @@ bool addCamPeer() {
 
   esp_now_peer_info_t peer = {};
   memcpy(peer.peer_addr, camPeerMac, 6);
-  peer.channel = WiFi.channel();
+  peer.channel = (WiFi.status() == WL_CONNECTED) ? WiFi.channel() : 1;
   peer.encrypt = false;
   peer.ifidx = WIFI_IF_STA;
 
@@ -425,21 +429,36 @@ bool addCamPeer() {
 }
 
 void sendCamMessage(const char* msg) {
-  if (!camPeerReady) return;
+  if (!espNowStarted || !camPeerReady) return;
   esp_now_send(camPeerMac, reinterpret_cast<const uint8_t*>(msg), strlen(msg));
+  Serial.printf("[cam] ESP-NOW >> %s\n", msg);
 }
 
-void camLinkSetup() {
-  Serial.printf("[cam] S3 MAC %s\n", WiFi.macAddress().c_str());
+void camLinkStart() {
+  if (espNowStarted) {
+    esp_now_deinit();
+    espNowStarted = false;
+    camPeerReady = false;
+    camOnline = false;
+  }
+
   if (esp_now_init() != ESP_OK) {
     Serial.println("[cam] esp_now_init failed");
     return;
   }
+
   esp_now_register_recv_cb(onCamEspNowRecv);
+  espNowStarted = true;
+
   if (addCamPeer()) {
     sendCamMessage(CAM_MSG_PING);
     lastCamPingMs = millis();
   }
+}
+
+void camLinkSetup() {
+  Serial.printf("[cam] S3 MAC %s\n", WiFi.macAddress().c_str());
+  camLinkStart();
 }
 
 void camLinkLoop() {
@@ -628,7 +647,10 @@ void setup() {
   dispenserSetup();
 
   connectWiFi();
-  camLinkSetup();
+  Serial.printf("[cam] S3 MAC %s\n", WiFi.macAddress().c_str());
+  if (!espNowStarted) {
+    camLinkStart();
+  }
 
   server.on("/health", HTTP_GET, handleHealth);
   server.on("/status", HTTP_GET, handleStatus);

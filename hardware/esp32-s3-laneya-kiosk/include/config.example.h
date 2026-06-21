@@ -37,6 +37,7 @@
 
 // --- ESP-NOW → ESP32-CAM (ไม่ต้องต่อสาย TX/RX) ---
 // ใส่ MAC 6 ไบต์ของ ESP32-CAM — ดูจาก Serial Monitor ตอน boot กล้อง
-#define CAM_ESPNOW_MAC {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+// ESP32-CAM — ดู [cam] MAC จาก Serial Monitor ตอน boot กล้อง
+#define CAM_ESPNOW_MAC {0x28, 0x05, 0xA5, 0x24, 0x16, 0xAC}
 #define CAM_ESPNOW_PING_MS 30000
 #define CAM_ESPNOW_TIMEOUT_MS 90000
