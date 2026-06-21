@@ -16,6 +16,12 @@ export async function postKioskCameraFrame(req: Request, res: Response) {
     return
   }
 
+  if (Buffer.isBuffer(req.body) && req.body.length > 100) {
+    storeCameraFrame(req.body)
+    res.json({ ok: true, bytes: req.body.length })
+    return
+  }
+
   const body = req.body as { jpegBase64?: string }
 
   if (typeof body.jpegBase64 === "string" && body.jpegBase64.length > 0) {
@@ -32,19 +38,13 @@ export async function postKioskCameraFrame(req: Request, res: Response) {
     }
   }
 
-  if (Buffer.isBuffer(req.body) && req.body.length > 0) {
-    storeCameraFrame(req.body)
-    res.json({ ok: true, bytes: req.body.length })
-    return
-  }
-
-  res.status(400).json({ error: "missing jpegBase64" })
+  res.status(400).json({ error: "missing jpeg body" })
 }
 
 export async function getKioskDisplayCameraFrame(_req: Request, res: Response) {
   const frame = getCameraFrame()
   if (!frame) {
-    res.status(404).send("no frame")
+    res.status(204).end()
     return
   }
 

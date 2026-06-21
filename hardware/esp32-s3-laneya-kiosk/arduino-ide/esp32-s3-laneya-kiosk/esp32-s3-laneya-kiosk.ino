@@ -78,7 +78,6 @@
 #include <esp_now.h>
 #include <esp_system.h>
 #include <ArduinoJson.h>
-#include "mbedtls/base64.h"
 #include <Adafruit_PWMServoDriver.h>
 #include "kiosk_page.h"
 
@@ -941,20 +940,22 @@ bool postCloudJson(const char* url, const String& body) {
   return ok;
 }
 
-bool encodeJpegBase64(const uint8_t* data, size_t len, String& out) {
-  if (!data || len == 0) return false;
-  size_t olen = 0;
-  if (mbedtls_base64_encode(nullptr, 0, &olen, data, len) != MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL) {
-    return false;
-  }
-  unsigned char* buf = new unsigned char[olen + 1];
-  const bool ok =
-      mbedtls_base64_encode(buf, olen + 1, &olen, data, len) == 0;
-  if (ok) {
-    out = String(reinterpret_cast<const char*>(buf), olen);
-  }
-  delete[] buf;
-  return ok;
+static bool postCameraFrameRaw(const uint8_t* data, size_t len) {
+  if (!data || len < 100) return false;
+  if (WiFi.status() != WL_CONNECTED) return false;
+  if (strlen(KIOSK_HEARTBEAT_SECRET) == 0) return false;
+  if (strlen(BACKEND_CAMERA_FRAME_URL) == 0) return false;
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  http.begin(client, BACKEND_CAMERA_FRAME_URL);
+  http.setTimeout(20000);
+  http.addHeader("Content-Type", "image/jpeg");
+  http.addHeader("X-Kiosk-Secret", KIOSK_HEARTBEAT_SECRET);
+  const int code = http.POST(data, len);
+  http.end();
+  return code >= 200 && code < 300;
 }
 
 void relayCameraFrameIfScanning() {
@@ -984,16 +985,9 @@ void relayCameraFrameIfScanning() {
 
   if (jpeg.length() < 100 || jpeg.length() > 512000) return;
 
-  String b64;
-  if (!encodeJpegBase64(reinterpret_cast<const uint8_t*>(jpeg.c_str()), jpeg.length(), b64)) {
-    return;
+  if (postCameraFrameRaw(reinterpret_cast<const uint8_t*>(jpeg.c_str()), jpeg.length())) {
+    Serial.printf("[cam-relay] posted %u bytes\n", static_cast<unsigned>(jpeg.length()));
   }
-
-  JsonDocument doc;
-  doc["jpegBase64"] = b64;
-  String body;
-  serializeJson(doc, body);
-  postCloudJson(BACKEND_CAMERA_FRAME_URL, body);
 }
 
 void pushSessionSyncIfDirty() {

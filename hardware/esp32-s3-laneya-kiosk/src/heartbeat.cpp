@@ -11,7 +11,6 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <vector>
-#include "mbedtls/base64.h"
 
 #if __has_include("config.h")
 #include "config.h"
@@ -126,19 +125,24 @@ static bool postCloudJson(const char* url, const String& body) {
   return ok;
 }
 
-static bool encodeJpegBase64(const uint8_t* data, size_t len, String& out) {
-  if (!data || len == 0) return false;
-  size_t olen = 0;
-  if (mbedtls_base64_encode(nullptr, 0, &olen, data, len) != MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL) {
-    return false;
-  }
-  out.reserve(olen + 1);
-  std::vector<unsigned char> buf(olen + 1);
-  if (mbedtls_base64_encode(buf.data(), buf.size(), &olen, data, len) != 0) {
-    return false;
-  }
-  out = String(reinterpret_cast<const char*>(buf.data()), olen);
-  return true;
+static bool postCameraFrameRaw(const uint8_t* data, size_t len) {
+  if (!data || len < 100) return false;
+  if (!isWiFiConnected()) return false;
+  if (strlen(KIOSK_HEARTBEAT_SECRET) == 0) return false;
+  if (strlen(BACKEND_CAMERA_FRAME_URL) == 0) return false;
+
+  WiFiClientSecure client;
+  client.setInsecure();
+
+  HTTPClient http;
+  http.begin(client, BACKEND_CAMERA_FRAME_URL);
+  http.setTimeout(20000);
+  http.addHeader("Content-Type", "image/jpeg");
+  http.addHeader("X-Kiosk-Secret", KIOSK_HEARTBEAT_SECRET);
+
+  const int code = http.POST(data, len);
+  http.end();
+  return code >= 200 && code < 300;
 }
 
 static void relayCameraFrameIfScanning() {
@@ -187,14 +191,9 @@ static void relayCameraFrameIfScanning() {
 
   if (readTotal < 100) return;
 
-  String b64;
-  if (!encodeJpegBase64(jpeg.data(), readTotal, b64)) return;
-
-  JsonDocument doc;
-  doc["jpegBase64"] = b64;
-  String body;
-  serializeJson(doc, body);
-  postCloudJson(BACKEND_CAMERA_FRAME_URL, body);
+  if (postCameraFrameRaw(jpeg.data(), readTotal)) {
+    Serial.printf("[cam-relay] posted %u bytes\n", static_cast<unsigned>(readTotal));
+  }
 }
 
 void heartbeatPushSessionIfDirty() {

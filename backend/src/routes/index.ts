@@ -1,4 +1,4 @@
-import { Router } from "express"
+import { Router, json, raw } from "express"
 import rateLimit from "express-rate-limit"
 import * as authController from "../controllers/auth.controller.js"
 import * as userController from "../controllers/user.controller.js"
@@ -131,7 +131,12 @@ router.post(
   kioskDisplayLimiter,
   kioskDisplayController.postKioskDisplayConfirm
 )
-router.post("/api/kiosk/camera-frame", kioskCameraFrameController.postKioskCameraFrame)
+router.post(
+  "/api/kiosk/camera-frame",
+  json({ limit: "2mb" }),
+  raw({ type: ["image/jpeg", "application/octet-stream"], limit: "512kb" }),
+  kioskCameraFrameController.postKioskCameraFrame
+)
 router.get(
   "/api/kiosk/display/camera-frame",
   kioskCameraFrameLimiter,

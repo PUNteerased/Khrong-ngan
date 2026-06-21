@@ -52,7 +52,7 @@ export function KioskCameraViewport({
           { cache: "no-store" }
         )
         if (cancelled) return
-        if (res.status === 404) return
+        if (res.status === 204 || res.status === 404) return
         if (res.status === 429) return
         if (!res.ok) return
 
