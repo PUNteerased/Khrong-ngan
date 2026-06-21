@@ -13,7 +13,7 @@ const NAV_ITEMS = [
   { href: "/", icon: Home, key: "home" },
   { href: "/knowledge", icon: Database, key: "knowledge" },
   { href: "/health-tips", icon: BookOpenText, key: "healthTips" },
-  { href: "/chat", icon: MessageCircle, key: "chat" },
+    { href: "/chat?prompt=1", icon: MessageCircle, key: "chat" },
   { href: "/tickets", icon: Ticket, key: "tickets" },
   { href: "/profile", icon: User, key: "profile" },
 ] as const
@@ -51,7 +51,10 @@ export function TopNav() {
         </Link>
         <nav className="flex items-center gap-1">
           {navItems.map((item) => {
-            const active = pathname === item.href
+            const active =
+              item.key === "chat"
+                ? pathname === "/chat"
+                : pathname === item.href
             return (
               <Link
                 key={item.href}

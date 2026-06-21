@@ -73,7 +73,7 @@ export default function HistoryPage() {
       <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" asChild>
-            <Link href="/chat">
+            <Link href="/chat?prompt=1">
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>

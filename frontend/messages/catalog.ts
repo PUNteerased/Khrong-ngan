@@ -145,6 +145,10 @@ export const thMessages = {
     historyTitle: "ประวัติแชท",
     inputPh: "พิมพ์ข้อความ...",
     newChat: "แชทใหม่",
+    resumePromptTitle: "มีการปรึกษาที่ยังไม่เสร็จ",
+    resumePromptBody: "ต้องการคุยต่อหรือเริ่มการปรึกษาใหม่?",
+    resumeContinue: "คุยต่อ",
+    newChatConfirm: "เริ่มการปรึกษาใหม่? ข้อความในแชตปัจจุบันจะไม่หายจากประวัติ",
     suspenseLoading: "กำลังโหลด…",
     disclaimer:
       "⚠️ ข้อควรระวัง: LaneYa เป็นเพียง AI ประเมินอาการเบื้องต้น หากมีอาการรุนแรงโปรดพบแพทย์",
@@ -920,6 +924,11 @@ export const enMessages = {
     historyTitle: "Chat history",
     inputPh: "Type a message…",
     newChat: "New chat",
+    resumePromptTitle: "You have an ongoing consultation",
+    resumePromptBody: "Continue where you left off or start a new one?",
+    resumeContinue: "Continue",
+    newChatConfirm:
+      "Start a new consultation? Your current chat will stay in history.",
     suspenseLoading: "Loading…",
     disclaimer:
       "⚠️ Notice: LaneYa is an AI for initial triage only. Seek a clinician for severe symptoms.",

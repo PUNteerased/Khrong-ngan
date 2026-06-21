@@ -12,7 +12,7 @@ const NAV_ITEMS = [
   { href: "/", icon: Home, key: "home" },
   { href: "/knowledge", icon: Database, key: "knowledge" },
   { href: "/health-tips", icon: BookOpenText, key: "healthTips" },
-  { href: "/chat", icon: MessageCircle, key: "chat" },
+    { href: "/chat?prompt=1", icon: MessageCircle, key: "chat" },
   { href: "/tickets", icon: Ticket, key: "tickets" },
   { href: "/profile", icon: User, key: "profile" },
 ] as const
@@ -46,7 +46,10 @@ export function BottomNav() {
     <nav className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 backdrop-blur lg:hidden">
       <div className={cn("grid h-16", isAdmin ? "grid-cols-7" : "grid-cols-6")}>
         {navItems.map((item) => {
-          const active = pathname === item.href
+          const active =
+            item.key === "chat"
+              ? pathname === "/chat"
+              : pathname === item.href
           return (
             <Link
               key={item.href}

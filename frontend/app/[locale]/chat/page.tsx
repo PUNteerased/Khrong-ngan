@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Clock,
+  MessageSquarePlus,
   Send,
   UserCircle2,
 } from "lucide-react"
@@ -24,7 +25,7 @@ import {
   type ChatQrTicketView,
 } from "@/components/chat-qr-card"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import {
   ApiError,
@@ -36,6 +37,11 @@ import {
   type UserProfile,
 } from "@/lib/api"
 import { getStoredToken } from "@/lib/auth-token"
+import {
+  clearActiveChatSession,
+  getActiveChatSession,
+  setActiveChatSession,
+} from "@/lib/active-chat-session"
 
 interface Message {
   id: string
@@ -84,6 +90,8 @@ function ChatPageInner() {
   const locale = useLocale()
   const t = useTranslations("Chat")
   const searchParams = useSearchParams()
+  const isNewChat = searchParams.get("new") === "1"
+  const isPromptNav = searchParams.get("prompt") === "1"
   const sessionIdFromUrl = searchParams.get("sessionId")
 
   const [messages, setMessages] = useState<Message[]>([])
@@ -95,20 +103,21 @@ function ChatPageInner() {
   const [drugById, setDrugById] = useState<Record<string, DrugDto>>({})
   const [activeFullscreenTicket, setActiveFullscreenTicket] =
     useState<ChatQrTicketView | null>(null)
+  const [resumeDialogOpen, setResumeDialogOpen] = useState(false)
+  const [pendingResumeSessionId, setPendingResumeSessionId] = useState<
+    string | null
+  >(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const isMobile = useIsMobile()
 
-  useEffect(() => {
-    if (sessionIdFromUrl) return
-    setMessages([
-      {
-        id: "1",
-        content: t("greeting"),
-        sender: "ai",
-        timestamp: new Date(),
-      },
-    ])
-  }, [locale, t, sessionIdFromUrl])
+  const makeGreetingMessages = (): Message[] => [
+    {
+      id: "greeting",
+      content: t("greeting"),
+      sender: "ai",
+      timestamp: new Date(),
+    },
+  ]
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -132,30 +141,19 @@ function ChatPageInner() {
 
   useEffect(() => {
     let cancelled = false
-    ;(async () => {
-      try {
-        const list = await fetchDrugs()
-        if (cancelled) return
-        const map: Record<string, DrugDto> = {}
-        for (const d of list) map[d.id] = d
-        setDrugById(map)
-      } catch {
-        // ignore
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
-  useEffect(() => {
-    const sid = sessionIdFromUrl
-    if (!sid || !getStoredToken()) {
+    const finishWithGreeting = () => {
+      if (cancelled) return
+      setMessages(makeGreetingMessages())
+      setChatSessionId(null)
       setHistoryLoaded(true)
-      return
     }
-    let cancelled = false
-    ;(async () => {
+
+    const loadSession = async (sid: string) => {
+      if (!getStoredToken()) {
+        finishWithGreeting()
+        return
+      }
       try {
         const [data, drugs] = await Promise.all([
           fetchChatSessionMessages(sid),
@@ -166,6 +164,19 @@ function ChatPageInner() {
         for (const d of drugs) map[d.id] = d
         setDrugById((prev) => ({ ...prev, ...map }))
         setChatSessionId(data.sessionId)
+        if (userCtx?.id) {
+          setActiveChatSession(data.sessionId, userCtx.id)
+        } else {
+          try {
+            const me = await fetchMe()
+            if (!cancelled) {
+              setUserCtx(me)
+              setActiveChatSession(data.sessionId, me.id)
+            }
+          } catch {
+            // ignore
+          }
+        }
         if (data.messages.length > 0) {
           setMessages(
             data.messages.map((m) => ({
@@ -178,17 +189,97 @@ function ChatPageInner() {
               timestamp: new Date(m.createdAt),
             }))
           )
+        } else {
+          setMessages(makeGreetingMessages())
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) {
+          clearActiveChatSession()
+        }
+        finishWithGreeting()
+        return
       } finally {
         if (!cancelled) setHistoryLoaded(true)
       }
+    }
+
+    ;(async () => {
+      setHistoryLoaded(false)
+      const token = getStoredToken()
+
+      if (isNewChat) {
+        clearActiveChatSession()
+        finishWithGreeting()
+        router.replace("/chat", { scroll: false })
+        return
+      }
+
+      if (sessionIdFromUrl) {
+        await loadSession(sessionIdFromUrl)
+        return
+      }
+
+      if (isPromptNav) {
+        if (!token) {
+          finishWithGreeting()
+          router.replace("/chat", { scroll: false })
+          return
+        }
+        try {
+          const me = userCtx ?? (await fetchMe())
+          if (cancelled) return
+          if (!userCtx) setUserCtx(me)
+          const activeSid = getActiveChatSession(me.id)
+          if (activeSid) {
+            setPendingResumeSessionId(activeSid)
+            setResumeDialogOpen(true)
+            setMessages(makeGreetingMessages())
+            setHistoryLoaded(true)
+            return
+          }
+        } catch {
+          finishWithGreeting()
+          router.replace("/chat", { scroll: false })
+          return
+        }
+        finishWithGreeting()
+        router.replace("/chat", { scroll: false })
+        return
+      }
+
+      if (token) {
+        try {
+          const me = userCtx ?? (await fetchMe())
+          if (cancelled) return
+          if (!userCtx) setUserCtx(me)
+          const activeSid = getActiveChatSession(me.id)
+          if (activeSid) {
+            router.replace(
+              `/chat?sessionId=${encodeURIComponent(activeSid)}`,
+              { scroll: false }
+            )
+            return
+          }
+        } catch {
+          finishWithGreeting()
+          return
+        }
+      }
+
+      finishWithGreeting()
     })()
+
     return () => {
       cancelled = true
     }
-  }, [sessionIdFromUrl])
+  }, [
+    isNewChat,
+    isPromptNav,
+    sessionIdFromUrl,
+    locale,
+    router,
+    t,
+  ])
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.visualViewport) return
@@ -251,6 +342,27 @@ function ChatPageInner() {
         },
         onDone: (res) => {
           setChatSessionId(res.sessionId)
+          const syncSession = (userId: string) => {
+            setActiveChatSession(res.sessionId, userId)
+            if (sessionIdFromUrl !== res.sessionId) {
+              router.replace(
+                `/chat?sessionId=${encodeURIComponent(res.sessionId)}`,
+                { scroll: false }
+              )
+            }
+          }
+          if (userCtx?.id) {
+            syncSession(userCtx.id)
+          } else {
+            void fetchMe()
+              .then((me) => {
+                setUserCtx(me)
+                syncSession(me.id)
+              })
+              .catch(() => {
+                // ignore
+              })
+          }
           const qrTicket = res.qrTicket
             ? mapServerQrTicket(res.qrTicket, drugById)
             : null
@@ -275,6 +387,28 @@ function ChatPageInner() {
       toast.error(msg)
       if (err instanceof ApiError && err.status === 401) router.push("/login")
     }
+  }
+
+  const hasUserMessages = messages.some((m) => m.sender === "user")
+
+  const handleStartNewChat = () => {
+    if (hasUserMessages && !window.confirm(t("newChatConfirm"))) return
+    setResumeDialogOpen(false)
+    router.push("/chat?new=1")
+  }
+
+  const handleResumeContinue = () => {
+    if (!pendingResumeSessionId) return
+    setResumeDialogOpen(false)
+    router.replace(
+      `/chat?sessionId=${encodeURIComponent(pendingResumeSessionId)}`,
+      { scroll: false }
+    )
+  }
+
+  const handleResumeNew = () => {
+    setResumeDialogOpen(false)
+    router.replace("/chat?new=1", { scroll: false })
   }
 
   const formatTime = (date: Date) =>
@@ -319,6 +453,17 @@ function ChatPageInner() {
           </div>
         </div>
         <div className="flex items-center gap-1">
+          {getStoredToken() ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              title={t("newChat")}
+              onClick={handleStartNewChat}
+            >
+              <MessageSquarePlus className="h-5 w-5" />
+            </Button>
+          ) : null}
           <ProfileAvatar src={userCtx?.avatarUrl} alt={t("userAvatarAlt")} size={30} ring />
           <Link href="/history" title={t("historyTitle")}>
             <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -444,6 +589,18 @@ function ChatPageInner() {
             </div>
           </div>
       </div>
+      <Dialog open={resumeDialogOpen} onOpenChange={setResumeDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogTitle>{t("resumePromptTitle")}</DialogTitle>
+          <DialogDescription>{t("resumePromptBody")}</DialogDescription>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={handleResumeNew}>
+              {t("newChat")}
+            </Button>
+            <Button onClick={handleResumeContinue}>{t("resumeContinue")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={!!activeFullscreenTicket}
         onOpenChange={(open) => {

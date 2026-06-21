@@ -54,6 +54,7 @@ import {
   ApiError,
 } from "@/lib/api"
 import { getStoredToken, setStoredToken } from "@/lib/auth-token"
+import { clearActiveChatSession } from "@/lib/active-chat-session"
 
 const ALLERGY_CHIPS = ["Paracetamol", "NSAIDs", "Penicillin"] as const
 
@@ -336,6 +337,7 @@ export default function ProfilePage() {
   }
 
   const handleLogout = () => {
+    clearActiveChatSession()
     setStoredToken(null)
     toast.success(t("logoutOk"))
     router.push("/login")
@@ -346,6 +348,7 @@ export default function ProfilePage() {
     setDeleting(true)
     try {
       await deleteMe()
+      clearActiveChatSession()
       setStoredToken(null)
       toast.success(t("deleteOk"))
       router.push("/login")

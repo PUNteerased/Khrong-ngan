@@ -31,11 +31,17 @@ import {
 } from "@/components/ui/collapsible"
 import { useEffect, useState } from "react"
 import { getStoredToken, setStoredToken } from "@/lib/auth-token"
+import { clearActiveChatSession } from "@/lib/active-chat-session"
 import { fetchMe, ApiError } from "@/lib/api"
 
 interface AppSidebarProps {
   isOpen: boolean
   onClose: () => void
+}
+
+function isNavActive(pathname: string, href: string) {
+  if (href.startsWith("/chat")) return pathname === "/chat"
+  return pathname === href
 }
 
 export function AppSidebar({ isOpen, onClose }: AppSidebarProps) {
@@ -65,7 +71,7 @@ export function AppSidebar({ isOpen, onClose }: AppSidebarProps) {
       hasChildren: true,
     },
     { href: "/health-tips", label: t("healthTips"), icon: BookOpenText },
-    { href: "/chat", label: t("chat"), icon: Bot },
+    { href: "/chat?prompt=1", label: t("chat"), icon: Bot },
   ]
 
   const adminNavItem = {
@@ -121,6 +127,7 @@ export function AppSidebar({ isOpen, onClose }: AppSidebarProps) {
           err.status === 401 &&
           typeof window !== "undefined"
         ) {
+          clearActiveChatSession()
           setStoredToken(null)
         }
       })
@@ -219,7 +226,7 @@ export function AppSidebar({ isOpen, onClose }: AppSidebarProps) {
                   onClick={onClose}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                    pathname === item.href
+                    isNavActive(pathname, item.href)
                       ? "bg-sidebar-accent text-sidebar-accent-foreground"
                       : "text-sidebar-foreground hover:bg-sidebar-accent/50"
                   )}
@@ -271,7 +278,7 @@ export function AppSidebar({ isOpen, onClose }: AppSidebarProps) {
                   onClick={onClose}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                    pathname === item.href
+                    isNavActive(pathname, item.href)
                       ? "bg-sidebar-accent text-sidebar-accent-foreground"
                       : "text-sidebar-foreground hover:bg-sidebar-accent/50"
                   )}

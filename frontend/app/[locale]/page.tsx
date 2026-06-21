@@ -118,7 +118,7 @@ export default function HomePage() {
             <p className="text-muted-foreground text-sm">{t("heroSubtitle")}</p>
           </div>
 
-          <Link href="/chat">
+          <Link href="/chat?new=1">
             <Button
               size="lg"
               className="w-full py-6 text-lg font-medium shadow-lg hover:shadow-xl transition-all"
