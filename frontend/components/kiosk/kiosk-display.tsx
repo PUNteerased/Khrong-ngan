@@ -21,6 +21,7 @@ import {
   type KioskLocale,
 } from "@/lib/kiosk-api"
 import {
+  isKioskCloudRelayMode,
   isKioskMixedContentBlocked,
   mapKioskSessionError,
 } from "@/lib/kiosk-connectivity"
@@ -49,6 +50,10 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
   const t = useMemo(() => getKioskMessages(locale), [locale])
 
   useEffect(() => {
+    if (isKioskCloudRelayMode()) {
+      setMixedContent(false)
+      return
+    }
     setMixedContent(isKioskMixedContentBlocked())
   }, [])
 
@@ -56,7 +61,9 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
   const scanDisabledReason = mixedContent
     ? t.mixedContentBody
     : !connected
-      ? t.s3OfflineBody
+      ? isKioskCloudRelayMode()
+        ? t.kioskOfflineCloudBody
+        : t.s3OfflineBody
       : undefined
 
   const errorMessage = mapKioskSessionError(session.error, locale)

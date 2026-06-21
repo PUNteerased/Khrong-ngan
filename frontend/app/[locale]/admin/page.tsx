@@ -102,7 +102,7 @@ import { normalizeUsername, USERNAME_PATTERN } from "@/lib/username"
 import { AdminDrugDialog } from "@/components/admin-drug-dialog"
 import { AdminSessionSheet } from "@/components/admin-session-sheet"
 import { AdminUserSheet } from "@/components/admin-user-sheet"
-import { getEmbeddedKioskUrl } from "@/lib/kiosk-connectivity"
+import { getCloudKioskUrl, getKioskS3BaseUrl } from "@/lib/kiosk-connectivity"
 
 function stockStatus(q: number, threshold: number): "normal" | "low" | "empty" {
   if (q === 0) return "empty"
@@ -622,7 +622,7 @@ export default function AdminPage() {
     : []
 
   const kioskOnline = health?.cabinet === true
-  const kioskDisplayUrl = getEmbeddedKioskUrl()
+  const kioskDisplayUrl = getCloudKioskUrl()
 
   if (!authReady) {
     return (

@@ -473,7 +473,7 @@ export const thMessages = {
     servoTestAll: "หมุนทุกช่อง",
     openKioskDisplay: "เปิดจอคีออส",
     openKioskDisplayHint:
-      "จอคีออสบน ESP32-S3 — แท็บเล็ตที่ตู้ bookmark URL นี้ (WiFi เดียวกับตู้)",
+      "จอคีออสบน Vercel (HTTPS) — คำสั่งส่งผ่าน Render heartbeat เหมือนทดสอบ servo",
     kioskTabTitle: "จอคีออสบนตู้จ่ายยา",
     kioskTabDescription:
       "หน้าจอสำหรับแท็บเล็ต 11 นิ้วแนวตั้ง — สแกน QR ยืนยันตัวตน แล้วจ่ายยาจากตู้",
@@ -486,7 +486,7 @@ export const thMessages = {
     kioskFlowStep3: "ระบบแสดงยาและคำเตือน — ผู้ป่วยกดยืนยัน",
     kioskFlowStep4: "ตู้ redeem QR และหมุนมอเตอร์จ่ายยา",
     kioskTabletUrlHint:
-      "แท็บเล็ตที่ตู้: bookmark http://<S3-IP>/kiosk — ไม่ใช้ Vercel HTTPS",
+      "แท็บเล็ตที่ตู้: bookmark URL ด้านล่าง (ต้องมี ?token= ครั้งแรก) — LAN fallback: http://<S3-IP>/kiosk",
     kioskAuthRequired: "ต้องเข้าสู่ระบบผู้ดูแลก่อน",
     kioskAuthHint: "เข้าสู่ระบบที่หน้า Admin แล้วเปิดจอคีออสอีกครั้ง",
     backToAdmin: "กลับ Admin",
@@ -723,6 +723,8 @@ export const thMessages = {
       "เปิดจาก Vercel (HTTPS) เรียก ESP32 ใน WiFi ไม่ได้ — ใช้ http://IP-คอม:3000/th/admin/kiosk บน WiFi เดียวกับตู้",
     s3OfflineTitle: "เชื่อมตู้จ่ายยาไม่ได้",
     s3OfflineBody: "ตรวจ WiFi เดียวกับ ESP32-S3 และ NEXT_PUBLIC_KIOSK_S3_URL",
+    kioskOfflineCloudBody:
+      "ตู้ยังไม่ส่ง heartbeat ไป Render — ตรวจ WiFi ของ ESP32-S3 และ upload firmware ล่าสุด",
     camOnline: "กล้องพร้อมสแกน",
     camOffline: "กล้องไม่เชื่อมต่อ — ตรวจ ESP-NOW",
   },
@@ -1198,7 +1200,7 @@ export const enMessages = {
     servoTestAll: "Spin all channels",
     openKioskDisplay: "Open Kiosk display",
     openKioskDisplayHint:
-      "Kiosk UI on ESP32-S3 — bookmark this URL on the cabinet tablet (same WiFi)",
+      "Kiosk on Vercel (HTTPS) — commands relay via Render heartbeat like servo test",
     kioskTabTitle: "Cabinet Kiosk display",
     kioskTabDescription:
       "11\" portrait tablet UI — scan QR, verify identity, then dispense from the cabinet",
@@ -1211,7 +1213,7 @@ export const enMessages = {
     kioskFlowStep3: "System shows drug info and warnings — patient confirms",
     kioskFlowStep4: "Cabinet redeems QR and spins the motor to dispense",
     kioskTabletUrlHint:
-      "Cabinet tablet: bookmark http://<S3-IP>/kiosk — do not use Vercel HTTPS",
+      "Cabinet tablet: bookmark the URL below (?token= on first visit) — LAN fallback: http://<S3-IP>/kiosk",
     kioskAuthRequired: "Admin login required",
     kioskAuthHint: "Sign in on the Admin page, then open Kiosk display again",
     backToAdmin: "Back to Admin",
@@ -1447,6 +1449,8 @@ export const enMessages = {
       "Vercel (HTTPS) cannot call LAN ESP32 — use http://PC-IP:3000/th/admin/kiosk on the same WiFi",
     s3OfflineTitle: "Cannot connect to cabinet",
     s3OfflineBody: "Check same WiFi as ESP32-S3 and NEXT_PUBLIC_KIOSK_S3_URL",
+    kioskOfflineCloudBody:
+      "Cabinet has not sent a heartbeat to Render — check ESP32-S3 WiFi and upload latest firmware",
     camOnline: "Camera ready to scan",
     camOffline: "Camera offline — check ESP-NOW",
   },

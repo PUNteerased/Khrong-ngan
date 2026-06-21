@@ -37,19 +37,78 @@ export type KioskSession = {
   dispenseBusy?: boolean
   error?: string
   preview?: KioskPreview
+  connected?: boolean
 }
 
-const base = () =>
-  (process.env.NEXT_PUBLIC_KIOSK_S3_URL || "http://192.168.1.100").replace(
-    /\/$/,
-    ""
-  )
+const PRODUCTION_API_URL = "https://khrong-ngan.onrender.com"
+
+function isLanKioskMode(): boolean {
+  return process.env.NEXT_PUBLIC_KIOSK_MODE === "lan"
+}
+
+function isLocalHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1"
+}
+
+function getCloudApiBase(): string {
+  const configured = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "")
+
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname
+    if (host.endsWith(".vercel.app") || (host && !isLocalHostname(host))) {
+      return PRODUCTION_API_URL
+    }
+    if (isLocalHostname(host)) {
+      return configured || "http://localhost:4000"
+    }
+  }
+
+  if (process.env.VERCEL || process.env.NODE_ENV === "production") {
+    return PRODUCTION_API_URL
+  }
+
+  return configured || "http://localhost:4000"
+}
+
+function getLanS3Base(): string {
+  return (
+    process.env.NEXT_PUBLIC_KIOSK_S3_URL || "http://192.168.1.100"
+  ).replace(/\/$/, "")
+}
+
+function apiBase(): string {
+  return isLanKioskMode() ? getLanS3Base() : getCloudApiBase()
+}
+
+function sessionPath(): string {
+  return isLanKioskMode()
+    ? "/kiosk/session"
+    : "/api/kiosk/display/session"
+}
+
+function scanStartPath(): string {
+  return isLanKioskMode()
+    ? "/kiosk/scan/start"
+    : "/api/kiosk/display/scan/start"
+}
+
+function scanCancelPath(): string {
+  return isLanKioskMode()
+    ? "/kiosk/scan/cancel"
+    : "/api/kiosk/display/scan/cancel"
+}
+
+function confirmPath(): string {
+  return isLanKioskMode()
+    ? "/kiosk/pickup/confirm"
+    : "/api/kiosk/display/confirm"
+}
 
 async function kioskFetch<T>(
   path: string,
   init?: RequestInit
 ): Promise<T> {
-  const res = await fetch(`${base()}${path}`, {
+  const res = await fetch(`${apiBase()}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -71,17 +130,17 @@ async function kioskFetch<T>(
 }
 
 export function getKioskSession(): Promise<KioskSession> {
-  return kioskFetch<KioskSession>("/kiosk/session")
+  return kioskFetch<KioskSession>(sessionPath())
 }
 
 export function startKioskScan(): Promise<{ ok: boolean }> {
-  return kioskFetch("/kiosk/scan/start", { method: "POST" })
+  return kioskFetch(scanStartPath(), { method: "POST" })
 }
 
 export function cancelKioskScan(): Promise<{ ok: boolean }> {
-  return kioskFetch("/kiosk/scan/cancel", { method: "POST" })
+  return kioskFetch(scanCancelPath(), { method: "POST" })
 }
 
 export function confirmKioskPickup(): Promise<{ ok: boolean }> {
-  return kioskFetch("/kiosk/pickup/confirm", { method: "POST" })
+  return kioskFetch(confirmPath(), { method: "POST" })
 }

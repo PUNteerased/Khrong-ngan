@@ -1,7 +1,10 @@
 "use client"
 
 import type { KioskMessages } from "@/lib/kiosk-i18n"
-import { getKioskS3BaseUrl } from "@/lib/kiosk-connectivity"
+import {
+  getKioskS3BaseUrl,
+  isKioskCloudRelayMode,
+} from "@/lib/kiosk-connectivity"
 
 type Props = {
   t: KioskMessages
@@ -27,6 +30,7 @@ export function KioskConnectivityBanner({
   }
 
   if (!connected) {
+    const cloud = isKioskCloudRelayMode()
     return (
       <div
         role="alert"
@@ -34,7 +38,8 @@ export function KioskConnectivityBanner({
       >
         <p className="font-semibold">{t.s3OfflineTitle}</p>
         <p className="mt-1">
-          {t.s3OfflineBody} ({getKioskS3BaseUrl()})
+          {cloud ? t.kioskOfflineCloudBody : t.s3OfflineBody}
+          {!cloud ? ` (${getKioskS3BaseUrl()})` : null}
         </p>
       </div>
     )

@@ -11,14 +11,15 @@ export function useKioskSession(pollMs = 500) {
   const [session, setSession] = useState<KioskSession>({
     phase: "idle",
     countdownSec: 0,
+    connected: false,
   })
-  const [connected, setConnected] = useState(true)
+  const [connected, setConnected] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
       const data = await getKioskSession()
       setSession(data)
-      setConnected(true)
+      setConnected(data.connected !== false)
     } catch {
       setConnected(false)
     }
