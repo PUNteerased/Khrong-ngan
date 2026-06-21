@@ -465,17 +465,57 @@ const char* camLinkPreviewUrl() {
   return camPreviewUrl[0] ? camPreviewUrl : nullptr;
 }
 
-bool camLinkRequestScan() {
-  for (int attempt = 0; attempt < 3; attempt++) {
-    if (sendCamMessage(CAM_MSG_SCAN)) return true;
-    delay(50);
+static bool camHttpScanControl(bool startScanMode) {
+  const char* previewUrl = camLinkPreviewUrl();
+  if (!previewUrl || !previewUrl[0]) return false;
+  if (WiFi.status() != WL_CONNECTED) return false;
+
+  char url[64];
+  strncpy(url, previewUrl, sizeof(url) - 1);
+  url[sizeof(url) - 1] = '\0';
+  char* slash = strrchr(url, '/');
+  if (!slash) return false;
+  strcpy(slash, startScanMode ? "/scan/start" : "/scan/stop");
+
+  for (int attempt = 0; attempt < 4; attempt++) {
+    WiFiClient client;
+    HTTPClient http;
+    http.setReuse(false);
+    http.begin(client, url);
+    http.setTimeout(8000);
+    const int code = http.GET();
+    http.end();
+    Serial.printf("[cam] HTTP %s → %d (try %d)\n",
+                  startScanMode ? "scan/start" : "scan/stop", code, attempt + 1);
+    if (code >= 200 && code < 300) return true;
+    if (code > 0) return false;
+    delay(200);
   }
-  Serial.println("[cam] SCAN send failed after retries");
   return false;
+}
+
+bool camLinkRequestScan() {
+  addCamPeer();
+  delay(30);
+  bool viaEspNow = false;
+  for (int attempt = 0; attempt < 10; attempt++) {
+    if (sendCamMessage(CAM_MSG_SCAN)) viaEspNow = true;
+    delay(80);
+  }
+  delay(100);
+  const bool viaHttp = camHttpScanControl(true);
+  if (!viaEspNow && !viaHttp) {
+    Serial.println("[cam] SCAN failed (ESP-NOW + HTTP)");
+    return false;
+  }
+  Serial.printf("[cam] scan arm espnow=%s http=%s\n",
+                viaEspNow ? "yes" : "no", viaHttp ? "yes" : "no");
+  return true;
 }
 
 void camLinkRequestScanStop() {
   sendCamMessage(CAM_MSG_SCAN_STOP);
+  camHttpScanControl(false);
 }
 
 void kioskSessionReset() {
@@ -666,6 +706,23 @@ bool kioskSessionConfirmPickup() {
 }
 
 void kioskSessionLoop() {
+  static unsigned long lastScanKeepaliveMs = 0;
+  static unsigned long lastHttpScanKeepaliveMs = 0;
+  if (kioskPhase == KIOSK_SCANNING) {
+    const unsigned long now = millis();
+    if (now - lastScanKeepaliveMs >= 3000) {
+      sendCamMessage(CAM_MSG_SCAN);
+      lastScanKeepaliveMs = now;
+    }
+    if (now - lastHttpScanKeepaliveMs >= 9000) {
+      camHttpScanControl(true);
+      lastHttpScanKeepaliveMs = now;
+    }
+  } else {
+    lastScanKeepaliveMs = 0;
+    lastHttpScanKeepaliveMs = 0;
+  }
+
   if (kioskPhase == KIOSK_SCANNING && kioskScanUntilMs > 0 && millis() > kioskScanUntilMs) {
     kioskSessionOnScanError("timeout");
     Serial.println("[kiosk] scan timeout");
@@ -993,12 +1050,20 @@ void relayCameraFrameIfScanning() {
 
   WiFiClient camClient;
   HTTPClient camHttp;
+  camHttp.setReuse(false);
   camHttp.begin(camClient, previewUrl);
-  camHttp.setTimeout(5000);
-  const int camCode = camHttp.GET();
+  camHttp.setTimeout(8000);
+  int camCode = -1;
+  for (int attempt = 0; attempt < 3; attempt++) {
+    camCode = camHttp.GET();
+    if (camCode == HTTP_CODE_OK) break;
+    if (camCode > 0) break;
+    delay(150);
+  }
   if (camCode != HTTP_CODE_OK) {
-    if (camCode == 503) return;
-    camRelayWarnf("[cam-relay] CAM GET HTTP %d\n", camCode);
+    if (camCode != 503) {
+      camRelayWarnf("[cam-relay] CAM GET HTTP %d\n", camCode);
+    }
     camHttp.end();
     return;
   }

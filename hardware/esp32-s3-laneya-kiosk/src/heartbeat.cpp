@@ -195,12 +195,20 @@ static void relayCameraFrameIfScanning() {
 
   WiFiClient camClient;
   HTTPClient camHttp;
+  camHttp.setReuse(false);
   camHttp.begin(camClient, previewUrl);
-  camHttp.setTimeout(5000);
-  const int camCode = camHttp.GET();
+  camHttp.setTimeout(8000);
+  int camCode = -1;
+  for (int attempt = 0; attempt < 3; attempt++) {
+    camCode = camHttp.GET();
+    if (camCode == HTTP_CODE_OK) break;
+    if (camCode > 0) break;
+    delay(150);
+  }
   if (camCode != HTTP_CODE_OK) {
-    if (camCode == 503) return;
-    camRelayWarnf("[cam-relay] CAM GET HTTP %d\n", camCode);
+    if (camCode != 503) {
+      camRelayWarnf("[cam-relay] CAM GET HTTP %d\n", camCode);
+    }
     camHttp.end();
     return;
   }

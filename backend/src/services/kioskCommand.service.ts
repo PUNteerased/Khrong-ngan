@@ -81,11 +81,42 @@ export function queueServoTestAll(): KioskCommandRecord {
   return queueCommand("dispense_all", -1)
 }
 
+function clearStaleDisplayCommand(maxAgeMs = 8000): void {
+  if (!activeCommand) return
+  if (activeCommand.status !== "pending" && activeCommand.status !== "delivered") {
+    return
+  }
+  const anchor = activeCommand.deliveredAt || activeCommand.createdAt
+  if (Date.now() - new Date(anchor).getTime() > maxAgeMs) {
+    activeCommand = null
+  }
+}
+
 export function queueDisplayScanStart(): KioskCommandRecord {
+  expireIfNeeded()
+  if (
+    activeCommand &&
+    activeCommand.action === "scan_start" &&
+    (activeCommand.status === "pending" || activeCommand.status === "delivered")
+  ) {
+    return activeCommand
+  }
+  clearStaleDisplayCommand()
+  if (commandInProgress()) {
+    throw new Error("COMMAND_IN_PROGRESS")
+  }
   return queueCommand("scan_start", -1)
 }
 
 export function queueDisplayScanCancel(): KioskCommandRecord {
+  expireIfNeeded()
+  clearStaleDisplayCommand(3000)
+  if (
+    activeCommand &&
+    (activeCommand.status === "pending" || activeCommand.status === "delivered")
+  ) {
+    activeCommand = null
+  }
   return queueCommand("scan_cancel", -1)
 }
 

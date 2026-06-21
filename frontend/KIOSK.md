@@ -94,6 +94,9 @@ Cloud mode: กด **ยกเลิก** หรือ **ลองใหม่**
 | กดสแกนแล้วไม่เริ่ม | รอ heartbeat 2–5s / firmware เก่าไม่รองรับ scan_start |
 | scan timeout | QR ไม่ถูกอ่าน — ดู Serial CAM |
 | กล้อง preview ไม่ขึ้นบน Vercel | รอ S3 relay ~1s / ตรวจ `BACKEND_CAMERA_FRAME_URL` ใน firmware |
+| `409 command in progress` | คำสั่ง scan ค้าง — กดยกเลิกหรือรอ 8s แล้วลองใหม่ (backend ล้าง stale อัตโนมัติ) |
+| S3 Serial `CAM GET HTTP -1` | S3 เชื่อม CAM ไม่ได้ — ปิด AP isolation บน router / ทดสอบ `http://<CAM-IP>:81/health` จาก PC |
+| CAM `/health` เป็น `scanning:false` ตอนสแกน | CAM ไม่ได้รับ SCAN — อัปโหลด firmware CAM+S3 ล่าสุด / ดู Serial CAM ต้องมี `[espnow] << SCAN` |
 | mixed content (LAN mode) | ตั้ง `NEXT_PUBLIC_KIOSK_MODE` ไม่ใช่ `lan` บน Vercel |
 
 ## Deploy checklist

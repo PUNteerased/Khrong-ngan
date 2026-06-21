@@ -192,6 +192,23 @@ static unsigned long successAtMs = 0;
 static unsigned long errorAtMs = 0;
 
 void kioskSessionLoop() {
+  static unsigned long lastScanKeepaliveMs = 0;
+  static unsigned long lastHttpScanKeepaliveMs = 0;
+  if (phase == KIOSK_SCANNING) {
+    const unsigned long now = millis();
+    if (now - lastScanKeepaliveMs >= 3000) {
+      camLinkResendScan();
+      lastScanKeepaliveMs = now;
+    }
+    if (now - lastHttpScanKeepaliveMs >= 9000) {
+      camLinkHttpScanKeepalive();
+      lastHttpScanKeepaliveMs = now;
+    }
+  } else {
+    lastScanKeepaliveMs = 0;
+    lastHttpScanKeepaliveMs = 0;
+  }
+
   if (phase == KIOSK_SCANNING && scanUntilMs > 0 && millis() > scanUntilMs) {
     kioskSessionOnScanError("timeout");
     Serial.println("[kiosk] scan timeout");

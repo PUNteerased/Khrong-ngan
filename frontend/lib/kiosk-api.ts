@@ -142,8 +142,16 @@ export function getKioskSession(): Promise<KioskSession> {
   return kioskFetch<KioskSession>(sessionPath())
 }
 
-export function startKioskScan(): Promise<{ ok: boolean }> {
-  return kioskFetch(scanStartPath(), { method: "POST" })
+export async function startKioskScan(): Promise<{ ok: boolean }> {
+  try {
+    return await kioskFetch<{ ok: boolean }>(scanStartPath(), { method: "POST" })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : ""
+    if (msg.includes("command in progress")) {
+      return { ok: true }
+    }
+    throw e
+  }
 }
 
 export function cancelKioskScan(): Promise<{ ok: boolean }> {

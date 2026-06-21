@@ -207,6 +207,13 @@ static void capturePreviewJpeg() {
   }
 }
 
+static bool previewHasFrame() {
+  portENTER_CRITICAL(&jpgMux);
+  const bool ok = jpgBuf && jpgLen > 0;
+  portEXIT_CRITICAL(&jpgMux);
+  return ok;
+}
+
 static void handlePreviewJpg() {
   previewServer.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   previewServer.sendHeader("Access-Control-Allow-Origin", "*");
@@ -217,11 +224,18 @@ static void handlePreviewJpg() {
   }
 
   portENTER_CRITICAL(&jpgMux);
-  const bool hasJpg = jpgBuf && jpgLen > 0;
+  bool hasJpg = jpgBuf && jpgLen > 0;
   portEXIT_CRITICAL(&jpgMux);
 
   if (!hasJpg) {
-    capturePreviewJpeg();
+    for (int attempt = 0; attempt < 4; attempt++) {
+      capturePreviewJpeg();
+      portENTER_CRITICAL(&jpgMux);
+      hasJpg = jpgBuf && jpgLen > 0;
+      portEXIT_CRITICAL(&jpgMux);
+      if (hasJpg) break;
+      delay(40);
+    }
   }
 
   portENTER_CRITICAL(&jpgMux);
@@ -241,18 +255,43 @@ static void handlePreviewJpg() {
 
 static void handlePreviewHealth() {
   previewServer.sendHeader("Access-Control-Allow-Origin", "*");
-  previewServer.send(200, "application/json",
-                     scanning ? "{\"scanning\":true}" : "{\"scanning\":false}");
+  portENTER_CRITICAL(&jpgMux);
+  const bool hasFrame = jpgBuf && jpgLen > 0;
+  const unsigned jpgBytes = hasFrame ? static_cast<unsigned>(jpgLen) : 0U;
+  portEXIT_CRITICAL(&jpgMux);
+  char buf[72];
+  snprintf(buf, sizeof(buf),
+           "{\"scanning\":%s,\"hasFrame\":%s,\"jpgBytes\":%u}",
+           scanning ? "true" : "false",
+           hasFrame ? "true" : "false",
+           jpgBytes);
+  previewServer.send(200, "application/json", buf);
+}
+
+static void handleScanStartHttp() {
+  previewServer.sendHeader("Access-Control-Allow-Origin", "*");
+  startScan();
+  previewServer.send(200, "application/json", "{\"ok\":true,\"scanning\":true}");
+}
+
+static void handleScanStopHttp() {
+  previewServer.sendHeader("Access-Control-Allow-Origin", "*");
+  stopScan(nullptr);
+  previewServer.send(200, "application/json", "{\"ok\":true,\"scanning\":false}");
 }
 
 static void setupPreviewServer() {
   previewServer.on("/jpg", HTTP_GET, handlePreviewJpg);
   previewServer.on("/health", HTTP_GET, handlePreviewHealth);
+  previewServer.on("/scan/start", HTTP_GET, handleScanStartHttp);
+  previewServer.on("/scan/stop", HTTP_GET, handleScanStopHttp);
   previewServer.onNotFound([]() {
     previewServer.send(404, "text/plain", "not found");
   });
   previewServer.begin();
   Serial.printf("[preview] http://%s:%d/jpg\n",
+                WiFi.localIP().toString().c_str(), PREVIEW_HTTP_PORT);
+  Serial.printf("[preview] scan http://%s:%d/scan/start\n",
                 WiFi.localIP().toString().c_str(), PREVIEW_HTTP_PORT);
 }
 
@@ -498,10 +537,14 @@ void loop() {
   if (now - lastPreviewCaptureMs >= PREVIEW_CAPTURE_MS) {
     lastPreviewCaptureMs = now;
     capturePreviewJpeg();
+    if (!previewHasFrame()) {
+      delay(30);
+      capturePreviewJpeg();
+    }
   }
 
   struct QRCodeData qrCodeData;
-  if (qrReader.receiveQrCode(&qrCodeData, 120)) {
+  if (qrReader.receiveQrCode(&qrCodeData, 80)) {
     if (qrCodeData.valid && !qrSentThisScan) {
       Serial.println("[qr] decoded");
       if (handleDecodedQr(reinterpret_cast<const char*>(qrCodeData.payload))) {
@@ -510,4 +553,7 @@ void loop() {
       }
     }
   }
+
+  previewServer.handleClient();
+  yield();
 }

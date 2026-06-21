@@ -1,6 +1,7 @@
 #include "cam_link.h"
 
 #include <WiFi.h>
+#include <HTTPClient.h>
 #include <esp_now.h>
 #include <ArduinoJson.h>
 
@@ -186,17 +187,65 @@ void camLinkRequestCapture() {
   sendCamMessage(CAM_MSG_CAPTURE);
 }
 
-bool camLinkRequestScan() {
-  for (int attempt = 0; attempt < 3; attempt++) {
-    if (sendCamMessage(CAM_MSG_SCAN)) return true;
-    delay(50);
+static bool camHttpScanControl(bool startScanMode) {
+  const char* previewUrl = camLinkPreviewUrl();
+  if (!previewUrl || !previewUrl[0]) return false;
+  if (WiFi.status() != WL_CONNECTED) return false;
+
+  char url[64];
+  strncpy(url, previewUrl, sizeof(url) - 1);
+  url[sizeof(url) - 1] = '\0';
+  char* slash = strrchr(url, '/');
+  if (!slash) return false;
+  strcpy(slash, startScanMode ? "/scan/start" : "/scan/stop");
+
+  for (int attempt = 0; attempt < 4; attempt++) {
+    WiFiClient client;
+    HTTPClient http;
+    http.setReuse(false);
+    http.begin(client, url);
+    http.setTimeout(8000);
+    const int code = http.GET();
+    http.end();
+    Serial.printf("[cam] HTTP %s → %d (try %d)\n",
+                  startScanMode ? "scan/start" : "scan/stop", code, attempt + 1);
+    if (code >= 200 && code < 300) return true;
+    if (code > 0) return false;
+    delay(200);
   }
-  Serial.println("[cam] SCAN send failed after retries");
   return false;
+}
+
+bool camLinkRequestScan() {
+  addCamPeer();
+  delay(30);
+  bool viaEspNow = false;
+  for (int attempt = 0; attempt < 10; attempt++) {
+    if (sendCamMessage(CAM_MSG_SCAN)) viaEspNow = true;
+    delay(80);
+  }
+  delay(100);
+  const bool viaHttp = camHttpScanControl(true);
+  if (!viaEspNow && !viaHttp) {
+    Serial.println("[cam] SCAN failed (ESP-NOW + HTTP)");
+    return false;
+  }
+  Serial.printf("[cam] scan arm espnow=%s http=%s\n",
+                viaEspNow ? "yes" : "no", viaHttp ? "yes" : "no");
+  return true;
+}
+
+void camLinkResendScan() {
+  sendCamMessage(CAM_MSG_SCAN);
 }
 
 void camLinkRequestScanStop() {
   sendCamMessage(CAM_MSG_SCAN_STOP);
+  camHttpScanControl(false);
+}
+
+void camLinkHttpScanKeepalive() {
+  camHttpScanControl(true);
 }
 
 const char* camLinkPreviewUrl() {
