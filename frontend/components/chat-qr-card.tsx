@@ -1,13 +1,19 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import QRCode from "react-qr-code"
-import { Expand, QrCode } from "lucide-react"
+import { Download, Expand, QrCode } from "lucide-react"
 import { useTranslations } from "next-intl"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import type { ChatQrTicket, DrugDto } from "@/lib/api"
+import { PickupTicketCard } from "@/components/pickup-ticket-card"
+import {
+  downloadTicketJpeg,
+  ticketJpegFilename,
+} from "@/lib/download-ticket-jpeg"
 
 export type ChatQrTicketView = {
   code: string
@@ -95,7 +101,10 @@ export function ChatQrCard({
   ticket: ChatQrTicketView
   onOpenFull?: () => void
 }) {
-  const t = useTranslations("Chat")
+  const tChat = useTranslations("Chat")
+  const tTicket = useTranslations("QRTicket")
+  const exportRef = useRef<HTMLDivElement>(null)
+  const [downloading, setDownloading] = useState(false)
   const redeemed = ticket.status === "REDEEMED"
   const [remainingSeconds, setRemainingSeconds] = useState(() =>
     Math.max(0, Math.floor((new Date(ticket.expiresAt).getTime() - Date.now()) / 1000))
@@ -115,18 +124,47 @@ export function ChatQrCard({
     return () => window.clearInterval(id)
   }, [ticket.expiresAt, showQr])
 
+  const handleDownload = async () => {
+    if (!exportRef.current || expired) return
+    setDownloading(true)
+    try {
+      await downloadTicketJpeg(
+        exportRef.current,
+        ticketJpegFilename(ticket.code)
+      )
+    } catch {
+      toast.error(tTicket("downloadFailed"))
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   return (
     <div className="mt-3 w-full rounded-lg border border-primary/30 bg-primary/5 p-3">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="text-xs font-medium text-primary">{t("qrPickupTitle")}</p>
-          <p className="text-xs text-muted-foreground">{t("qrPickupHint")}</p>
+          <p className="text-xs font-medium text-primary">{tChat("qrPickupTitle")}</p>
+          <p className="text-xs text-muted-foreground">{tChat("qrPickupHint")}</p>
         </div>
-        {showQr && onOpenFull ? (
-          <Button type="button" variant="secondary" size="sm" onClick={onOpenFull}>
-            <Expand className="h-3.5 w-3.5 mr-1" />
-            {t("qrOpenFullscreen")}
-          </Button>
+        {showQr ? (
+          <div className="flex shrink-0 gap-1">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={downloading}
+              onClick={() => void handleDownload()}
+            >
+              <Download className="mr-1 h-3.5 w-3.5" />
+              {downloading ? tTicket("downloadBusy") : tTicket("download")}
+            </Button>
+            {onOpenFull ? (
+              <Button type="button" variant="secondary" size="sm" onClick={onOpenFull}>
+                <Expand className="h-3.5 w-3.5 mr-1" />
+                {tChat("qrOpenFullscreen")}
+              </Button>
+            ) : null}
+          </div>
         ) : null}
       </div>
       <div className="mt-2 flex items-center justify-between text-xs">
@@ -145,10 +183,10 @@ export function ChatQrCard({
           }
         >
           {redeemed
-            ? t("qrRedeemed")
+            ? tChat("qrRedeemed")
             : expired
-              ? t("qrExpired")
-              : t("qrTimeLeft", { time: formatMMSS(remainingSeconds) })}
+              ? tChat("qrExpired")
+              : tChat("qrTimeLeft", { time: formatMMSS(remainingSeconds) })}
         </span>
       </div>
       {showQr ? (
@@ -161,6 +199,21 @@ export function ChatQrCard({
       ) : (
         <p className="mt-2 text-center text-xs text-muted-foreground">{ticket.code}</p>
       )}
+
+      {showQr ? (
+        <div
+          className="pointer-events-none fixed left-[-9999px] top-0 opacity-0"
+          aria-hidden
+        >
+          <PickupTicketCard
+            ref={exportRef}
+            drug={ticket.drug}
+            quantity={ticket.quantity}
+            ticketCode={ticket.code}
+            remainingSeconds={remainingSeconds}
+          />
+        </div>
+      ) : null}
     </div>
   )
 }

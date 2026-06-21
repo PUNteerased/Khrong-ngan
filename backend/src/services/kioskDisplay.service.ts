@@ -30,6 +30,7 @@ export type KioskDisplaySession = {
   phase: KioskDisplayPhase
   countdownSec: number
   camOnline?: boolean
+  camPreviewUrl?: string
   dispenseBusy?: boolean
   error?: string
   preview?: KioskDisplayPreview
@@ -64,6 +65,7 @@ export function syncCabinetSession(body: {
   phase?: unknown
   countdownSec?: unknown
   camOnline?: unknown
+  camPreviewUrl?: unknown
   dispenseBusy?: unknown
   error?: unknown
   preview?: unknown
@@ -78,6 +80,10 @@ export function syncCabinetSession(body: {
     countdownSec,
     camOnline:
       typeof body.camOnline === "boolean" ? body.camOnline : undefined,
+    camPreviewUrl:
+      typeof body.camPreviewUrl === "string" && body.camPreviewUrl.trim()
+        ? body.camPreviewUrl.trim()
+        : undefined,
     dispenseBusy:
       typeof body.dispenseBusy === "boolean" ? body.dispenseBusy : undefined,
     updatedAt: new Date().toISOString(),
@@ -89,6 +95,10 @@ export function syncCabinetSession(body: {
 
   if (phase === "preview" && body.preview && typeof body.preview === "object") {
     next.preview = body.preview as KioskDisplayPreview
+  }
+
+  if (phase !== "scanning") {
+    next.camPreviewUrl = undefined
   }
 
   cabinetSession = next

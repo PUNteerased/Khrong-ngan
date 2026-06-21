@@ -243,7 +243,9 @@ export const thMessages = {
     warning:
       "คำเตือน: หากมีอาการแพ้ยา โปรดหยุดใช้ทันที และรีบพบแพทย์หรือเภสัชกร",
     backHome: "กลับสู่หน้าหลัก",
-    download: "ดาวน์โหลด QR",
+    download: "ดาวน์โหลดตั๋ว",
+    downloadBusy: "กำลังสร้างไฟล์…",
+    downloadFailed: "ดาวน์โหลดไม่สำเร็จ ลองใหม่อีกครั้ง",
     slot: "ตู้ {slot}",
     qtyLabel: "จำนวน",
     qtyUnit: "{count} หน่วย",
@@ -727,6 +729,7 @@ export const thMessages = {
       "ตู้ยังไม่ส่ง heartbeat ไป Render — ตรวจ WiFi ของ ESP32-S3 และ upload firmware ล่าสุด",
     camOnline: "กล้องพร้อมสแกน",
     camOffline: "กล้องไม่เชื่อมต่อ — ตรวจ ESP-NOW",
+    camConnecting: "กำลังเชื่อมกล้อง…",
   },
 } as const
 
@@ -972,7 +975,9 @@ export const enMessages = {
     warning:
       "Warning: if you experience any allergic reaction, stop taking the drug and consult a clinician or pharmacist.",
     backHome: "Back to home",
-    download: "Download QR",
+    download: "Download ticket",
+    downloadBusy: "Generating file…",
+    downloadFailed: "Download failed. Please try again.",
     slot: "Slot {slot}",
     qtyLabel: "Quantity",
     qtyUnit: "{count} units",
@@ -1453,5 +1458,6 @@ export const enMessages = {
       "Cabinet has not sent a heartbeat to Render — check ESP32-S3 WiFi and upload latest firmware",
     camOnline: "Camera ready to scan",
     camOffline: "Camera offline — check ESP-NOW",
+    camConnecting: "Connecting to camera…",
   },
 } as const

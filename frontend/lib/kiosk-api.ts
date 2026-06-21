@@ -34,6 +34,7 @@ export type KioskSession = {
   phase: KioskSessionPhase
   countdownSec: number
   camOnline?: boolean
+  camPreviewUrl?: string
   dispenseBusy?: boolean
   error?: string
   preview?: KioskPreview
@@ -78,6 +79,14 @@ function getLanS3Base(): string {
 
 function apiBase(): string {
   return isLanKioskMode() ? getLanS3Base() : getCloudApiBase()
+}
+
+export function getKioskApiBase(): string {
+  return getCloudApiBase()
+}
+
+export function getKioskCameraFrameUrl(): string {
+  return `${getCloudApiBase()}/api/kiosk/display/camera-frame`
 }
 
 function sessionPath(): string {

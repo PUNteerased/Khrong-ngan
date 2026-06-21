@@ -1,17 +1,29 @@
 "use client"
 
 import type { KioskMessages } from "@/lib/kiosk-i18n"
+import { KioskCameraViewport } from "@/components/kiosk/kiosk-camera-viewport"
 
 type Props = {
   t: KioskMessages
   seconds: number
   camOnline?: boolean
+  camPreviewUrl?: string
 }
 
-export function KioskScanCountdown({ t, seconds, camOnline }: Props) {
+export function KioskScanCountdown({
+  t,
+  seconds,
+  camOnline,
+  camPreviewUrl,
+}: Props) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
-      <p className="text-2xl font-semibold text-primary">{t.cameraOn}</p>
+    <div className="flex h-full flex-col items-center justify-center gap-5 px-6 text-center">
+      <KioskCameraViewport
+        t={t}
+        active
+        camPreviewUrl={camPreviewUrl}
+      />
+      <p className="text-xl font-semibold text-primary">{t.cameraOn}</p>
       <p
         className={
           camOnline === false
@@ -22,7 +34,7 @@ export function KioskScanCountdown({ t, seconds, camOnline }: Props) {
         {camOnline === false ? t.camOffline : camOnline ? t.camOnline : t.scanHint}
       </p>
       <div
-        className="flex h-40 w-40 items-center justify-center rounded-full border-8 border-primary/20 bg-primary/5 text-[5rem] font-bold tabular-nums text-primary"
+        className="flex h-28 w-28 items-center justify-center rounded-full border-8 border-primary/20 bg-primary/5 text-[4rem] font-bold tabular-nums text-primary"
         aria-live="polite"
       >
         {seconds}

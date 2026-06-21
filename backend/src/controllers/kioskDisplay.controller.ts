@@ -94,6 +94,7 @@ export async function postKioskSessionSync(req: Request, res: Response) {
     phase?: unknown
     countdownSec?: unknown
     camOnline?: unknown
+    camPreviewUrl?: unknown
     dispenseBusy?: unknown
     error?: unknown
     preview?: unknown

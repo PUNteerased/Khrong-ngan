@@ -31,14 +31,18 @@ http://<PC-IP>:3000/kiosk?token=<KIOSK_DISPLAY_TOKEN>
 ```
 Tablet (Vercel HTTPS)
   → GET/POST /api/kiosk/display/*  (Render)
+  → GET /api/kiosk/display/camera-frame  (JPEG relay, poll ~400ms ตอนสแกน)
 ESP32-S3
   → POST /api/kiosk/heartbeat + session (Render)
   → POST /api/kiosk/session-sync เมื่อ phase เปลี่ยน
+  → ตอน scanning: GET http://CAM:81/jpg ทุก ~500ms → POST /api/kiosk/camera-frame
   ↔ ESP-NOW ESP32-CAM (QR scan — local only)
   → POST /api/kiosk/preview-ticket + redeem-ticket (Render)
 ```
 
-ไม่มี live camera preview บน Vercel (countdown + ข้อความอย่างเดียว)
+**Live camera preview**
+- **LAN** (`NEXT_PUBLIC_KIOSK_MODE=lan`): แท็บเล็ตโหลด `camPreviewUrl` จาก session ตรง (`http://CAM:81/jpg`)
+- **Cloud (Vercel)**: S3 relay JPEG ไป Render → แท็บเล็ต poll `GET /api/kiosk/display/camera-frame` (หลีก mixed content)
 
 ## Environment
 
@@ -60,6 +64,7 @@ KIOSK_HEARTBEAT_SECRET=...   # ตรงกับ firmware S3
 ```env
 BACKEND_HEARTBEAT_URL=https://khrong-ngan.onrender.com/api/kiosk/heartbeat
 BACKEND_SESSION_SYNC_URL=https://khrong-ngan.onrender.com/api/kiosk/session-sync
+BACKEND_CAMERA_FRAME_URL=https://khrong-ngan.onrender.com/api/kiosk/camera-frame
 KIOSK_HEARTBEAT_SECRET=...
 HEARTBEAT_INTERVAL_MS=5000
 HEARTBEAT_ACTIVE_INTERVAL_MS=2500   # ตอน scan/preview
@@ -88,6 +93,7 @@ Cloud mode: กด **ยกเลิก** หรือ **ลองใหม่**
 | Banner ตู้ offline บน Vercel | S3 ยังไม่ heartbeat ไป Render / WiFi ขาด |
 | กดสแกนแล้วไม่เริ่ม | รอ heartbeat 2–5s / firmware เก่าไม่รองรับ scan_start |
 | scan timeout | QR ไม่ถูกอ่าน — ดู Serial CAM |
+| กล้อง preview ไม่ขึ้นบน Vercel | รอ S3 relay ~1s / ตรวจ `BACKEND_CAMERA_FRAME_URL` ใน firmware |
 | mixed content (LAN mode) | ตั้ง `NEXT_PUBLIC_KIOSK_MODE` ไม่ใช่ `lan` บน Vercel |
 
 ## Deploy checklist

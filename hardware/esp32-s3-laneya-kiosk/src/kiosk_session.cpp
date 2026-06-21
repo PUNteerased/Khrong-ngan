@@ -31,6 +31,12 @@ void kioskSessionAppendCloudJson(JsonObject sessionOut) {
   sessionOut["countdownSec"] = kioskSessionCountdownSec();
   sessionOut["camOnline"] = camLinkOnline();
   sessionOut["dispenseBusy"] = kioskSessionDispenseBusy();
+  if (phase == KIOSK_SCANNING) {
+    const char* previewUrl = camLinkPreviewUrl();
+    if (previewUrl && previewUrl[0]) {
+      sessionOut["camPreviewUrl"] = previewUrl;
+    }
+  }
   const char* err = kioskSessionError();
   if (err && err[0] && phase == KIOSK_ERROR) {
     sessionOut["error"] = err;

@@ -18,6 +18,7 @@ import * as kioskController from "../controllers/kiosk.controller.js"
 import * as adminKioskController from "../controllers/adminKiosk.controller.js"
 import * as kioskPickupController from "../controllers/kioskPickup.controller.js"
 import * as kioskDisplayController from "../controllers/kioskDisplay.controller.js"
+import * as kioskCameraFrameController from "../controllers/kioskCameraFrame.controller.js"
 import * as ticketController from "../controllers/ticket.controller.js"
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth.js"
 import { adminAuthMiddleware, adminOrKeyMiddleware } from "../middleware/adminAuth.js"
@@ -122,6 +123,12 @@ router.post(
   "/api/kiosk/display/confirm",
   kioskDisplayLimiter,
   kioskDisplayController.postKioskDisplayConfirm
+)
+router.post("/api/kiosk/camera-frame", kioskCameraFrameController.postKioskCameraFrame)
+router.get(
+  "/api/kiosk/display/camera-frame",
+  kioskDisplayLimiter,
+  kioskCameraFrameController.getKioskDisplayCameraFrame
 )
 
 router.get(

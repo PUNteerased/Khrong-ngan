@@ -126,6 +126,7 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
           t={t}
           seconds={session.countdownSec || 45}
           camOnline={session.camOnline}
+          camPreviewUrl={session.camPreviewUrl}
         />
       )
     }

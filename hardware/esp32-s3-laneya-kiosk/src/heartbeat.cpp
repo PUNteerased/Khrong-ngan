@@ -3,11 +3,15 @@
 #include "wifi_manager.h"
 #include "dispenser.h"
 #include "kiosk_session.h"
+#include "cam_link.h"
 
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <WiFiClient.h>
 #include <WiFi.h>
 #include <ArduinoJson.h>
+#include <vector>
+#include "mbedtls/base64.h"
 
 #if __has_include("config.h")
 #include "config.h"
@@ -23,7 +27,16 @@
 #define HEARTBEAT_ACTIVE_INTERVAL_MS 2500
 #endif
 
+#ifndef BACKEND_CAMERA_FRAME_URL
+#define BACKEND_CAMERA_FRAME_URL "https://khrong-ngan.onrender.com/api/kiosk/camera-frame"
+#endif
+
+#ifndef CAMERA_FRAME_INTERVAL_MS
+#define CAMERA_FRAME_INTERVAL_MS 500
+#endif
+
 static unsigned long lastHeartbeatMs = 0;
+static unsigned long lastCameraFrameMs = 0;
 
 static struct {
   bool pending = false;
@@ -111,6 +124,77 @@ static bool postCloudJson(const char* url, const String& body) {
   }
   http.end();
   return ok;
+}
+
+static bool encodeJpegBase64(const uint8_t* data, size_t len, String& out) {
+  if (!data || len == 0) return false;
+  size_t olen = 0;
+  if (mbedtls_base64_encode(nullptr, 0, &olen, data, len) != MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL) {
+    return false;
+  }
+  out.reserve(olen + 1);
+  std::vector<unsigned char> buf(olen + 1);
+  if (mbedtls_base64_encode(buf.data(), buf.size(), &olen, data, len) != 0) {
+    return false;
+  }
+  out = String(reinterpret_cast<const char*>(buf.data()), olen);
+  return true;
+}
+
+static void relayCameraFrameIfScanning() {
+  if (kioskSessionPhase() != KIOSK_SCANNING) return;
+  if (millis() - lastCameraFrameMs < CAMERA_FRAME_INTERVAL_MS) return;
+
+  const char* previewUrl = camLinkPreviewUrl();
+  if (!previewUrl || !previewUrl[0]) return;
+  if (!isWiFiConnected()) return;
+  if (strlen(BACKEND_CAMERA_FRAME_URL) == 0) return;
+  if (strlen(KIOSK_HEARTBEAT_SECRET) == 0) return;
+
+  lastCameraFrameMs = millis();
+
+  WiFiClient camClient;
+  HTTPClient camHttp;
+  camHttp.begin(camClient, previewUrl);
+  camHttp.setTimeout(4000);
+  const int camCode = camHttp.GET();
+  if (camCode != HTTP_CODE_OK) {
+    camHttp.end();
+    return;
+  }
+
+  const int len = camHttp.getSize();
+  if (len <= 0 || len > 512000) {
+    camHttp.end();
+    return;
+  }
+
+  WiFiClient* stream = camHttp.getStreamPtr();
+  if (!stream) {
+    camHttp.end();
+    return;
+  }
+
+  std::vector<uint8_t> jpeg(static_cast<size_t>(len));
+  size_t readTotal = 0;
+  while (readTotal < static_cast<size_t>(len) && camHttp.connected()) {
+    const size_t n = stream->readBytes(
+        jpeg.data() + readTotal, static_cast<size_t>(len) - readTotal);
+    if (n == 0) break;
+    readTotal += n;
+  }
+  camHttp.end();
+
+  if (readTotal < 100) return;
+
+  String b64;
+  if (!encodeJpegBase64(jpeg.data(), readTotal, b64)) return;
+
+  JsonDocument doc;
+  doc["jpegBase64"] = b64;
+  String body;
+  serializeJson(doc, body);
+  postCloudJson(BACKEND_CAMERA_FRAME_URL, body);
 }
 
 void heartbeatPushSessionIfDirty() {
@@ -253,6 +337,7 @@ void heartbeatSetup() {
 
 void heartbeatLoop() {
   heartbeatPushSessionIfDirty();
+  relayCameraFrameIfScanning();
 
   unsigned long interval = HEARTBEAT_INTERVAL_MS;
   if (kioskSessionPhase() != KIOSK_IDLE) {

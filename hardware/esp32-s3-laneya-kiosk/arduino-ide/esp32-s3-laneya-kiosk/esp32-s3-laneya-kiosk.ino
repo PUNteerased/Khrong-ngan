@@ -22,6 +22,7 @@
 #define BACKEND_SESSION_SYNC_URL "https://khrong-ngan.onrender.com/api/kiosk/session-sync"
 #define BACKEND_REDEEM_URL "https://khrong-ngan.onrender.com/api/kiosk/redeem-ticket"
 #define BACKEND_PREVIEW_URL "https://khrong-ngan.onrender.com/api/kiosk/preview-ticket"
+#define BACKEND_CAMERA_FRAME_URL "https://khrong-ngan.onrender.com/api/kiosk/camera-frame"
 #define KIOSK_HEARTBEAT_SECRET "ilovevijai"
 
 #define FIRMWARE_VERSION "1.0.0-kiosk"
@@ -29,6 +30,7 @@
 // production อาจใช้ 15000–30000 ถ้าไม่อยากยิง Render บ่อย
 #define HEARTBEAT_INTERVAL_MS 5000
 #define HEARTBEAT_ACTIVE_INTERVAL_MS 2500
+#define CAMERA_FRAME_INTERVAL_MS 500
 
 #define I2C_SDA_PIN 9
 #define I2C_SCL_PIN 10
@@ -70,10 +72,12 @@
 #include <WebServer.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <WiFiClient.h>
 #include <Wire.h>
 #include <esp_now.h>
 #include <esp_system.h>
 #include <ArduinoJson.h>
+#include "mbedtls/base64.h"
 #include <Adafruit_PWMServoDriver.h>
 #include "kiosk_page.h"
 
@@ -81,6 +85,7 @@ WebServer server(80);
 Adafruit_PWMServoDriver pwm(PCA9685_I2C_ADDR);
 
 unsigned long lastHeartbeatMs = 0;
+unsigned long lastCameraFrameMs = 0;
 unsigned long lastWifiRetryMs = 0;
 bool pwmReady = false;
 bool dispenseBusy = false;
@@ -110,14 +115,29 @@ static unsigned long kioskScanUntilMs = 0;
 static unsigned long kioskSuccessAtMs = 0;
 static unsigned long kioskErrorAtMs = 0;
 static bool kioskCloudDirty = false;
+static char kioskSessionError[96] = {};
+static char kioskPreviewJson[2048] = {};
+static char kioskPendingCode[32] = {};
+static char kioskPendingSignature[128] = {};
 
 static void kioskMarkCloudDirty() { kioskCloudDirty = true; }
+
+const char* kioskPhaseName();
+int kioskSessionCountdownSec();
+bool camLinkOnline();
+bool dispenserIsBusy();
 
 static void kioskAppendCloudJson(JsonObject sessionOut) {
   sessionOut["phase"] = kioskPhaseName();
   sessionOut["countdownSec"] = kioskSessionCountdownSec();
   sessionOut["camOnline"] = camLinkOnline();
   sessionOut["dispenseBusy"] = dispenserIsBusy();
+  if (kioskPhase == KIOSK_SCANNING) {
+    const char* previewUrl = camLinkPreviewUrl();
+    if (previewUrl && previewUrl[0]) {
+      sessionOut["camPreviewUrl"] = previewUrl;
+    }
+  }
   const char* err = kioskSessionError;
   if (err && err[0] && kioskPhase == KIOSK_ERROR) {
     sessionOut["error"] = err;
@@ -129,10 +149,6 @@ static void kioskAppendCloudJson(JsonObject sessionOut) {
     }
   }
 }
-static char kioskSessionError[96] = {};
-static char kioskPreviewJson[2048] = {};
-static char kioskPendingCode[32] = {};
-static char kioskPendingSignature[128] = {};
 
 struct {
   bool pending = false;
@@ -924,6 +940,61 @@ bool postCloudJson(const char* url, const String& body) {
   return ok;
 }
 
+bool encodeJpegBase64(const uint8_t* data, size_t len, String& out) {
+  if (!data || len == 0) return false;
+  size_t olen = 0;
+  if (mbedtls_base64_encode(nullptr, 0, &olen, data, len) != MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL) {
+    return false;
+  }
+  unsigned char* buf = new unsigned char[olen + 1];
+  const bool ok =
+      mbedtls_base64_encode(buf, olen + 1, &olen, data, len) == 0;
+  if (ok) {
+    out = String(reinterpret_cast<const char*>(buf), olen);
+  }
+  delete[] buf;
+  return ok;
+}
+
+void relayCameraFrameIfScanning() {
+  if (kioskPhase != KIOSK_SCANNING) return;
+  if (millis() - lastCameraFrameMs < CAMERA_FRAME_INTERVAL_MS) return;
+
+  const char* previewUrl = camLinkPreviewUrl();
+  if (!previewUrl || !previewUrl[0]) return;
+  if (WiFi.status() != WL_CONNECTED) return;
+  if (strlen(BACKEND_CAMERA_FRAME_URL) == 0) return;
+  if (strlen(KIOSK_HEARTBEAT_SECRET) == 0) return;
+
+  lastCameraFrameMs = millis();
+
+  WiFiClient camClient;
+  HTTPClient camHttp;
+  camHttp.begin(camClient, previewUrl);
+  camHttp.setTimeout(4000);
+  const int camCode = camHttp.GET();
+  if (camCode != HTTP_CODE_OK) {
+    camHttp.end();
+    return;
+  }
+
+  const String jpeg = camHttp.getString();
+  camHttp.end();
+
+  if (jpeg.length() < 100 || jpeg.length() > 512000) return;
+
+  String b64;
+  if (!encodeJpegBase64(reinterpret_cast<const uint8_t*>(jpeg.c_str()), jpeg.length(), b64)) {
+    return;
+  }
+
+  JsonDocument doc;
+  doc["jpegBase64"] = b64;
+  String body;
+  serializeJson(doc, body);
+  postCloudJson(BACKEND_CAMERA_FRAME_URL, body);
+}
+
 void pushSessionSyncIfDirty() {
   if (!kioskCloudDirty) return;
   const String body = buildSessionSyncBody();
@@ -1262,6 +1333,7 @@ void loop() {
   }
 
   pushSessionSyncIfDirty();
+  relayCameraFrameIfScanning();
 
   unsigned long hbInterval = HEARTBEAT_INTERVAL_MS;
   if (kioskPhase != KIOSK_IDLE) {
