@@ -8,6 +8,14 @@ export function stripTicketCodeInput(raw: string): string {
   return raw.trim().toUpperCase().replace(/[\s-]+/g, "")
 }
 
+/** Live format while typing: a10001abcdef → A1-0001-ABCDEF */
+export function formatTicketCodeLive(raw: string): string {
+  const compact = raw.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 12)
+  if (compact.length <= 2) return compact
+  if (compact.length <= 6) return `${compact.slice(0, 2)}-${compact.slice(2)}`
+  return `${compact.slice(0, 2)}-${compact.slice(2, 6)}-${compact.slice(6)}`
+}
+
 /**
  * Parse compact or dashed ticket input → canonical A1-0001-ABCDEF.
  * Returns null if invalid.
@@ -26,9 +34,4 @@ export function parseCompactTicketCode(raw: string): string | null {
 
   const formatted = `${compact.slice(0, 2)}-${compact.slice(2, 6)}-${compact.slice(6)}`
   return TICKET_CODE_RE.test(formatted) ? formatted : null
-}
-
-/** Display hint for compact entry (visual separators only). */
-export function ticketCodeFormatHint(): string {
-  return "A1 · 0001 · ABCDEF"
 }

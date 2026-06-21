@@ -94,14 +94,15 @@ function stopCamPreview(){if(camTimer){clearInterval(camTimer);camTimer=null}}
 function startCamPreview(url){stopCamPreview();if(!url)return;const img=document.getElementById("camLive");if(!img)return;const tick=()=>{img.src=url+(url.indexOf("?")>=0?"&":"?")+"t="+Date.now()};tick();camTimer=setInterval(tick,400)}
 function updateCamPill(){if(session.camOnline===true){camPill.textContent="กล้องเชื่อมต่อ";camPill.className="pill ok"}else if(session.camOnline===false){camPill.textContent="กล้องไม่ตอบ";camPill.className="pill bad"}else{camPill.textContent="กล้อง …";camPill.className="pill"}}
 function normalizeCode(raw){const c=(raw||"").trim().toUpperCase().replace(/[\s-]+/g,"");if(/^[AB][1-5]-\d{4}-[A-Z]{6}$/.test(c))return c;if(/^[AB][1-5]\d{4}[A-Z]{6}$/.test(c))return c.slice(0,2)+"-"+c.slice(2,6)+"-"+c.slice(6);return null}
+function formatCodeLive(raw){const c=(raw||"").replace(/[^a-zA-Z0-9]/g,"").toUpperCase().slice(0,12);if(c.length<=2)return c;if(c.length<=6)return c.slice(0,2)+"-"+c.slice(2);return c.slice(0,2)+"-"+c.slice(2,6)+"-"+c.slice(6)}
 function render(){
 updateCamPill();const p=session.phase||"idle";
 foot.classList.toggle("hidden",!(p==="preview"||p==="scanning"));
 btnConfirm.disabled=busy||p!=="preview"||ticketExpired();btnCancel.disabled=busy||p==="dispensing";
 if(p!=="scanning")stopCamPreview();
 if(p==="idle"){
-main.innerHTML='<div class="card">'+GUIDE+'<p class="caption">หากท่านคัดกรองอาการผ่านมือถือเรียบร้อยแล้ว โปรดกดปุ่มด้านล่างเพื่อเปิดกล้องสแกนรับยา</p><button class="btn btn-primary" id="btnScan" type="button">🔍 กดตรงนี้เพื่อเปิดกล้องสแกน QR Code</button><p class="code-or">หรือ</p><p class="hint">พิมพ์รหัสจากแชท LaneYa</p><input class="code-input" id="codeInput" placeholder="A10001ABCDEF" maxlength="14" autocapitalize="characters" autocomplete="off"><p class="hint">A1 · 0001 · ABCDEF (ไม่ต้องพิมพ์ -)</p><button class="btn btn-ghost" id="btnSubmitCode" type="button">ยืนยันรหัส</button></div>';
-document.getElementById("btnScan").onclick=startScan;document.getElementById("btnSubmitCode").onclick=submitCode;return}
+main.innerHTML='<div class="card">'+GUIDE+'<p class="caption">หากท่านคัดกรองอาการผ่านมือถือเรียบร้อยแล้ว โปรดกดปุ่มด้านล่างเพื่อเปิดกล้องสแกนรับยา</p><button class="btn btn-primary" id="btnScan" type="button">🔍 กดตรงนี้เพื่อเปิดกล้องสแกน QR Code</button><p class="code-or">หรือ</p><p class="hint">พิมพ์รหัสจากแชท LaneYa</p><input class="code-input" id="codeInput" placeholder="A1-0001-ABCDEF" maxlength="14" autocapitalize="characters" autocomplete="off"><button class="btn btn-ghost" id="btnSubmitCode" type="button">ยืนยันรหัส</button></div>';
+document.getElementById("btnScan").onclick=startScan;document.getElementById("btnSubmitCode").onclick=submitCode;const codeEl=document.getElementById("codeInput");if(codeEl)codeEl.oninput=function(){this.value=formatCodeLive(this.value)};return}
 if(p==="scanning"){
 const camWarn=session.camOnline===false?'<p class="status bad">กล้องยังไม่ตอบ — preview อาจไม่ขึ้น</p>':'';
 main.innerHTML='<div class="scan-wrap"><img id="camLive" alt="กล้อง" onerror="this.style.display=\'none\';document.getElementById(\'ph\').classList.remove(\'hidden\')"><div id="ph" class="scan-placeholder hidden">กำลังเชื่อมกล้อง…</div><div class="scan-overlay"><div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div><div class="scan-line"></div></div></div><div class="scan-meta"><div class="count">'+(session.countdownSec||0)+'</div><div class="count-label">วินาที — ถือ QR ในกรอบ</div>'+camWarn+'</div>';

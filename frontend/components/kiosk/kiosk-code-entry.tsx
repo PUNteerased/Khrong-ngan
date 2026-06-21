@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import type { KioskMessages } from "@/lib/kiosk-i18n"
-import { parseCompactTicketCode, stripTicketCodeInput } from "@/lib/ticket-code"
+import { formatTicketCodeLive, parseCompactTicketCode } from "@/lib/ticket-code"
 
 type Props = {
   t: KioskMessages
@@ -32,7 +32,7 @@ export function KioskCodeEntry({
   }
 
   const handleChange = (raw: string) => {
-    setCode(stripTicketCodeInput(raw))
+    setCode(formatTicketCodeLive(raw))
   }
 
   return (
@@ -67,9 +67,6 @@ export function KioskCodeEntry({
         }}
         className="w-full rounded-xl border-2 border-border bg-background px-4 py-4 text-center font-mono text-[clamp(1rem,3vw,1.35rem)] tracking-wide outline-none focus:border-primary disabled:opacity-60"
       />
-      <p className="text-center font-mono text-sm text-muted-foreground">
-        {t.codeEntryHint}
-      </p>
       {disabled && disabledReason ? (
         <p className="text-center text-sm text-destructive">{disabledReason}</p>
       ) : null}
