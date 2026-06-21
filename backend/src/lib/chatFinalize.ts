@@ -129,8 +129,8 @@ export async function finalizeQrRequest(params: {
   if (!drugSafety.isSafe) return null
 
   const answer =
-    `ได้เลยครับ/ค่ะ 🙏 นี่คือ QR สำหรับรับ **${drug.name} (ช่อง ${drug.slotId})** ที่ตู้จ่ายยานะครับ/ค่ะ\n\n` +
-    `ถือ QR บนหน้าจอให้กล้องที่ตู้เพื่อรับยาได้เลยครับ/ค่ะ 📱`
+    `ได้เลยนะครับ 🙏 นี่คือ QR สำหรับรับ **${drug.name} (ช่อง ${drug.slotId})** ที่ตู้จ่ายยาครับ\n\n` +
+    `ถือ QR บนหน้าจอให้กล้องที่ตู้เพื่อรับยาได้เลยนะครับ 📱`
 
   const assistantMessage = await prisma.chatMessage.create({
     data: { sessionId: session.id, role: "assistant", content: answer },

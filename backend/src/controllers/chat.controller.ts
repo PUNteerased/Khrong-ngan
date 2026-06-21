@@ -18,6 +18,7 @@ import {
   MISSING_FIELD_PROMPTS,
   buildMissingFieldsInstruction,
   detectMissingProfileFields,
+  fieldsToAskThisTurn,
   type MissingFieldKey,
 } from "../lib/profileCompleteness.js"
 import {
@@ -78,12 +79,15 @@ function buildUserSnapshot(user: {
 }
 
 function buildAskMissingReply(missing: MissingFieldKey[]): string {
+  const askNow = fieldsToAskThisTurn(missing)
   const header =
-    "👋 สวัสดีครับ/ค่ะ ก่อนที่จะช่วยประเมินอาการและแนะนำยาให้ปลอดภัย ขอข้อมูลเพิ่มเติมอีกนิดนะครับ/ค่ะ:"
-  const bullets = missing.map((k) => `• ${MISSING_FIELD_PROMPTS[k]}`)
+    "สวัสดีครับ ก่อนแนะนำยา ขอข้อมูลเพิ่มนิดนึงนะครับ"
+  const questions = askNow.map((k) => `• ${MISSING_FIELD_PROMPTS[k]}`)
   const footer =
-    "\nเมื่อได้ข้อมูลครบแล้วระบบจะวิเคราะห์อาการและเลือกยาที่เหมาะสมให้ครับ/ค่ะ 🙏"
-  return [header, "", ...bullets, footer].join("\n")
+    askNow.length < missing.length
+      ? "\nตอบทีละข้อได้เลยครับ แล้วจะถามต่อให้ 🙏"
+      : "\nตอบแล้วจะช่วยประเมินอาการให้เลยครับ 🙏"
+  return [header, "", ...questions, footer].join("\n")
 }
 
 type EarlyChatJson = Record<string, unknown>
@@ -196,6 +200,7 @@ async function prepareChatContext(req: Request): Promise<
     currentMedications: user.currentMedications,
   })
   const missingInstruction = buildMissingFieldsInstruction(missingFields)
+  const missingFieldsThisTurn = fieldsToAskThisTurn(missingFields)
 
   const inputs: Record<string, string> = {
     allergy_context: allergyContext,
@@ -210,7 +215,7 @@ async function prepareChatContext(req: Request): Promise<
     gender: user.gender?.trim() ? user.gender : "ไม่ระบุเพศ",
     current_medications: user.currentMedications.trim() || "ไม่ระบุยาที่ทานประจำ",
     user_current_medications: user.currentMedications.trim() || "ไม่ระบุยาที่ทานประจำ",
-    missing_fields: missingFields.join(","),
+    missing_fields: missingFieldsThisTurn.join(","),
     missing_fields_instruction: missingInstruction,
     inventory_drugs: inventoryDrugsInput,
     risk_rubric: RISK_RUBRIC_INPUT,

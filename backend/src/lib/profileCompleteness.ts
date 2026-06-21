@@ -25,21 +25,20 @@ export type MissingFieldKey =
   | "diseases"
   | "currentMedications"
 
-/** Thai one-liners the AI can echo verbatim when asking the patient. */
+/** Max profile questions the AI should ask per chat turn. */
+export const MAX_ASK_PER_TURN = 2
+
+/** Thai one-liners the AI can echo when asking the patient. */
 export const MISSING_FIELD_PROMPTS: Record<MissingFieldKey, string> = {
-  age: "ขอทราบอายุของคุณ (เป็นปี) เพื่อประเมินยาให้ปลอดภัยครับ/ค่ะ",
-  weight:
-    "ขอทราบน้ำหนักตัวโดยประมาณ (กก.) เพื่อคำนวณขนาดยาที่เหมาะสมครับ/ค่ะ",
-  height:
-    "ขอทราบส่วนสูงของคุณ (ซม.) เพื่อประกอบการประเมินขนาดยาครับ/ค่ะ",
-  gender:
-    "ขอทราบเพศของคุณ (ชาย / หญิง / อื่น ๆ) เพื่อให้คำแนะนำได้ปลอดภัยขึ้นครับ/ค่ะ",
-  allergies:
-    "คุณเคยแพ้ยาอะไรบ้างครับ/ค่ะ? ถ้าไม่เคยแพ้ยาเลย โปรดบอกว่า 'ไม่มี' ได้เลยครับ/ค่ะ",
+  age: "อายุเท่าไหร่ครับ (ปี)",
+  weight: "น้ำหนักประมาณเท่าไหร่ครับ (กก.)",
+  height: "ส่วนสูงประมาณเท่าไหร่ครับ (ซม.)",
+  gender: "เพศชายหรือหญิงครับ",
+  allergies: "เคยแพ้ยาอะไรบ้างครับ ถ้าไม่มีบอก 'ไม่มี' ได้เลย",
   diseases:
-    "คุณมีโรคประจำตัวอะไรบ้างไหมครับ/ค่ะ เช่น เบาหวาน ความดัน หอบหืด โรคไต โรคตับ ถ้าไม่มีให้บอกว่า 'ไม่มี' ได้เลย",
+    "มีโรคประจำตัวไหมครับ เช่น เบาหวาน ความดัน ถ้าไม่มีบอก 'ไม่มี' ได้เลย",
   currentMedications:
-    "ตอนนี้คุณทานยาอะไรประจำอยู่บ้างไหมครับ/ค่ะ? (ถ้าไม่มีบอก 'ไม่มี' ได้เลย) — เพื่อตรวจสอบยาตีกัน",
+    "ตอนนี้ทานยาประจำอะไรอยู่ไหมครับ ถ้าไม่มีบอก 'ไม่มี' ได้เลย",
 }
 
 const LABELS: Record<MissingFieldKey, string> = {
@@ -67,9 +66,16 @@ export function detectMissingProfileFields(
   return missing
 }
 
+/** First N missing fields to ask this turn. */
+export function fieldsToAskThisTurn(
+  missing: MissingFieldKey[],
+  max = MAX_ASK_PER_TURN
+): MissingFieldKey[] {
+  return missing.slice(0, max)
+}
+
 /**
- * Builds a single Thai instruction block to inject into the Dify prompt so
- * the AI knows exactly which questions to ask (and in what words).
+ * Builds a Thai instruction block for Dify — only the fields to ask now (max 2).
  */
 export function buildMissingFieldsInstruction(
   missing: MissingFieldKey[]
@@ -77,12 +83,23 @@ export function buildMissingFieldsInstruction(
   if (missing.length === 0) {
     return "ข้อมูลผู้ใช้ครบถ้วน สามารถประเมินอาการและแนะนำยาต่อได้เลย"
   }
-  const bullets = missing
-    .map((k, i) => `${i + 1}) ${LABELS[k]} — ${MISSING_FIELD_PROMPTS[k]}`)
+
+  const askNow = fieldsToAskThisTurn(missing)
+  const bullets = askNow
+    .map((k) => `- ${LABELS[k]}: ${MISSING_FIELD_PROMPTS[k]}`)
     .join("\n")
+
+  const remaining = missing.length - askNow.length
+  const remainingNote =
+    remaining > 0
+      ? `\n(ยังขาดอีก ${remaining} ข้อ — ถามในเทิร์นถัดไปหลังผู้ใช้ตอบ)`
+      : ""
+
   return [
-    "ข้อมูลโปรไฟล์ผู้ใช้ยังไม่ครบ ระบบต้องการให้คุณถามข้อมูลต่อไปนี้ในแชตก่อนเริ่มวินิจฉัยหรือแนะนำยา:",
+    "ข้อมูลโปรไฟล์ยังไม่ครบ — ถามเฉพาะข้อด้านล่างนี้ในเทิร์นนี้ (สูงสุด 2 ข้อ):",
     bullets,
-    "กรุณาถามเฉพาะข้อที่ยังขาด เรียงลำดับจากบนลงล่าง ใช้ภาษาสุภาพเป็นกันเอง และอย่าเพิ่งแนะนำยาจนกว่าข้อมูลจะครบ",
+    remainingNote,
+    "ใช้โทนเภสัชชาย อบอุ่น สั้น (ครับ/นะครับ) ห้ามถามเกิน 2 ข้อ ห้ามใช้เลข 1) 2) 3) ยาว",
+    "อย่าแนะนำยาจนกว่าข้อมูลจะครบ",
   ].join("\n")
 }
