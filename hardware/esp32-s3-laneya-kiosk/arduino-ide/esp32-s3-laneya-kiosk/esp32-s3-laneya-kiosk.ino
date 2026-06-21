@@ -953,7 +953,7 @@ static bool postCameraFrameRaw(const uint8_t* data, size_t len) {
   http.setTimeout(20000);
   http.addHeader("Content-Type", "image/jpeg");
   http.addHeader("X-Kiosk-Secret", KIOSK_HEARTBEAT_SECRET);
-  const int code = http.POST(data, len);
+  const int code = http.POST(const_cast<uint8_t*>(data), len);
   http.end();
   return code >= 200 && code < 300;
 }
