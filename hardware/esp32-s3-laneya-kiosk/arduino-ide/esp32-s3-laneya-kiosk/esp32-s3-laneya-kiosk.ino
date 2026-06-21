@@ -172,7 +172,8 @@ const char* wifiStatusText(wl_status_t s) {
 
 void camLinkStart();
 
-bool pickupRedeemAndDispense(const char* code);
+bool pickupRedeemAndDispense(const char* code, String* errorOut = nullptr);
+bool kioskSessionOnManualCode(const char* code, const char* signature = nullptr);
 
 bool connectWiFi(unsigned long timeoutMs = 20000) {
   if (WiFi.status() == WL_CONNECTED) return true;
@@ -606,8 +607,17 @@ bool pickupPreviewTicket(
 }
 
 bool kioskSessionOnQrCode(const char* code, const char* signature) {
+  return kioskSessionOnManualCode(code, signature);
+}
+
+bool kioskSessionOnManualCode(const char* code, const char* signature) {
   if (!code || !code[0]) return false;
-  if (kioskPhase != KIOSK_SCANNING && kioskPhase != KIOSK_PREVIEW) return false;
+  if (kioskPhase != KIOSK_IDLE && kioskPhase != KIOSK_SCANNING && kioskPhase != KIOSK_PREVIEW) {
+    return false;
+  }
+  if (kioskPhase == KIOSK_IDLE) {
+    kioskSessionError[0] = '\0';
+  }
   strncpy(kioskPendingCode, code, sizeof(kioskPendingCode) - 1);
   kioskPendingCode[sizeof(kioskPendingCode) - 1] = '\0';
   if (signature && signature[0]) {
@@ -691,7 +701,8 @@ bool kioskSessionConfirmPickup() {
   }
   kioskPhase = KIOSK_DISPENSING;
   kioskMarkCloudDirty();
-  const bool ok = pickupRedeemAndDispense(kioskPendingCode);
+  String redeemError;
+  const bool ok = pickupRedeemAndDispense(kioskPendingCode, &redeemError);
   if (ok) {
     kioskPhase = KIOSK_SUCCESS;
     kioskPreviewJson[0] = '\0';
@@ -700,7 +711,9 @@ bool kioskSessionConfirmPickup() {
     return true;
   }
   kioskPhase = KIOSK_ERROR;
-  strncpy(kioskSessionError, "dispense failed", sizeof(kioskSessionError) - 1);
+  const char* err = redeemError.length() ? redeemError.c_str() : "dispense failed";
+  strncpy(kioskSessionError, err, sizeof(kioskSessionError) - 1);
+  kioskSessionError[sizeof(kioskSessionError) - 1] = '\0';
   kioskMarkCloudDirty();
   return false;
 }
@@ -754,11 +767,12 @@ int kioskSessionCountdownSec() {
   return ms <= 0 ? 0 : static_cast<int>((ms + 999) / 1000);
 }
 
-bool pickupRedeemAndDispense(const char* code) {
+bool pickupRedeemAndDispense(const char* code, String* errorOut) {
   String response;
-  String errorOut;
-  if (!postKioskTicketUrl(BACKEND_REDEEM_URL, code, nullptr, response, errorOut)) {
+  String redeemError;
+  if (!postKioskTicketUrl(BACKEND_REDEEM_URL, code, nullptr, response, redeemError)) {
     Serial.println("[pickup] redeem failed");
+    if (errorOut) *errorOut = redeemError.length() ? redeemError : String("dispense failed");
     return false;
   }
 
@@ -800,6 +814,7 @@ static void handleCamPayload(const uint8_t* data, int len) {
     camOnline = true;
     lastCamRxMs = millis();
     const char* payload = buf + strlen(CAM_MSG_QR_PREFIX);
+    Serial.printf("[cam] ESP-NOW << QR:%s\n", payload);
     if (payload[0] == '{') {
       JsonDocument qrDoc;
       if (!deserializeJson(qrDoc, payload)) {
@@ -1153,7 +1168,7 @@ void pushSessionSyncIfDirty() {
 
 void sendHeartbeat();
 
-void handleDisplayCommand(const char* id, const char* action) {
+void handleDisplayCommand(const char* id, const char* action, const char* code) {
   bool ok = false;
   const char* errMsg = nullptr;
 
@@ -1165,10 +1180,23 @@ void handleDisplayCommand(const char* id, const char* action) {
     Serial.printf("[web-cmd] received scan_cancel id=%s\n", id);
     kioskSessionCancelScan();
     ok = true;
+  } else if (strcmp(action, "submit_code") == 0) {
+    Serial.printf("[web-cmd] received submit_code id=%s\n", id);
+    if (!code || !code[0]) {
+      ok = false;
+      errMsg = "preview failed";
+    } else {
+      ok = kioskSessionOnManualCode(code);
+      if (!ok) {
+        errMsg = kioskSessionError[0] ? kioskSessionError : "preview failed";
+      }
+    }
   } else if (strcmp(action, "confirm_pickup") == 0) {
     Serial.printf("[web-cmd] received confirm_pickup id=%s\n", id);
     ok = kioskSessionConfirmPickup();
-    if (!ok) errMsg = "confirm failed";
+    if (!ok) {
+      errMsg = kioskSessionError[0] ? kioskSessionError : "confirm failed";
+    }
   } else {
     Serial.println("[web-cmd] ignored invalid command");
     return;
@@ -1193,6 +1221,7 @@ void handleCommandFromResponse(const String& response) {
   const char* id = cmd["id"] | "";
   const char* action = cmd["action"] | "";
   const int slot = cmd["slot"] | -1;
+  const char* code = cmd["code"] | "";
 
   if (!id[0]) {
     Serial.println("[web-cmd] ignored invalid command");
@@ -1201,16 +1230,17 @@ void handleCommandFromResponse(const String& response) {
 
   if (strcmp(action, "scan_start") == 0 ||
       strcmp(action, "scan_cancel") == 0 ||
+      strcmp(action, "submit_code") == 0 ||
       strcmp(action, "confirm_pickup") == 0) {
     if (dispenserIsBusy() && strcmp(action, "scan_cancel") != 0 &&
-        strcmp(action, "confirm_pickup") != 0) {
+        strcmp(action, "confirm_pickup") != 0 && strcmp(action, "submit_code") != 0) {
       Serial.println("[web-cmd] rejected — dispense busy");
       queueAck(id, false, "busy");
       sendHeartbeat();
       lastHeartbeatMs = millis();
       return;
     }
-    handleDisplayCommand(id, action);
+    handleDisplayCommand(id, action, code);
     return;
   }
 
@@ -1327,6 +1357,29 @@ void handleScanCancel() {
   sendCorsHeaders();
   kioskSessionCancelScan();
   server.send(200, "application/json", "{\"ok\":true,\"phase\":\"idle\"}");
+}
+
+void handleSubmitCode() {
+  sendCorsHeaders();
+  JsonDocument doc;
+  if (deserializeJson(doc, server.arg("plain"))) {
+    server.send(400, "application/json", "{\"error\":\"invalid json\"}");
+    return;
+  }
+  const char* code = doc["code"] | "";
+  if (!code[0]) {
+    server.send(400, "application/json", "{\"error\":\"code required\"}");
+    return;
+  }
+  Serial.printf("[web-cmd] LAN POST /kiosk/submit-code code=%s\n", code);
+  if (!kioskSessionOnManualCode(code)) {
+    String body = "{\"ok\":false,\"error\":\"";
+    body += kioskSessionError[0] ? kioskSessionError : "preview failed";
+    body += "\"}";
+    server.send(500, "application/json", body);
+    return;
+  }
+  server.send(200, "application/json", "{\"ok\":true,\"phase\":\"preview\"}");
 }
 
 void handlePickupConfirm() {
@@ -1449,10 +1502,12 @@ void setup() {
   server.on("/kiosk/scan/cancel", HTTP_POST, handleScanCancel);
   server.on("/kiosk/scan/cancel", HTTP_GET, handleScanCancel);
   server.on("/kiosk/pickup/confirm", HTTP_POST, handlePickupConfirm);
+  server.on("/kiosk/submit-code", HTTP_POST, handleSubmitCode);
   server.on("/kiosk/session", HTTP_OPTIONS, handleOptions);
   server.on("/kiosk/scan/start", HTTP_OPTIONS, handleOptions);
   server.on("/kiosk/scan/cancel", HTTP_OPTIONS, handleOptions);
   server.on("/kiosk/pickup/confirm", HTTP_OPTIONS, handleOptions);
+  server.on("/kiosk/submit-code", HTTP_OPTIONS, handleOptions);
   server.on("/dispense", HTTP_POST, handleDispense);
   server.onNotFound([]() {
     sendCorsHeaders();

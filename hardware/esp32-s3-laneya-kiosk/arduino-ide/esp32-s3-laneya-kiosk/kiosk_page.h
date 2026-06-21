@@ -62,6 +62,9 @@ html,body{height:100%;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
 .center{text-align:center;font-size:clamp(1.1rem,3vw,1.3rem);font-weight:600;padding:20px}
 .ok{color:var(--ok)}.err{color:var(--danger)}
 .hint{font-size:.85rem;color:var(--muted);margin-top:14px;line-height:1.55}
+.code-or{font-size:.9rem;color:var(--muted);margin:16px 0 8px}
+.code-input{width:100%;border:2px solid #dbe4ef;border-radius:12px;padding:14px;font-size:1.05rem;font-family:ui-monospace,monospace;text-align:center;letter-spacing:.04em;margin:8px 0;text-transform:uppercase}
+.code-input:focus{outline:none;border-color:var(--navy)}
 .guide{margin:0 auto 8px;max-width:280px;width:70%}
 .guide svg{width:100%;height:auto}
 </style>
@@ -82,7 +85,7 @@ html,body{height:100%;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
 <script>
 const ERR={"preview failed":"ไม่สามารถตรวจสอบตั๋วได้ — ตรวจว่าตั๋วยังไม่หมดอายุ","ticket expired":"ตั๋วหมดอายุแล้ว — ขอ QR ใหม่จากแชท","unauthorized":"ระบบตู้ไม่ได้รับอนุญาต — ตรวจ KIOSK_HEARTBEAT_SECRET","ticket not found":"ไม่พบตั๋วในระบบ","cam offline":"กล้องไม่ตอบ PING","cam peer not ready":"กล้องยังไม่พร้อม — ตรวจ MAC","scan timeout":"หมดเวลาสแกน — ถือ QR ใกล้กล้อง","scan start failed":"เปิดกล้องไม่สำเร็จ","dispense failed":"จ่ายยาไม่สำเร็จ"};
 function mapErr(e){return ERR[(e||"").toLowerCase()]||e||"เกิดข้อผิดพลาด กรุณาลองใหม่"}
-async function api(p,m){const r=await fetch(p,{method:m||"GET",headers:{"Content-Type":"application/json"}});if(!r.ok){let d="";try{d=(await r.json()).error||""}catch(_){}throw new Error(d||String(r.status))}return r.json()}
+async function api(p,m,b){const r=await fetch(p,{method:m||"GET",headers:{"Content-Type":"application/json"},body:b?JSON.stringify(b):undefined});if(!r.ok){let d="";try{d=(await r.json()).error||""}catch(_){}throw new Error(d||String(r.status))}return r.json()}
 let busy=false,session={phase:"idle",countdownSec:0},camTimer=null;
 const main=document.getElementById("main"),foot=document.getElementById("foot"),camPill=document.getElementById("camPill");
 const btnCancel=document.getElementById("btnCancel"),btnConfirm=document.getElementById("btnConfirm");
@@ -90,30 +93,32 @@ const GUIDE='<div class="guide"><svg xmlns="http://www.w3.org/2000/svg" viewBox=
 function stopCamPreview(){if(camTimer){clearInterval(camTimer);camTimer=null}}
 function startCamPreview(url){stopCamPreview();if(!url)return;const img=document.getElementById("camLive");if(!img)return;const tick=()=>{img.src=url+(url.indexOf("?")>=0?"&":"?")+"t="+Date.now()};tick();camTimer=setInterval(tick,400)}
 function updateCamPill(){if(session.camOnline===true){camPill.textContent="กล้องเชื่อมต่อ";camPill.className="pill ok"}else if(session.camOnline===false){camPill.textContent="กล้องไม่ตอบ";camPill.className="pill bad"}else{camPill.textContent="กล้อง …";camPill.className="pill"}}
+function ticketExpired(){if(!session.preview||!session.preview.expiresAt)return false;return Date.now()>=new Date(session.preview.expiresAt).getTime()}
 function render(){
 updateCamPill();const p=session.phase||"idle";
 foot.classList.toggle("hidden",!(p==="preview"||p==="scanning"));
-btnConfirm.disabled=busy||p!=="preview";btnCancel.disabled=busy||p==="dispensing";
+btnConfirm.disabled=busy||p!=="preview"||ticketExpired();btnCancel.disabled=busy||p==="dispensing";
 if(p!=="scanning")stopCamPreview();
 if(p==="idle"){
-main.innerHTML='<div class="card">'+GUIDE+'<p class="caption">หากท่านคัดกรองอาการผ่านมือถือเรียบร้อยแล้ว โปรดกดปุ่มด้านล่างเพื่อเปิดกล้องสแกนรับยา</p><button class="btn btn-primary" id="btnScan" type="button">🔍 กดตรงนี้เพื่อเปิดกล้องสแกน QR Code</button><p class="hint">ถือ QR จากแชท LaneYa ใกล้กล้อง<br>รูปแบบ A1-0001-ABCDEF</p></div>';
-document.getElementById("btnScan").onclick=startScan;return}
+main.innerHTML='<div class="card">'+GUIDE+'<p class="caption">หากท่านคัดกรองอาการผ่านมือถือเรียบร้อยแล้ว โปรดกดปุ่มด้านล่างเพื่อเปิดกล้องสแกนรับยา</p><button class="btn btn-primary" id="btnScan" type="button">🔍 กดตรงนี้เพื่อเปิดกล้องสแกน QR Code</button><p class="code-or">หรือ</p><p class="hint">พิมพ์รหัสจากแชท LaneYa</p><input class="code-input" id="codeInput" placeholder="A1-0001-ABCDEF" autocapitalize="characters" autocomplete="off"><button class="btn btn-ghost" id="btnSubmitCode" type="button">ยืนยันรหัส</button></div>';
+document.getElementById("btnScan").onclick=startScan;document.getElementById("btnSubmitCode").onclick=submitCode;return}
 if(p==="scanning"){
 const camWarn=session.camOnline===false?'<p class="status bad">กล้องยังไม่ตอบ — preview อาจไม่ขึ้น</p>':'';
 main.innerHTML='<div class="scan-wrap"><img id="camLive" alt="กล้อง" onerror="this.style.display=\'none\';document.getElementById(\'ph\').classList.remove(\'hidden\')"><div id="ph" class="scan-placeholder hidden">กำลังเชื่อมกล้อง…</div><div class="scan-overlay"><div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div><div class="scan-line"></div></div></div><div class="scan-meta"><div class="count">'+(session.countdownSec||0)+'</div><div class="count-label">วินาที — ถือ QR ในกรอบ</div>'+camWarn+'</div>';
 if(session.camPreviewUrl)setTimeout(()=>startCamPreview(session.camPreviewUrl),50);
 return}
 if(p==="preview"&&session.preview&&session.preview.drug){
-const d=session.preview.drug,w=[d.warnings,d.contraindications].filter(Boolean).join("\n\n");
-main.innerHTML='<div class="preview"><div class="card"><h2>ผลการวิเคราะห์</h2><p>'+(session.preview.sessionSummary||d.indication||"—")+'</p></div><div class="card drug-card"><div class="pill-icon">💊</div><div class="drug-name">'+d.name+'</div></div>'+(w?'<div class="warn"><h2>คำเตือน</h2><p style="white-space:pre-wrap">'+w+'</p></div>':"")+'</div>';return}
+const d=session.preview.drug,w=[d.warnings,d.contraindications].filter(Boolean).join("\n\n"),exp=ticketExpired()?'<div class="warn"><p>ตั๋วหมดอายุแล้ว — ไม่สามารถรับยาได้</p></div>':'';
+main.innerHTML=exp+'<div class="preview"><div class="card"><h2>ผลการวิเคราะห์</h2><p>'+(session.preview.sessionSummary||d.indication||"—")+'</p></div><div class="card drug-card"><div class="pill-icon">💊</div><div class="drug-name">'+d.name+'</div></div>'+(w?'<div class="warn"><h2>คำเตือน</h2><p style="white-space:pre-wrap">'+w+'</p></div>':"")+'</div>';return}
 if(p==="dispensing"){main.innerHTML='<div class="card center"><div class="state-icon">⏳</div>กำลังจ่ายยา…</div>';return}
 if(p==="success"){main.innerHTML='<div class="card center ok"><div class="state-icon">✅</div>รับยาสำเร็จ<br><span style="font-weight:400;font-size:1rem">ขอบคุณค่ะ</span></div>';return}
 if(p==="error"){main.innerHTML='<div class="card center err"><div class="state-icon">⚠️</div>'+mapErr(session.error)+'</div><button class="btn btn-primary" style="margin-top:16px;max-width:320px" id="btnRetry" type="button">ลองใหม่</button>';document.getElementById("btnRetry").onclick=()=>api("/kiosk/scan/cancel","POST").then(refresh);return}
 main.innerHTML='<div class="center">'+p+'</div>'}
 async function refresh(){try{session=await api("/kiosk/session")}catch(e){session={phase:"error",error:"เชื่อมตู้ไม่ได้"}}render()}
 async function startScan(){if(busy)return;busy=true;render();try{await api("/kiosk/scan/start","POST");await refresh()}catch(e){session={phase:"error",error:e.message};render()}finally{busy=false}}
+async function submitCode(){if(busy)return;const el=document.getElementById("codeInput");const code=(el&&el.value||"").trim().toUpperCase();if(!code)return;busy=true;render();try{await api("/kiosk/submit-code","POST",{code});await refresh()}catch(e){session={phase:"error",error:e.message};render()}finally{busy=false}}
 btnCancel.onclick=async()=>{if(busy)return;busy=true;try{await api("/kiosk/scan/cancel","POST");await refresh()}finally{busy=false}};
-btnConfirm.onclick=async()=>{if(busy)return;busy=true;try{await api("/kiosk/pickup/confirm","POST");await refresh()}catch(e){session={phase:"error",error:e.message};render()}finally{busy=false}};
+btnConfirm.onclick=async()=>{if(busy||ticketExpired())return;busy=true;try{await api("/kiosk/pickup/confirm","POST");await refresh()}catch(e){session={phase:"error",error:e.message};render()}finally{busy=false}};
 setInterval(refresh,500);refresh();
 </script>
 </body>

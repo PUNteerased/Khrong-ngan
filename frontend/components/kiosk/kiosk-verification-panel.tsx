@@ -4,6 +4,10 @@ import Image from "next/image"
 import { Pill } from "lucide-react"
 import type { KioskPreview } from "@/lib/kiosk-api"
 import type { KioskMessages } from "@/lib/kiosk-i18n"
+import {
+  formatTicketExpiryCountdown,
+  useTicketExpiry,
+} from "@/hooks/use-ticket-expiry"
 
 type Props = {
   t: KioskMessages
@@ -12,12 +16,27 @@ type Props = {
 
 export function KioskVerificationPanel({ t, preview }: Props) {
   const drug = preview.drug
+  const { secondsLeft, expired } = useTicketExpiry(preview.expiresAt)
   const summary =
     preview.sessionSummary?.trim() || drug.indication?.trim() || t.fallbackSummary
   const warnings = [drug.warnings, drug.contraindications].filter(Boolean).join("\n\n")
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto px-4 py-3">
+      {expired ? (
+        <section className="rounded-xl border-2 border-destructive bg-destructive/10 p-4 text-center">
+          <p className="text-base font-semibold text-destructive">
+            {t.codeExpiredConfirmBlocked}
+          </p>
+        </section>
+      ) : (
+        <section className="rounded-xl bg-muted/60 px-4 py-3 text-center">
+          <p className="text-sm text-muted-foreground">{t.codeExpiryWarning}</p>
+          <p className="text-2xl font-bold tabular-nums text-primary">
+            {formatTicketExpiryCountdown(secondsLeft)}
+          </p>
+        </section>
+      )}
       <section className="rounded-xl bg-secondary/60 p-4">
         <h2 className="mb-2 text-lg font-semibold text-primary">{t.analysisTitle}</h2>
         <p className="text-base leading-relaxed">{summary}</p>

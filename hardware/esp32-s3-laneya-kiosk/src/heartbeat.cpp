@@ -259,7 +259,7 @@ void heartbeatPushSessionIfDirty() {
   }
 }
 
-static void handleDisplayCommand(const char* id, const char* action) {
+static void handleDisplayCommand(const char* id, const char* action, const char* code) {
   bool ok = false;
   const char* errMsg = nullptr;
 
@@ -271,10 +271,25 @@ static void handleDisplayCommand(const char* id, const char* action) {
     Serial.printf("[web-cmd] received scan_cancel id=%s\n", id);
     kioskSessionCancelScan();
     ok = true;
+  } else if (strcmp(action, "submit_code") == 0) {
+    Serial.printf("[web-cmd] received submit_code id=%s\n", id);
+    if (!code || !code[0]) {
+      ok = false;
+      errMsg = "preview failed";
+    } else {
+      ok = kioskSessionOnManualCode(code);
+      if (!ok) {
+        const char* sessionErr = kioskSessionError();
+        errMsg = sessionErr && sessionErr[0] ? sessionErr : "preview failed";
+      }
+    }
   } else if (strcmp(action, "confirm_pickup") == 0) {
     Serial.printf("[web-cmd] received confirm_pickup id=%s\n", id);
     ok = kioskSessionConfirmPickup();
-    if (!ok) errMsg = "confirm failed";
+    if (!ok) {
+      const char* sessionErr = kioskSessionError();
+      errMsg = sessionErr && sessionErr[0] ? sessionErr : "confirm failed";
+    }
   } else {
     Serial.println("[web-cmd] ignored invalid command");
     return;
@@ -299,6 +314,7 @@ static void handleCommandFromResponse(const String& response) {
   const char* id = cmd["id"] | "";
   const char* action = cmd["action"] | "";
   const int slot = cmd["slot"] | -1;
+  const char* code = cmd["code"] | "";
 
   if (!id[0]) {
     Serial.println("[web-cmd] ignored invalid command");
@@ -307,16 +323,17 @@ static void handleCommandFromResponse(const String& response) {
 
   if (strcmp(action, "scan_start") == 0 ||
       strcmp(action, "scan_cancel") == 0 ||
+      strcmp(action, "submit_code") == 0 ||
       strcmp(action, "confirm_pickup") == 0) {
     if (dispenserIsBusy() && strcmp(action, "confirm_pickup") != 0 &&
-        strcmp(action, "scan_cancel") != 0) {
+        strcmp(action, "scan_cancel") != 0 && strcmp(action, "submit_code") != 0) {
       Serial.println("[web-cmd] rejected — dispense busy");
       queueAck(id, false, "busy");
       sendHeartbeat();
       lastHeartbeatMs = millis();
       return;
     }
-    handleDisplayCommand(id, action);
+    handleDisplayCommand(id, action, code);
     return;
   }
 

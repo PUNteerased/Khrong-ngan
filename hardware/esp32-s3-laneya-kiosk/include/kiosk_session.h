@@ -17,6 +17,7 @@ bool kioskSessionStartScan();
 void kioskSessionCancelScan();
 void kioskSessionOnScanError(const char* msg);
 bool kioskSessionOnQrCode(const char* code, const char* signature);
+bool kioskSessionOnManualCode(const char* code, const char* signature = nullptr);
 bool kioskSessionConfirmPickup();
 void kioskSessionLoop();
 

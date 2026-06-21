@@ -134,6 +134,34 @@ static void handleScanCancel() {
   server.send(200, "application/json", "{\"ok\":true,\"phase\":\"idle\"}");
 }
 
+static void handleSubmitCode() {
+  sendCorsHeaders();
+  JsonDocument doc;
+  const DeserializationError err = deserializeJson(doc, server.arg("plain"));
+  if (err) {
+    server.send(400, "application/json", "{\"error\":\"invalid json\"}");
+    return;
+  }
+
+  const char* code = doc["code"] | "";
+  if (!code[0]) {
+    server.send(400, "application/json", "{\"error\":\"code required\"}");
+    return;
+  }
+
+  Serial.printf("[web-cmd] LAN POST /kiosk/submit-code code=%s\n", code);
+  if (!kioskSessionOnManualCode(code)) {
+    const char* sessionErr = kioskSessionError();
+    String body = "{\"ok\":false,\"error\":\"";
+    body += sessionErr && sessionErr[0] ? sessionErr : "preview failed";
+    body += "\"}";
+    server.send(500, "application/json", body);
+    return;
+  }
+
+  server.send(200, "application/json", "{\"ok\":true,\"phase\":\"preview\"}");
+}
+
 static void handlePickupConfirm() {
   sendCorsHeaders();
   if (dispenserIsBusy()) {
@@ -197,12 +225,14 @@ void kioskHttpSetup() {
   server.on("/kiosk/scan/cancel", HTTP_POST, handleScanCancel);
   server.on("/kiosk/scan/cancel", HTTP_GET, handleScanCancel);
   server.on("/kiosk/pickup/confirm", HTTP_POST, handlePickupConfirm);
+  server.on("/kiosk/submit-code", HTTP_POST, handleSubmitCode);
   server.on("/dispense", HTTP_POST, handleDispense);
 
   server.on("/kiosk/session", HTTP_OPTIONS, handleOptions);
   server.on("/kiosk/scan/start", HTTP_OPTIONS, handleOptions);
   server.on("/kiosk/scan/cancel", HTTP_OPTIONS, handleOptions);
   server.on("/kiosk/pickup/confirm", HTTP_OPTIONS, handleOptions);
+  server.on("/kiosk/submit-code", HTTP_OPTIONS, handleOptions);
 
   server.onNotFound([]() {
     sendCorsHeaders();

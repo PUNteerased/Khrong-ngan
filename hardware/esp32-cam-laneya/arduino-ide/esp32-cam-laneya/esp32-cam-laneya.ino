@@ -30,14 +30,8 @@
 #define PREVIEW_HTTP_PORT 81
 #define PREVIEW_FRAME2JPEG_QUALITY 38
 #define PREVIEW_MAX_JPEG_BYTES 48000
-#define CLOUD_RELAY_MS 1000
-
-#define BACKEND_CAMERA_FRAME_URL "https://khrong-ngan.onrender.com/api/kiosk/camera-frame"
-#define KIOSK_HEARTBEAT_SECRET "ilovevijai"
 
 #include <WiFi.h>
-#include <HTTPClient.h>
-#include <WiFiClientSecure.h>
 #include <WebServer.h>
 #include <esp_mac.h>
 #include <esp_log.h>
@@ -55,15 +49,11 @@ static ESP32QRCodeReader qrReader = ESP32QRCodeReader(FRAMESIZE_VGA);
 
 static bool scanning = false;
 static bool scanStartPending = false;
-static bool scanWorkPending = false;
 static unsigned long scanUntilMs = 0;
 static bool qrSentThisScan = false;
 static unsigned long lastHeartbeatMs = 0;
-static unsigned long lastCloudRelayMs = 0;
-static unsigned long lastCloudRelayWarnMs = 0;
 static char lastSentIp[16] = {};
 static bool qrReaderReady = false;
-static bool cloudPostInFlight = false;
 
 static uint8_t* jpgBuf = nullptr;
 static size_t jpgLen = 0;
@@ -175,16 +165,15 @@ static void pauseQrReader() {
   if (qrReaderReady) {
     qrReader.end();
     qrReaderReady = false;
-    delay(400);
+    delay(150);
   }
 }
 
 static void resumeQrReader() {
   if (!qrReaderReady) {
-    delay(50);
     qrReader.beginOnCore(1);
     qrReaderReady = true;
-    delay(100);
+    delay(40);
   }
 }
 
@@ -264,53 +253,6 @@ static bool capturePreviewJpegSafe() {
   return previewHasFrame();
 }
 
-static bool postPreviewToCloud() {
-  if (cloudPostInFlight) return false;
-  if (WiFi.status() != WL_CONNECTED) return false;
-  if (strlen(KIOSK_HEARTBEAT_SECRET) == 0) return false;
-  if (strlen(BACKEND_CAMERA_FRAME_URL) == 0) return false;
-
-  portENTER_CRITICAL(&jpgMux);
-  if (!jpgBuf || jpgLen < 100 || jpgLen > PREVIEW_MAX_JPEG_BYTES) {
-    portEXIT_CRITICAL(&jpgMux);
-    return false;
-  }
-  const size_t len = jpgLen;
-  uint8_t* copy = static_cast<uint8_t*>(malloc(len));
-  if (!copy) {
-    portEXIT_CRITICAL(&jpgMux);
-    return false;
-  }
-  memcpy(copy, jpgBuf, len);
-  portEXIT_CRITICAL(&jpgMux);
-
-  cloudPostInFlight = true;
-  WiFiClientSecure client;
-  client.setInsecure();
-  HTTPClient http;
-  http.begin(client, BACKEND_CAMERA_FRAME_URL);
-  http.setTimeout(8000);
-  http.addHeader("Content-Type", "image/jpeg");
-  http.addHeader("X-Kiosk-Secret", KIOSK_HEARTBEAT_SECRET);
-  const int code = http.POST(const_cast<uint8_t*>(copy), len);
-  http.end();
-  free(copy);
-  cloudPostInFlight = false;
-
-  if (code >= 200 && code < 300) {
-    Serial.printf("[cloud-relay] posted %u bytes HTTP %d\n",
-                  static_cast<unsigned>(len), code);
-    return true;
-  }
-
-  const unsigned long warnNow = millis();
-  if (warnNow - lastCloudRelayWarnMs > 4000) {
-    lastCloudRelayWarnMs = warnNow;
-    Serial.printf("[cloud-relay] POST error %d\n", code);
-  }
-  return false;
-}
-
 static void handlePreviewJpg() {
   previewServer.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   previewServer.sendHeader("Access-Control-Allow-Origin", "*");
@@ -321,9 +263,16 @@ static void handlePreviewJpg() {
   }
 
   portENTER_CRITICAL(&jpgMux);
+  bool hasJpg = jpgBuf && jpgLen > 0;
+  portEXIT_CRITICAL(&jpgMux);
+
+  if (!hasJpg) {
+    capturePreviewJpegSafe();
+  }
+
+  portENTER_CRITICAL(&jpgMux);
   if (!jpgBuf || jpgLen == 0) {
     portEXIT_CRITICAL(&jpgMux);
-    scanWorkPending = true;
     previewServer.send(503, "text/plain", "capturing");
     return;
   }
@@ -451,21 +400,17 @@ static void startScan() {
   scanStartPending = false;
   qrSentThisScan = false;
   scanUntilMs = millis() + SCAN_DURATION_MS;
-  lastCloudRelayMs = 0;
-  scanWorkPending = true;
-  // ไม่เปิด flash — กระแสสูงทำให้ brownout reset บน ESP32-CAM (USB 5V)
   digitalWrite(FLASH_LED_PIN, LOW);
   sendCamIpToS3();
-  Serial.println("[scan] started (60s)");
+  Serial.println("[scan] started (60s) — ปรับความสว่างมือถือสูงสุด");
 }
 
 static void stopScan(const char* errMsg) {
-  if (!scanning && !scanWorkPending) {
+  if (!scanning) {
     resumeQrReader();
     return;
   }
   scanning = false;
-  scanWorkPending = false;
   resumeQrReader();
   digitalWrite(FLASH_LED_PIN, LOW);
   clearPreviewJpeg();
@@ -631,32 +576,19 @@ void loop() {
     return;
   }
 
-  if (scanWorkPending) {
-    scanWorkPending = false;
-    if (capturePreviewJpegSafe()) {
-      postPreviewToCloud();
-    }
-    lastCloudRelayMs = now;
-  } else if (now - lastCloudRelayMs >= CLOUD_RELAY_MS) {
-    lastCloudRelayMs = now;
-    if (capturePreviewJpegSafe()) {
-      postPreviewToCloud();
-    }
-  }
-
-  if (!qrReaderReady) {
-    previewServer.handleClient();
-    yield();
-    return;
-  }
-
-  struct QRCodeData qrCodeData;
-  if (qrReader.receiveQrCode(&qrCodeData, 80)) {
-    if (qrCodeData.valid && !qrSentThisScan) {
-      Serial.println("[qr] decoded");
-      if (handleDecodedQr(reinterpret_cast<const char*>(qrCodeData.payload))) {
-        qrSentThisScan = true;
-        stopScan(nullptr);
+  // โฟกus QR — preview ให้ S3 ดึง GET /jpg (~1 วิ/ครั้ง) ไม่ block loop ด้วย HTTPS
+  if (qrReaderReady) {
+    struct QRCodeData qrCodeData;
+    if (qrReader.receiveQrCode(&qrCodeData, 120)) {
+      if (qrCodeData.valid && !qrSentThisScan) {
+        Serial.println("[qr] decoded");
+        if (handleDecodedQr(reinterpret_cast<const char*>(qrCodeData.payload))) {
+          qrSentThisScan = true;
+          stopScan(nullptr);
+        } else {
+          Serial.printf("[qr] rejected: %s\n",
+                        reinterpret_cast<const char*>(qrCodeData.payload));
+        }
       }
     }
   }

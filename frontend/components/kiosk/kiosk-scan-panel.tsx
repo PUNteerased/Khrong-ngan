@@ -2,11 +2,14 @@
 
 import Image from "next/image"
 import type { KioskMessages } from "@/lib/kiosk-i18n"
+import { KioskCodeEntry } from "@/components/kiosk/kiosk-code-entry"
 
 type Props = {
   t: KioskMessages
   onOpenScan: () => void
+  onSubmitCode: (code: string) => void
   loading?: boolean
+  codeLoading?: boolean
   disabled?: boolean
   disabledReason?: string
 }
@@ -14,12 +17,14 @@ type Props = {
 export function KioskScanPanel({
   t,
   onOpenScan,
+  onSubmitCode,
   loading,
+  codeLoading,
   disabled,
   disabledReason,
 }: Props) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 px-4">
+    <div className="flex h-full flex-col items-center justify-center gap-6 px-4 py-4">
       <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-lg">
         <div className="mx-auto mb-4 flex justify-center">
           <Image
@@ -44,6 +49,13 @@ export function KioskScanPanel({
       >
         {t.openScan}
       </button>
+      <KioskCodeEntry
+        t={t}
+        onSubmit={onSubmitCode}
+        loading={codeLoading}
+        disabled={disabled}
+        disabledReason={disabled ? disabledReason : undefined}
+      />
     </div>
   )
 }

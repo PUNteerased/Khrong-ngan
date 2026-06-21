@@ -107,9 +107,17 @@ void kioskSessionOnScanError(const char* msg) {
 }
 
 bool kioskSessionOnQrCode(const char* code, const char* signature) {
+  return kioskSessionOnManualCode(code, signature);
+}
+
+bool kioskSessionOnManualCode(const char* code, const char* signature) {
   if (!code || !code[0]) return false;
-  if (phase != KIOSK_SCANNING && phase != KIOSK_PREVIEW) {
+  if (phase != KIOSK_IDLE && phase != KIOSK_SCANNING && phase != KIOSK_PREVIEW) {
     return false;
+  }
+
+  if (phase == KIOSK_IDLE) {
+    sessionError[0] = '\0';
   }
 
   strncpy(pendingCode, code, sizeof(pendingCode) - 1);
@@ -166,9 +174,11 @@ bool kioskSessionConfirmPickup() {
 
   phase = KIOSK_DISPENSING;
   markCloudDirty();
+  String redeemError;
   const bool ok = pickupRedeemAndDispense(
       pendingCode,
-      pendingSignature[0] ? pendingSignature : nullptr);
+      pendingSignature[0] ? pendingSignature : nullptr,
+      &redeemError);
 
   if (ok) {
     phase = KIOSK_SUCCESS;
@@ -181,9 +191,10 @@ bool kioskSessionConfirmPickup() {
   }
 
   phase = KIOSK_ERROR;
-  strncpy(sessionError, "dispense failed", sizeof(sessionError) - 1);
+  const char* err = redeemError.length() ? redeemError.c_str() : "dispense failed";
+  strncpy(sessionError, err, sizeof(sessionError) - 1);
   sessionError[sizeof(sessionError) - 1] = '\0';
-  Serial.println("[kiosk] dispense failed");
+  Serial.printf("[kiosk] dispense failed: %s\n", sessionError);
   markCloudDirty();
   return false;
 }

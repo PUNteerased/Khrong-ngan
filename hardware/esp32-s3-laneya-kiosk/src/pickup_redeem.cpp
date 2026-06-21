@@ -115,10 +115,16 @@ bool pickupPreviewTicket(
   return true;
 }
 
-bool pickupRedeemAndDispense(const char* code, const char* signature) {
+bool pickupRedeemAndDispense(
+    const char* code,
+    const char* signature,
+    String* errorOut) {
   String response;
-  String errorOut;
-  if (!postKioskTicket(BACKEND_REDEEM_URL, code, signature, response, errorOut)) {
+  String error;
+  if (!postKioskTicket(BACKEND_REDEEM_URL, code, signature, response, error)) {
+    if (errorOut) {
+      *errorOut = error.length() ? error : String("dispense failed");
+    }
     return false;
   }
 

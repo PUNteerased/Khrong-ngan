@@ -7,4 +7,7 @@ bool pickupPreviewTicket(
     const char* signature,
     String& outJson,
     String& errorOut);
-bool pickupRedeemAndDispense(const char* code, const char* signature = nullptr);
+bool pickupRedeemAndDispense(
+    const char* code,
+    const char* signature,
+    String* errorOut = nullptr);

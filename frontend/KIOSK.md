@@ -81,11 +81,20 @@ HEARTBEAT_ACTIVE_INTERVAL_MS=2500   # ตอน scan/preview
 
 ## Flow
 
-1. ผู้ป่วยคัดกรอง + รับ QR บนมือถือ
-2. แท็บเล็ต: กด **เปิดกล้องสแกน** → คำสั่ง `scan_start` คิวที่ Render → S3 รับใน heartbeat
-3. CAM อ่าน QR → S3 เรียก `POST /api/kiosk/preview-ticket`
-4. แท็บเล็ต poll `GET /api/kiosk/display/session` → แสดงยา + คำเตือน
-5. ผู้ป่วยกด **ยืนยัน** → `confirm_pickup` → redeem + หมุนมอเตอร์
+1. ผู้ป่วยคัดกรอง + รับ QR บนมือถือ (รหัสรูปแบบ `A1-0001-ABCDEF`, อายุ **15 นาที**)
+2. แท็บเล็ต: **เปิดกล้องสแกน** หรือ **พิมพ์รหัส** ใต้ปุ่มสแกน
+3. ระบบเรียก `preview-ticket` — ถ้าหมดอายุได้ HTTP **410** (ไม่เข้าหน้ายืนยัน)
+4. แท็บเล็ต poll `GET /api/kiosk/display/session` → แสดงยา + countdown อายุตั๋ว
+5. ผู้ป่วยกด **ยืนยัน** (ปิดอัตโนมัติเมื่อหมดเวลา) → `confirm_pickup` → redeem + หมุนมอเตอร์
+
+### พิมพ์รหัส (แทนสแกน QR)
+
+| Mode | Endpoint |
+|------|----------|
+| Cloud (Vercel) | `POST /api/kiosk/display/submit-code` body `{"code":"A1-0001-ABCDEF"}` |
+| LAN | `POST http://<S3-IP>/kiosk/submit-code` |
+
+Cloud: backend preview ทันที + คิว `submit_code` ให้ S3 เก็บ `pendingCode` สำหรับ confirm
 
 ## Reset session (LAN)
 

@@ -113,6 +113,12 @@ function confirmPath(): string {
     : "/api/kiosk/display/confirm"
 }
 
+function submitCodePath(): string {
+  return isLanKioskMode()
+    ? "/kiosk/submit-code"
+    : "/api/kiosk/display/submit-code"
+}
+
 async function kioskFetch<T>(
   path: string,
   init?: RequestInit
@@ -160,4 +166,11 @@ export function cancelKioskScan(): Promise<{ ok: boolean }> {
 
 export function confirmKioskPickup(): Promise<{ ok: boolean }> {
   return kioskFetch(confirmPath(), { method: "POST" })
+}
+
+export function submitKioskCode(code: string): Promise<{ ok: boolean; preview?: KioskPreview }> {
+  return kioskFetch(submitCodePath(), {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  })
 }

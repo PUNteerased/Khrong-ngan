@@ -54,6 +54,14 @@ export function mapKioskSessionError(
       th: "ตั๋วหมดอายุแล้ว — ขอ QR ใหม่จากแชท",
       en: "Ticket expired — get a new QR from chat",
     },
+    "ตั๋วหมดอายุ": {
+      th: "ตั๋วหมดอายุแล้ว — ขอ QR ใหม่จากแชท",
+      en: "Ticket expired — get a new QR from chat",
+    },
+    "รูปแบบรหัสไม่ถูกต้อง": {
+      th: "รูปแบบรหัสไม่ถูกต้อง",
+      en: "Invalid code format",
+    },
     unauthorized: {
       th: "ระบบตู้ไม่ได้รับอนุญาต — ตรวจ KIOSK_HEARTBEAT_SECRET",
       en: "Kiosk not authorized — check KIOSK_HEARTBEAT_SECRET",

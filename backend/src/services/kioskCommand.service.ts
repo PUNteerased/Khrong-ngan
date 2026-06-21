@@ -13,11 +13,13 @@ export type KioskCommandAction =
   | "scan_start"
   | "scan_cancel"
   | "confirm_pickup"
+  | "submit_code"
 
 export type KioskCommandRecord = {
   id: string
   action: KioskCommandAction
   slot: number
+  code: string | null
   status: KioskCommandStatus
   createdAt: string
   deliveredAt: string | null
@@ -48,7 +50,11 @@ function commandInProgress(): boolean {
   )
 }
 
-function queueCommand(action: KioskCommandAction, slot: number): KioskCommandRecord {
+function queueCommand(
+  action: KioskCommandAction,
+  slot: number,
+  code: string | null = null
+): KioskCommandRecord {
   expireIfNeeded()
 
   if (commandInProgress()) {
@@ -59,6 +65,7 @@ function queueCommand(action: KioskCommandAction, slot: number): KioskCommandRec
     id: randomUUID(),
     action,
     slot,
+    code,
     status: "pending",
     createdAt: new Date().toISOString(),
     deliveredAt: null,
@@ -122,6 +129,25 @@ export function queueDisplayScanCancel(): KioskCommandRecord {
 
 export function queueDisplayConfirmPickup(): KioskCommandRecord {
   return queueCommand("confirm_pickup", -1)
+}
+
+export function queueDisplaySubmitCode(code: string): KioskCommandRecord {
+  const normalized = code.trim().toUpperCase()
+  if (!normalized) {
+    throw new Error("INVALID_CODE")
+  }
+  expireIfNeeded()
+  clearStaleDisplayCommand()
+  if (
+    activeCommand &&
+    (activeCommand.status === "pending" || activeCommand.status === "delivered")
+  ) {
+    activeCommand = null
+  }
+  if (commandInProgress()) {
+    throw new Error("COMMAND_IN_PROGRESS")
+  }
+  return queueCommand("submit_code", -1, normalized)
 }
 
 export function takePendingCommand(): KioskCommandRecord | null {

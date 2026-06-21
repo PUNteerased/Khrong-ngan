@@ -14,10 +14,12 @@ import {
   KioskStatusOverlay,
 } from "@/components/kiosk/kiosk-bottom-bar"
 import { useKioskSession } from "@/hooks/use-kiosk-session"
+import { useTicketExpiry } from "@/hooks/use-ticket-expiry"
 import {
   cancelKioskScan,
   confirmKioskPickup,
   startKioskScan,
+  submitKioskCode,
   type KioskLocale,
 } from "@/lib/kiosk-api"
 import {
@@ -46,9 +48,11 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
   const [locale, setLocale] = useState<KioskLocale>("th")
   const [ttsOn, setTtsOn] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [codeBusy, setCodeBusy] = useState(false)
   const [mixedContent, setMixedContent] = useState(false)
-  const { session, connected, phase } = useKioskSession()
+  const { session, connected, phase, refresh } = useKioskSession()
   const t = useMemo(() => getKioskMessages(locale), [locale])
+  const { expired: ticketExpired } = useTicketExpiry(session.preview?.expiresAt)
 
   useEffect(() => {
     if (isKioskCloudRelayMode()) {
@@ -59,6 +63,7 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
   }, [])
 
   const scanBlocked = mixedContent || !connected
+  const codeBlocked = mixedContent || !connected
   const scanDisabledReason = mixedContent
     ? t.mixedContentBody
     : !connected
@@ -111,14 +116,47 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
     }
   }, [])
 
+  const handleSubmitCode = useCallback(
+    async (code: string) => {
+      if (codeBlocked) return
+      setCodeBusy(true)
+      try {
+        await submitKioskCode(code)
+        await refresh()
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : t.error
+        const mapped = mapKioskSessionError(msg, locale)
+        if (msg.includes("ticket expired") || msg.includes("ตั๋วหมดอายุ")) {
+          toast.error(t.codeExpired)
+        } else if (msg.includes("ticket not found")) {
+          toast.error(t.codeNotFound)
+        } else if (msg.includes("รูปแบบรหัส") || msg.includes("INVALID")) {
+          toast.error(t.codeInvalid)
+        } else {
+          toast.error(mapped)
+        }
+      } finally {
+        setCodeBusy(false)
+      }
+    },
+    [codeBlocked, locale, t, refresh]
+  )
+
   const handleConfirm = useCallback(async () => {
+    if (ticketExpired) {
+      toast.error(t.codeExpiredConfirmBlocked)
+      return
+    }
     setBusy(true)
     try {
       await confirmKioskPickup()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : t.error
+      toast.error(mapKioskSessionError(msg, locale))
     } finally {
       setBusy(false)
     }
-  }, [])
+  }, [ticketExpired, locale, t.error, t.codeExpiredConfirmBlocked])
 
   const main = (() => {
     if (uiPhase === "scanning") {
@@ -128,6 +166,9 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
           seconds={session.countdownSec || KIOSK_SCAN_DURATION_SEC}
           camOnline={session.camOnline}
           camPreviewUrl={session.camPreviewUrl}
+          onSubmitCode={handleSubmitCode}
+          codeLoading={codeBusy}
+          codeDisabled={codeBlocked}
         />
       )
     }
@@ -147,7 +188,9 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
       <KioskScanPanel
         t={t}
         onOpenScan={handleOpenScan}
+        onSubmitCode={handleSubmitCode}
         loading={busy}
+        codeLoading={codeBusy}
         disabled={scanBlocked}
         disabledReason={scanDisabledReason}
       />
@@ -183,7 +226,7 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
           t={t}
           phase={phase}
           cancelDisabled={busy || phase === "dispensing"}
-          confirmDisabled={busy || phase !== "preview"}
+          confirmDisabled={busy || phase !== "preview" || ticketExpired}
           onCancel={handleCancel}
           onConfirm={handleConfirm}
         />

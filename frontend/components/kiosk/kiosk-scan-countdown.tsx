@@ -2,6 +2,7 @@
 
 import type { KioskMessages } from "@/lib/kiosk-i18n"
 import { KioskCameraViewport } from "@/components/kiosk/kiosk-camera-viewport"
+import { KioskCodeEntry } from "@/components/kiosk/kiosk-code-entry"
 import { KIOSK_SCAN_DURATION_SEC } from "@/lib/kiosk-constants"
 import { useSmoothCountdown } from "@/hooks/use-smooth-countdown"
 
@@ -10,6 +11,9 @@ type Props = {
   seconds: number
   camOnline?: boolean
   camPreviewUrl?: string
+  onSubmitCode: (code: string) => void
+  codeLoading?: boolean
+  codeDisabled?: boolean
 }
 
 export function KioskScanCountdown({
@@ -17,11 +21,14 @@ export function KioskScanCountdown({
   seconds,
   camOnline,
   camPreviewUrl,
+  onSubmitCode,
+  codeLoading,
+  codeDisabled,
 }: Props) {
   const displaySeconds = useSmoothCountdown(seconds, true)
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-5 px-6 text-center">
+    <div className="flex h-full flex-col items-center justify-center gap-5 overflow-y-auto px-6 py-4 text-center">
       <KioskCameraViewport
         t={t}
         active
@@ -52,6 +59,13 @@ export function KioskScanCountdown({
           }}
         />
       </div>
+      <KioskCodeEntry
+        t={t}
+        compact
+        onSubmit={onSubmitCode}
+        loading={codeLoading}
+        disabled={codeDisabled}
+      />
     </div>
   )
 }

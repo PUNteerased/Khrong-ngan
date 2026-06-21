@@ -53,6 +53,19 @@ let cabinetSession: Omit<KioskDisplaySession, "connected"> = {
   updatedAt: new Date().toISOString(),
 }
 
+/** Prevents S3 idle heartbeat from overwriting tablet-initiated preview. */
+let displayLockUntilMs = 0
+
+export function setCabinetDisplayLock(durationMs = 8000): void {
+  displayLockUntilMs = Date.now() + durationMs
+}
+
+export function isCabinetPreviewExpired(): boolean {
+  const expiresAt = cabinetSession.preview?.expiresAt
+  if (!expiresAt) return false
+  return new Date(expiresAt).getTime() <= Date.now()
+}
+
 function normalizePhase(raw: unknown): KioskDisplayPhase {
   const p = String(raw ?? "idle").trim().toLowerCase()
   if (VALID_PHASES.has(p as KioskDisplayPhase)) {
@@ -70,7 +83,16 @@ export function syncCabinetSession(body: {
   error?: unknown
   preview?: unknown
 }): void {
-  const phase = normalizePhase(body.phase)
+  const incomingPhase = normalizePhase(body.phase)
+  if (
+    displayLockUntilMs > Date.now() &&
+    incomingPhase === "idle" &&
+    cabinetSession.phase === "preview"
+  ) {
+    return
+  }
+
+  const phase = incomingPhase
   const countdownSec = Number.isFinite(Number(body.countdownSec))
     ? Math.max(0, Math.floor(Number(body.countdownSec)))
     : 0
@@ -119,4 +141,17 @@ export function resetCabinetSessionDisplay(): void {
     countdownSec: 0,
     updatedAt: new Date().toISOString(),
   }
+  displayLockUntilMs = 0
+}
+
+export function setCabinetPreviewFromTablet(
+  preview: KioskDisplayPreview
+): void {
+  cabinetSession = {
+    phase: "preview",
+    countdownSec: 0,
+    preview,
+    updatedAt: new Date().toISOString(),
+  }
+  setCabinetDisplayLock()
 }

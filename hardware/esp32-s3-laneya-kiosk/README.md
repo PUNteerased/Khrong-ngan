@@ -77,6 +77,7 @@ Serial จะแสดง `[web-cmd] LAN POST /dispense slot=0`
 | GET | `/api/kiosk/display/session` | heartbeat + session-sync |
 | POST | `/api/kiosk/display/scan/start` | command `scan_start` |
 | POST | `/api/kiosk/display/scan/cancel` | command `scan_cancel` |
+| POST | `/api/kiosk/display/submit-code` | command `submit_code` |
 | POST | `/api/kiosk/display/confirm` | command `confirm_pickup` |
 
 S3 ส่ง `session` ใน heartbeat และ POST `/api/kiosk/session-sync` เมื่อ phase เปลี่ยน
@@ -88,9 +89,12 @@ S3 ส่ง `session` ใน heartbeat และ POST `/api/kiosk/session-sync`
 | GET | `/kiosk/session` | สถานะ phase, countdown, preview |
 | POST | `/kiosk/scan/start` | เปิดกล้อง CAM สแกน 45 วิ |
 | POST / GET | `/kiosk/scan/cancel` | ยกเลิก + ปิด flash |
+| POST | `/kiosk/submit-code` | พิมพ์รหัสตั๋วแทนสแกน QR (`{"code":"A1-0001-ABCDEF"}`) |
 | POST | `/kiosk/pickup/confirm` | redeem backend + หมุนมอเตอร์ |
 
-Flow: QR จาก CAM → `preview-ticket` (ยังไม่จ่าย) → ผู้ป่วยยืนยันบนแท็บเล็ต → confirm → dispense
+Flow: QR จาก CAM **หรือพิมพ์รหัส** → `preview-ticket` (ยังไม่จ่าย) → ผู้ป่วยยืนยันบนแท็บเล็ต → confirm → dispense
+
+**ตั๋วหมดอายุ (15 นาที):** preview/redeem คืน HTTP **410** — ไม่สามารถจ่ายยาได้ ต้องขอ QR ใหม่จากแชท
 
 ดู frontend: [`../../frontend/KIOSK.md`](../../frontend/KIOSK.md)
 

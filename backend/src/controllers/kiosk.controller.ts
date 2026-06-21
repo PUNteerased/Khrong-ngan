@@ -70,13 +70,22 @@ export async function postKioskHeartbeat(req: Request, res: Response) {
 
   const pending = takePendingCommand()
   if (pending) {
+    const command: {
+      id: string
+      action: string
+      slot: number
+      code?: string
+    } = {
+      id: pending.id,
+      action: pending.action,
+      slot: pending.slot,
+    }
+    if (pending.code) {
+      command.code = pending.code
+    }
     res.json({
       ok: true,
-      command: {
-        id: pending.id,
-        action: pending.action,
-        slot: pending.slot,
-      },
+      command,
     })
     return
   }
