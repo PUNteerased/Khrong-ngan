@@ -74,27 +74,31 @@ Serial ต้องเห็น MAC จริง — **ถ้าเป็น `00
 
 ## ตั้งค่า cloud preview (Vercel)
 
-CAM อัปโหลด JPEG ตรงไป Render ระหว่างสแกน (ไม่พึ่ง S3→CAM HTTP):
+Preview ไป Render ผ่าน **ESP32-S3 relay** (CAM ไม่ upload HTTPS เอง):
 
 ```cpp
+// S3 .ino
 #define BACKEND_CAMERA_FRAME_URL "https://khrong-ngan.onrender.com/api/kiosk/camera-frame"
-#define KIOSK_HEARTBEAT_SECRET "..."   // ตรงกับ S3 + Render
+#define CAMERA_FRAME_INTERVAL_MS 450
 ```
 
-Serial ระหว่างสแกน: `[cloud-relay] posted N bytes HTTP 200`
+Serial S3 ระหว่างสแกน: `[cam-relay] posted N bytes`
 
-## Preview ภาพกล้อง (port 81 + cloud)
+## Preview ภาพกล้อง (port 81 + S3 relay)
 
 Firmware ล่าสุด:
-- **หยุด QR reader ชั่วคราว** ก่อน capture preview (กัน crash / SW_RESET)
-- อัปโหลด JPEG ไป Render ทุก ~800ms ขณะ `scanning`
-- HTTP preview บน LAN (fallback ถ้า S3 relay ใช้ได้)
+- **Capture ใน loop** ทุก `PREVIEW_CAPTURE_INTERVAL_MS` (450ms) ขณะ scanning
+- **GET /jpg serve cache** — ไม่ pause QR ตอน HTTP request
+- **Pause QR ชั่วคราว** (~80ms) เฉพาะตอน capture JPEG (แยกจาก GET)
+- S3 relay ไป Render ทุก `CAMERA_FRAME_INTERVAL_MS` (450ms)
 
 | URL | หน้าที่ |
 |-----|---------|
-| `http://<CAM-IP>:81/jpg` | JPEG snapshot ล่าสุด (ขณะ scanning เท่านั้น) |
+| `http://<CAM-IP>:81/jpg` | JPEG ล่าสุดจาก cache (ขณะ scanning) |
 | `http://<CAM-IP>:81/health` | `{"scanning":true/false,"hasFrame":...,"jpgBytes":...}` |
 | `http://<CAM-IP>:81/scan/start` | เริ่มสแกน (fallback ถ้า ESP-NOW หลุด) |
+
+ถ้า QR ไม่ติด: เพิ่ม `PREVIEW_CAPTURE_INTERVAL_MS` เป็น 600–700 ใน CAM `.ino`
 
 ทดสอบจาก PC (WiFi เดียวกัน):
 

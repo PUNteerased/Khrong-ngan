@@ -31,21 +31,20 @@ http://<PC-IP>:3000/kiosk?token=<KIOSK_DISPLAY_TOKEN>
 ```
 Tablet (Vercel HTTPS)
   → GET/POST /api/kiosk/display/*  (Render)
-  → GET /api/kiosk/display/camera-frame  (JPEG relay, poll ~400ms ตอนสแกน)
+  → GET /api/kiosk/display/camera-frame  (poll ~450ms)
 ESP32-S3
-  → POST /api/kiosk/heartbeat + session (Render)
-  → POST /api/kiosk/session-sync เมื่อ phase เปลี่ยน
-  → ตอน scanning (fallback): GET http://CAM:81/jpg → POST /api/kiosk/camera-frame
-  ↔ ESP-NOW ESP32-CAM (QR scan — local only)
-  → POST /api/kiosk/preview-ticket + redeem-ticket (Render)
+  → POST heartbeat + session-sync (Render)
+  → GET http://CAM:81/jpg ทุก ~450ms → POST /api/kiosk/camera-frame
+  ↔ ESP-NOW ESP32-CAM (QR scan)
+  → POST preview-ticket + redeem-ticket (Render)
 ESP32-CAM
-  → ตอน scanning: capture JPEG → POST /api/kiosk/camera-frame ทุก ~800ms (primary)
-  → HTTP :81/jpg สำหรับ LAN preview / S3 relay fallback
+  → capture JPEG ใน loop ทุก ~450ms → cache ที่ GET :81/jpg
+  → QR reader ทำงานระหว่าง capture (GET /jpg ไม่ pause QR)
 ```
 
 **Live camera preview**
-- **LAN** (`NEXT_PUBLIC_KIOSK_MODE=lan`): แท็บเล็ตโหลด `camPreviewUrl` จาก session ตรง (`http://CAM:81/jpg`)
-- **Cloud (Vercel)**: **CAM** อัปโหลด JPEG ไป Render โดยตรง → แท็บเล็ต poll `GET /api/kiosk/display/camera-frame` (S3 relay เป็น fallback)
+- **LAN** (`NEXT_PUBLIC_KIOSK_MODE=lan`): แท็บเล็ต poll `http://CAM:81/jpg` ตรง (~450ms)
+- **Cloud (Vercel)**: S3 relay JPEG → Render → แท็บเล็ต poll `GET /api/kiosk/display/camera-frame` (~450ms, ~2 fps)
 
 ## Environment
 
@@ -64,10 +63,13 @@ KIOSK_HEARTBEAT_SECRET=...   # ตรงกับ firmware S3
 ```
 
 ### ESP32-CAM firmware
+
 ```cpp
-BACKEND_CAMERA_FRAME_URL=https://khrong-ngan.onrender.com/api/kiosk/camera-frame
-KIOSK_HEARTBEAT_SECRET=...   // ตรงกับ S3 + Render
+#define PREVIEW_CAPTURE_INTERVAL_MS 450   // ~2 fps live preview
+#define QR_PAUSE_MS 80                    // pause QR ช่วง capture เท่านั้น
 ```
+
+Upload `.ino` ล่าสุด — CAM ไม่ upload HTTPS ไป Render เอง (S3 relay แทน)
 
 ### ESP32-S3 firmware
 ```env
@@ -77,6 +79,7 @@ BACKEND_CAMERA_FRAME_URL=https://khrong-ngan.onrender.com/api/kiosk/camera-frame
 KIOSK_HEARTBEAT_SECRET=...
 HEARTBEAT_INTERVAL_MS=5000
 HEARTBEAT_ACTIVE_INTERVAL_MS=2500   # ตอน scan/preview
+CAMERA_FRAME_INTERVAL_MS=450        # S3 relay ~2 fps
 ```
 
 ## Flow
@@ -88,6 +91,9 @@ HEARTBEAT_ACTIVE_INTERVAL_MS=2500   # ตอน scan/preview
 5. ผู้ป่วยกด **ยืนยัน** (ปิดอัตโนมัติเมื่อหมดเวลา) → `confirm_pickup` → redeem + หมุนมอเตอร์
 
 ### พิมพ์รหัส (แทนสแกน QR)
+
+พิมพ์ **12 ตัวติดกัน** ไม่ต้องใส่ `-` เช่น `A10001ABCDEF` → ระบบแปลงเป็น `A1-0001-ABCDEF` อัตโนมัติ  
+วางจากแชทแบบมี `-` ก็ได้
 
 | Mode | Endpoint |
 |------|----------|
@@ -111,7 +117,9 @@ Cloud mode: กด **ยกเลิก** หรือ **ลองใหม่**
 | Banner ตู้ offline บน Vercel | S3 ยังไม่ heartbeat ไป Render / WiFi ขาด |
 | กดสแกนแล้วไม่เริ่ม | รอ heartbeat 2–5s / firmware เก่าไม่รองรับ scan_start |
 | scan timeout | QR ไม่ถูกอ่าน — ดู Serial CAM |
-| กล้อง preview ไม่ขึ้นบน Vercel | อัปโหลด CAM firmware ล่าสุด — ดู Serial `[cloud-relay] posted N bytes HTTP 200` |
+| กล้อง preview ไม่ขยับ / ค้าง frame แรก | อัปโหลด CAM+S3 firmware ล่าสุด — CAM capture ทุก 450ms, S3 relay 450ms |
+| QR ไม่ติดหลัง preview ลื่นขึ้น | ลอง `PREVIEW_CAPTURE_INTERVAL_MS 600` ใน CAM — trade-off fps ↔ scan |
+| กล้อง preview ไม่ขึ้นบน Vercel | S3 Serial `[cam-relay] posted N bytes` — ทดสอบ `curl http://<CAM-IP>:81/health` |
 | `409 command in progress` | คำสั่ง scan ค้าง — กดยกเลิกหรือรอ 8s แล้วลองใหม่ (backend ล้าง stale อัตโนมัติ) |
 | S3 Serial `CAM GET HTTP -1` | S3→CAM HTTP ล้มเหลว — ไม่กระทบ cloud preview ถ้า CAM upload เองแล้ว / ทดสอบ `curl http://<CAM-IP>:81/health` จาก PC |
 | CAM reboot / ตัวอักษรแปลกๆ | firmware เก่าใช้กล้องพร้อม QR — อัปโหลด CAM ล่าสุด (pause QR ก่อน capture) |

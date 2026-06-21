@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import type { KioskMessages } from "@/lib/kiosk-i18n"
+import { parseCompactTicketCode, stripTicketCodeInput } from "@/lib/ticket-code"
 
 type Props = {
   t: KioskMessages
@@ -10,10 +11,6 @@ type Props = {
   disabled?: boolean
   disabledReason?: string
   compact?: boolean
-}
-
-function normalizeCodeInput(raw: string): string {
-  return raw.trim().toUpperCase().replace(/\s+/g, "")
 }
 
 export function KioskCodeEntry({
@@ -26,10 +23,16 @@ export function KioskCodeEntry({
 }: Props) {
   const [code, setCode] = useState("")
 
+  const parsedCode = useMemo(() => parseCompactTicketCode(code), [code])
+  const canSubmit = Boolean(parsedCode)
+
   const handleSubmit = () => {
-    const normalized = normalizeCodeInput(code)
-    if (!normalized) return
-    onSubmit(normalized)
+    if (!parsedCode) return
+    onSubmit(parsedCode)
+  }
+
+  const handleChange = (raw: string) => {
+    setCode(stripTicketCodeInput(raw))
   }
 
   return (
@@ -54,21 +57,25 @@ export function KioskCodeEntry({
         autoCapitalize="characters"
         autoComplete="off"
         spellCheck={false}
+        maxLength={14}
         value={code}
         disabled={loading || disabled}
         placeholder={t.codeEntryPlaceholder}
-        onChange={(e) => setCode(e.target.value.toUpperCase())}
+        onChange={(e) => handleChange(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") handleSubmit()
         }}
         className="w-full rounded-xl border-2 border-border bg-background px-4 py-4 text-center font-mono text-[clamp(1rem,3vw,1.35rem)] tracking-wide outline-none focus:border-primary disabled:opacity-60"
       />
+      <p className="text-center font-mono text-sm text-muted-foreground">
+        {t.codeEntryHint}
+      </p>
       {disabled && disabledReason ? (
         <p className="text-center text-sm text-destructive">{disabledReason}</p>
       ) : null}
       <button
         type="button"
-        disabled={loading || disabled || !normalizeCodeInput(code)}
+        disabled={loading || disabled || !canSubmit}
         onClick={handleSubmit}
         className="w-full rounded-xl bg-secondary px-4 py-4 text-center text-lg font-semibold text-secondary-foreground transition-opacity disabled:opacity-60"
       >

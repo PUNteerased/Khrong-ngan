@@ -30,6 +30,8 @@
 #define PREVIEW_HTTP_PORT 81
 #define PREVIEW_FRAME2JPEG_QUALITY 38
 #define PREVIEW_MAX_JPEG_BYTES 48000
+#define PREVIEW_CAPTURE_INTERVAL_MS 450
+#define QR_PAUSE_MS 80
 
 #include <WiFi.h>
 #include <WebServer.h>
@@ -52,6 +54,7 @@ static bool scanStartPending = false;
 static unsigned long scanUntilMs = 0;
 static bool qrSentThisScan = false;
 static unsigned long lastHeartbeatMs = 0;
+static unsigned long lastPreviewCaptureMs = 0;
 static char lastSentIp[16] = {};
 static bool qrReaderReady = false;
 
@@ -165,7 +168,7 @@ static void pauseQrReader() {
   if (qrReaderReady) {
     qrReader.end();
     qrReaderReady = false;
-    delay(150);
+    delay(QR_PAUSE_MS);
   }
 }
 
@@ -260,14 +263,6 @@ static void handlePreviewJpg() {
   if (!scanning) {
     previewServer.send(404, "text/plain", "no preview");
     return;
-  }
-
-  portENTER_CRITICAL(&jpgMux);
-  bool hasJpg = jpgBuf && jpgLen > 0;
-  portEXIT_CRITICAL(&jpgMux);
-
-  if (!hasJpg) {
-    capturePreviewJpegSafe();
   }
 
   portENTER_CRITICAL(&jpgMux);
@@ -400,6 +395,7 @@ static void startScan() {
   scanStartPending = false;
   qrSentThisScan = false;
   scanUntilMs = millis() + SCAN_DURATION_MS;
+  lastPreviewCaptureMs = 0;
   digitalWrite(FLASH_LED_PIN, LOW);
   sendCamIpToS3();
   Serial.println("[scan] started (60s) — ปรับความสว่างมือถือสูงสุด");
@@ -576,7 +572,12 @@ void loop() {
     return;
   }
 
-  // โฟกus QR — preview ให้ S3 ดึง GET /jpg (~1 วิ/ครั้ง) ไม่ block loop ด้วย HTTPS
+  if (now - lastPreviewCaptureMs >= PREVIEW_CAPTURE_INTERVAL_MS) {
+    capturePreviewJpegSafe();
+    lastPreviewCaptureMs = now;
+  }
+
+  // โฟกus QR — GET /jpg อ่าน cache อย่างเดียว ไม่ pause QR ตอน HTTP
   if (qrReaderReady) {
     struct QRCodeData qrCodeData;
     if (qrReader.receiveQrCode(&qrCodeData, 120)) {

@@ -5,7 +5,7 @@ import { getKioskCameraFrameUrl } from "@/lib/kiosk-api"
 import { isKioskLanMode } from "@/lib/kiosk-connectivity"
 import type { KioskMessages } from "@/lib/kiosk-i18n"
 
-const POLL_MS = 900
+const POLL_MS = 450
 
 type Props = {
   t: KioskMessages
@@ -23,6 +23,7 @@ export function KioskCameraViewport({
   const [lanTick, setLanTick] = useState(0)
   const [cloudBlobUrl, setCloudBlobUrl] = useState<string | null>(null)
   const [hasFrame, setHasFrame] = useState(false)
+  const [frameVisible, setFrameVisible] = useState(false)
   const [lanLoadFailed, setLanLoadFailed] = useState(false)
   const blobRef = useRef<string | null>(null)
   const pollInFlightRef = useRef(false)
@@ -41,6 +42,7 @@ export function KioskCameraViewport({
   useEffect(() => {
     if (!active || isKioskLanMode()) {
       setHasFrame(false)
+      setFrameVisible(false)
       return
     }
 
@@ -49,8 +51,12 @@ export function KioskCameraViewport({
     const commitBlobUrl = (next: string) => {
       const prev = blobRef.current
       blobRef.current = next
+      setFrameVisible(false)
       setCloudBlobUrl(next)
       setHasFrame(true)
+      window.requestAnimationFrame(() => {
+        if (!cancelled) setFrameVisible(true)
+      })
       if (prev && prev !== next) URL.revokeObjectURL(prev)
     }
 
@@ -100,6 +106,7 @@ export function KioskCameraViewport({
       }
       setCloudBlobUrl(null)
       setHasFrame(false)
+      setFrameVisible(false)
     }
   }, [active])
 
@@ -122,10 +129,13 @@ export function KioskCameraViewport({
         <img
           src={displaySrc}
           alt=""
-          className="block h-full w-full object-cover [image-rendering:auto]"
+          className={`block h-full w-full object-cover transition-opacity duration-150 [image-rendering:auto] ${
+            frameVisible || lanSrc ? "opacity-100" : "opacity-0"
+          }`}
           onLoad={() => {
             setHasFrame(true)
             setLanLoadFailed(false)
+            if (lanSrc) setFrameVisible(true)
           }}
           onError={() => {
             if (lanSrc) setLanLoadFailed(true)

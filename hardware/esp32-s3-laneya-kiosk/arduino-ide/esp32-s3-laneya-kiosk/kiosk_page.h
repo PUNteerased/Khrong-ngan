@@ -93,14 +93,14 @@ const GUIDE='<div class="guide"><svg xmlns="http://www.w3.org/2000/svg" viewBox=
 function stopCamPreview(){if(camTimer){clearInterval(camTimer);camTimer=null}}
 function startCamPreview(url){stopCamPreview();if(!url)return;const img=document.getElementById("camLive");if(!img)return;const tick=()=>{img.src=url+(url.indexOf("?")>=0?"&":"?")+"t="+Date.now()};tick();camTimer=setInterval(tick,400)}
 function updateCamPill(){if(session.camOnline===true){camPill.textContent="กล้องเชื่อมต่อ";camPill.className="pill ok"}else if(session.camOnline===false){camPill.textContent="กล้องไม่ตอบ";camPill.className="pill bad"}else{camPill.textContent="กล้อง …";camPill.className="pill"}}
-function ticketExpired(){if(!session.preview||!session.preview.expiresAt)return false;return Date.now()>=new Date(session.preview.expiresAt).getTime()}
+function normalizeCode(raw){const c=(raw||"").trim().toUpperCase().replace(/[\s-]+/g,"");if(/^[AB][1-5]-\d{4}-[A-Z]{6}$/.test(c))return c;if(/^[AB][1-5]\d{4}[A-Z]{6}$/.test(c))return c.slice(0,2)+"-"+c.slice(2,6)+"-"+c.slice(6);return null}
 function render(){
 updateCamPill();const p=session.phase||"idle";
 foot.classList.toggle("hidden",!(p==="preview"||p==="scanning"));
 btnConfirm.disabled=busy||p!=="preview"||ticketExpired();btnCancel.disabled=busy||p==="dispensing";
 if(p!=="scanning")stopCamPreview();
 if(p==="idle"){
-main.innerHTML='<div class="card">'+GUIDE+'<p class="caption">หากท่านคัดกรองอาการผ่านมือถือเรียบร้อยแล้ว โปรดกดปุ่มด้านล่างเพื่อเปิดกล้องสแกนรับยา</p><button class="btn btn-primary" id="btnScan" type="button">🔍 กดตรงนี้เพื่อเปิดกล้องสแกน QR Code</button><p class="code-or">หรือ</p><p class="hint">พิมพ์รหัสจากแชท LaneYa</p><input class="code-input" id="codeInput" placeholder="A1-0001-ABCDEF" autocapitalize="characters" autocomplete="off"><button class="btn btn-ghost" id="btnSubmitCode" type="button">ยืนยันรหัส</button></div>';
+main.innerHTML='<div class="card">'+GUIDE+'<p class="caption">หากท่านคัดกรองอาการผ่านมือถือเรียบร้อยแล้ว โปรดกดปุ่มด้านล่างเพื่อเปิดกล้องสแกนรับยา</p><button class="btn btn-primary" id="btnScan" type="button">🔍 กดตรงนี้เพื่อเปิดกล้องสแกน QR Code</button><p class="code-or">หรือ</p><p class="hint">พิมพ์รหัสจากแชท LaneYa</p><input class="code-input" id="codeInput" placeholder="A10001ABCDEF" maxlength="14" autocapitalize="characters" autocomplete="off"><p class="hint">A1 · 0001 · ABCDEF (ไม่ต้องพิมพ์ -)</p><button class="btn btn-ghost" id="btnSubmitCode" type="button">ยืนยันรหัส</button></div>';
 document.getElementById("btnScan").onclick=startScan;document.getElementById("btnSubmitCode").onclick=submitCode;return}
 if(p==="scanning"){
 const camWarn=session.camOnline===false?'<p class="status bad">กล้องยังไม่ตอบ — preview อาจไม่ขึ้น</p>':'';
@@ -116,7 +116,7 @@ if(p==="error"){main.innerHTML='<div class="card center err"><div class="state-i
 main.innerHTML='<div class="center">'+p+'</div>'}
 async function refresh(){try{session=await api("/kiosk/session")}catch(e){session={phase:"error",error:"เชื่อมตู้ไม่ได้"}}render()}
 async function startScan(){if(busy)return;busy=true;render();try{await api("/kiosk/scan/start","POST");await refresh()}catch(e){session={phase:"error",error:e.message};render()}finally{busy=false}}
-async function submitCode(){if(busy)return;const el=document.getElementById("codeInput");const code=(el&&el.value||"").trim().toUpperCase();if(!code)return;busy=true;render();try{await api("/kiosk/submit-code","POST",{code});await refresh()}catch(e){session={phase:"error",error:e.message};render()}finally{busy=false}}
+async function submitCode(){if(busy)return;const el=document.getElementById("codeInput");const code=normalizeCode(el&&el.value);if(!code){session={phase:"error",error:"รูปแบบรหัสไม่ถูกต้อง"};render();return}busy=true;render();try{await api("/kiosk/submit-code","POST",{code});await refresh()}catch(e){session={phase:"error",error:e.message};render()}finally{busy=false}}
 btnCancel.onclick=async()=>{if(busy)return;busy=true;try{await api("/kiosk/scan/cancel","POST");await refresh()}finally{busy=false}};
 btnConfirm.onclick=async()=>{if(busy||ticketExpired())return;busy=true;try{await api("/kiosk/pickup/confirm","POST");await refresh()}catch(e){session={phase:"error",error:e.message};render()}finally{busy=false}};
 setInterval(refresh,500);refresh();
