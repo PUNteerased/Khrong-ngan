@@ -1252,6 +1252,7 @@ export type IssueReportDto = {
   description: string
   reporterEmail: string
   imageUrl: string | null
+  source: string
   status: IssueReportStatus
   userId: string | null
   reporter: {
@@ -1291,9 +1292,13 @@ export async function submitIssueReport(payload: {
   })
 }
 
-export async function fetchAdminIssueReports(status?: IssueReportStatus) {
+export async function fetchAdminIssueReports(
+  status?: IssueReportStatus,
+  source?: "kiosk" | "contact"
+) {
   const sp = new URLSearchParams()
   if (status) sp.set("status", status)
+  if (source) sp.set("source", source)
   const q = sp.toString()
   return apiJson<IssueReportDto[]>(
     `/api/admin/issue-reports${q ? `?${q}` : ""}`,

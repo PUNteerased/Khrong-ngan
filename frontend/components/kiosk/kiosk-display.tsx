@@ -166,9 +166,6 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
           seconds={session.countdownSec || KIOSK_SCAN_DURATION_SEC}
           camOnline={session.camOnline}
           camPreviewUrl={session.camPreviewUrl}
-          onSubmitCode={handleSubmitCode}
-          codeLoading={codeBusy}
-          codeDisabled={codeBlocked}
         />
       )
     }
@@ -193,6 +190,8 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
         codeLoading={codeBusy}
         disabled={scanBlocked}
         disabledReason={scanDisabledReason}
+        phase={phase}
+        camOnline={session.camOnline}
       />
     )
   })()

@@ -174,3 +174,30 @@ export function submitKioskCode(code: string): Promise<{ ok: boolean; preview?: 
     body: JSON.stringify({ code }),
   })
 }
+
+export function submitKioskIssueReport(payload: {
+  subCategory: string
+  subCategoryOther?: string
+  description?: string
+  phase?: KioskSessionPhase
+  camOnline?: boolean
+}): Promise<{ ok: boolean; id: string }> {
+  return fetch(`${getCloudApiBase()}/api/kiosk/display/report-issue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  }).then(async (res) => {
+    if (!res.ok) {
+      let detail = `${res.status}`
+      try {
+        const body = (await res.json()) as { error?: string }
+        if (body.error) detail = body.error
+      } catch {
+        /* ignore */
+      }
+      throw new Error(detail)
+    }
+    return res.json() as Promise<{ ok: boolean; id: string }>
+  })
+}

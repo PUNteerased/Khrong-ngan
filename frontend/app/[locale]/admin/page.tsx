@@ -153,6 +153,9 @@ export default function AdminPage() {
   const [issueReportFilter, setIssueReportFilter] = useState<
     "ALL" | IssueReportStatus
   >("ALL")
+  const [issueSourceFilter, setIssueSourceFilter] = useState<
+    "ALL" | "kiosk" | "contact"
+  >("ALL")
   const [reportsLoading, setReportsLoading] = useState(false)
   const [servoStatus, setServoStatus] = useState<AdminServoTestStatus | null>(
     null
@@ -195,7 +198,8 @@ export default function AdminPage() {
     setReportsLoading(true)
     try {
       const rows = await fetchAdminIssueReports(
-        issueReportFilter === "ALL" ? undefined : issueReportFilter
+        issueReportFilter === "ALL" ? undefined : issueReportFilter,
+        issueSourceFilter === "ALL" ? undefined : issueSourceFilter
       )
       setIssueReports(rows)
     } catch {
@@ -204,7 +208,7 @@ export default function AdminPage() {
     } finally {
       setReportsLoading(false)
     }
-  }, [issueReportFilter, tr])
+  }, [issueReportFilter, issueSourceFilter, tr])
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -269,7 +273,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (!unlocked || mainTab !== "reports") return
     void loadIssueReports()
-  }, [unlocked, mainTab, issueReportFilter, loadIssueReports])
+  }, [unlocked, mainTab, issueReportFilter, issueSourceFilter, loadIssueReports])
 
   const loadServoStatus = useCallback(async () => {
     try {
@@ -383,6 +387,15 @@ export default function AdminPage() {
         more_drugs: "subFeedbackDrugs",
         other: "subOther",
       },
+      kiosk: {
+        qr_not_scanning: "subKioskQr",
+        camera_offline: "subKioskCamera",
+        code_not_working: "subKioskCode",
+        dispense_failed: "subKioskDispense",
+        screen_frozen: "subKioskFrozen",
+        wrong_medicine: "subKioskWrongMed",
+        other: "subOther",
+      },
     }
 
     const parts = cat.split(":")
@@ -394,6 +407,7 @@ export default function AdminPage() {
       medical_logic: tr("catMedicalLogic"),
       technical_bug: tr("catTechnicalBug"),
       feedback: tr("catFeedback"),
+      kiosk: tr("catKiosk"),
       dispenser: tr("catDispenser"),
       qr: tr("catQr"),
       ai: tr("catAi"),
@@ -1597,6 +1611,20 @@ export default function AdminPage() {
                               : tr("filterResolved")}
                         </Button>
                       ))}
+                      {(["ALL", "kiosk", "contact"] as const).map((f) => (
+                        <Button
+                          key={`src-${f}`}
+                          size="sm"
+                          variant={issueSourceFilter === f ? "secondary" : "outline"}
+                          onClick={() => setIssueSourceFilter(f)}
+                        >
+                          {f === "ALL"
+                            ? tr("filterAll")
+                            : f === "kiosk"
+                              ? tr("filterKiosk")
+                              : tr("filterContact")}
+                        </Button>
+                      ))}
                       <Button
                         size="sm"
                         variant="outline"
@@ -1650,9 +1678,15 @@ export default function AdminPage() {
                                   <p className="line-clamp-3">{row.description}</p>
                                 </TableCell>
                                 <TableCell className="text-xs">
-                                  {row.reporter
-                                    ? row.reporter.fullName || row.reporter.username
-                                    : tr("anonymous")}
+                                  {row.source === "kiosk" ? (
+                                    <Badge variant="default" className="bg-sky-600">
+                                      {tr("reporterKiosk")}
+                                    </Badge>
+                                  ) : row.reporter ? (
+                                    row.reporter.fullName || row.reporter.username
+                                  ) : (
+                                    tr("anonymous")
+                                  )}
                                 </TableCell>
                                 <TableCell className="text-xs">
                                   {row.reporterEmail ? (

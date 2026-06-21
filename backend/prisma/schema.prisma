@@ -59,6 +59,8 @@ model IssueReport {
   description    String
   reporterEmail  String
   imageUrl       String?
+  /// "contact" | "kiosk"
+  source         String       @default("contact")
   status         IssueStatus  @default(OPEN)
   userId         String?
   user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -67,6 +69,7 @@ model IssueReport {
 
   @@index([status, createdAt(sort: Desc)])
   @@index([userId])
+  @@index([source, createdAt(sort: Desc)])
 }
 
 /// Medicine row in the cabinet; `imageUrl` is optional public URL for UI (Supabase Storage).

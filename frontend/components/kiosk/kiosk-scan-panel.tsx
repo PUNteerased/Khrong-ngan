@@ -3,6 +3,8 @@
 import Image from "next/image"
 import type { KioskMessages } from "@/lib/kiosk-i18n"
 import { KioskCodeEntry } from "@/components/kiosk/kiosk-code-entry"
+import { KioskHelpDialog } from "@/components/kiosk/kiosk-help-dialog"
+import type { KioskSessionPhase } from "@/lib/kiosk-api"
 
 type Props = {
   t: KioskMessages
@@ -12,6 +14,8 @@ type Props = {
   codeLoading?: boolean
   disabled?: boolean
   disabledReason?: string
+  phase?: KioskSessionPhase
+  camOnline?: boolean
 }
 
 export function KioskScanPanel({
@@ -22,9 +26,11 @@ export function KioskScanPanel({
   codeLoading,
   disabled,
   disabledReason,
+  phase,
+  camOnline,
 }: Props) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 px-4 py-4">
+    <div className="relative flex h-full flex-col items-center justify-center gap-6 px-4 py-4">
       <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-lg">
         <div className="mx-auto mb-4 flex justify-center">
           <Image
@@ -56,6 +62,7 @@ export function KioskScanPanel({
         disabled={disabled}
         disabledReason={disabled ? disabledReason : undefined}
       />
+      <KioskHelpDialog t={t} phase={phase} camOnline={camOnline} />
     </div>
   )
 }

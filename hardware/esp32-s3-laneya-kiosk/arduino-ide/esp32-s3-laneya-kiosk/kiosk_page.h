@@ -57,6 +57,8 @@ html,body{height:100%;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
 .warn h2{color:var(--danger);font-size:.95rem;margin-bottom:6px}
 .foot{display:flex;gap:12px;padding:14px 16px;background:#fff;border-top:1px solid #dbe4ef;box-shadow:0 -4px 16px rgba(0,0,0,.04)}
 .foot .btn{flex:1;margin:0}
+.foot.scan-only .btn-primary{display:none!important}
+.foot.scan-only .btn-ghost{flex:1;width:100%}
 .hidden{display:none!important}
 .state-icon{font-size:3rem;margin-bottom:12px}
 .center{text-align:center;font-size:clamp(1.1rem,3vw,1.3rem);font-weight:600;padding:20px}
@@ -98,6 +100,7 @@ function formatCodeLive(raw){const c=(raw||"").replace(/[^a-zA-Z0-9]/g,"").toUpp
 function render(){
 updateCamPill();const p=session.phase||"idle";
 foot.classList.toggle("hidden",!(p==="preview"||p==="scanning"));
+foot.classList.toggle("scan-only",p==="scanning");
 btnConfirm.disabled=busy||p!=="preview"||ticketExpired();btnCancel.disabled=busy||p==="dispensing";
 if(p!=="scanning")stopCamPreview();
 if(p==="idle"){

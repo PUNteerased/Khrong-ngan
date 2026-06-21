@@ -23,6 +23,21 @@ export function KioskBottomBar({
 }: Props) {
   if (phase === "idle") return null
 
+  if (phase === "scanning") {
+    return (
+      <footer className="flex min-h-[20vh] shrink-0 border-t bg-muted/30 px-4 py-4 safe-bottom">
+        <button
+          type="button"
+          disabled={cancelDisabled}
+          onClick={onCancel}
+          className="flex w-full items-center justify-center rounded-xl bg-secondary px-4 py-4 text-lg font-semibold disabled:opacity-50"
+        >
+          {t.cancel}
+        </button>
+      </footer>
+    )
+  }
+
   return (
     <footer className="flex min-h-[20vh] shrink-0 gap-4 border-t bg-muted/30 px-4 py-4 safe-bottom">
       <button

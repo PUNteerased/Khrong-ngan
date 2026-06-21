@@ -2,6 +2,7 @@ const ISSUE_MAIN_CATEGORIES = new Set([
   "medical_logic",
   "technical_bug",
   "feedback",
+  "kiosk",
 ])
 
 const ISSUE_SUB_CATEGORIES: Record<string, Set<string>> = {
@@ -13,6 +14,15 @@ const ISSUE_SUB_CATEGORIES: Record<string, Set<string>> = {
   ]),
   technical_bug: new Set(["chat_stuck", "mobile_layout", "slow_timeout", "other"]),
   feedback: new Set(["new_feature", "more_drugs", "other"]),
+  kiosk: new Set([
+    "qr_not_scanning",
+    "camera_offline",
+    "code_not_working",
+    "dispense_failed",
+    "screen_frozen",
+    "wrong_medicine",
+    "other",
+  ]),
 }
 
 export function normalizeIssueCategory(raw: string): string | null {

@@ -13,6 +13,11 @@ import {
   queueDisplaySubmitCode,
 } from "../services/kioskCommand.service.js"
 import { previewPickupTicket } from "../services/pickupTicket.service.js"
+import { randomUUID } from "crypto"
+import { prisma } from "../lib/prisma.js"
+import { resolveIssueCategory } from "../lib/issueCategories.js"
+
+const MAX_KIOSK_REPORT_DESC = 500
 
 function mapCommandError(res: Response, err: unknown) {
   const msg = err instanceof Error ? err.message : "UNKNOWN"
@@ -180,4 +185,58 @@ export async function postKioskSessionSync(req: Request, res: Response) {
 
   syncCabinetSession(body)
   res.json({ ok: true })
+}
+
+export async function postKioskDisplayReportIssue(_req: Request, res: Response) {
+  const body = _req.body as {
+    subCategory?: string
+    subCategoryOther?: string
+    description?: string
+    phase?: string
+    camOnline?: boolean
+  }
+
+  const category = resolveIssueCategory({
+    category: "kiosk",
+    subCategory: body.subCategory,
+    subCategoryOther: body.subCategoryOther,
+  })
+
+  if (!category) {
+    res.status(400).json({ error: "หมวดหมู่ปัญหาไม่ถูกต้อง" })
+    return
+  }
+
+  const userText = String(body.description || "").trim().slice(0, MAX_KIOSK_REPORT_DESC)
+  const phase = String(body.phase || "idle").trim()
+  const camOnline =
+    body.camOnline === true ? "online" : body.camOnline === false ? "offline" : "unknown"
+
+  const contextLines = [
+    "[Kiosk report]",
+    `phase: ${phase}`,
+    `camera: ${camOnline}`,
+  ]
+  const description = userText
+    ? `${userText}\n\n---\n${contextLines.join("\n")}`
+    : contextLines.join("\n")
+
+  const row = await prisma.issueReport.create({
+    data: {
+      id: randomUUID(),
+      category,
+      description,
+      reporterEmail: "",
+      source: "kiosk",
+      userId: null,
+    },
+  })
+
+  res.status(201).json({
+    ok: true,
+    id: row.id,
+    category: row.category,
+    source: row.source,
+    createdAt: row.createdAt.toISOString(),
+  })
 }

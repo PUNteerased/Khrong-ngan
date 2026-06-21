@@ -2,6 +2,7 @@ export const ISSUE_MAIN_CATEGORIES = [
   "medical_logic",
   "technical_bug",
   "feedback",
+  "kiosk",
 ] as const
 
 export type IssueMainCategory = (typeof ISSUE_MAIN_CATEGORIES)[number]
@@ -25,6 +26,15 @@ export const ISSUE_SUB_CATEGORIES: Record<
   feedback: [
     { value: "new_feature", labelKey: "subFeedbackFeature" },
     { value: "more_drugs", labelKey: "subFeedbackDrugs" },
+    { value: "other", labelKey: "subOther" },
+  ],
+  kiosk: [
+    { value: "qr_not_scanning", labelKey: "subKioskQr" },
+    { value: "camera_offline", labelKey: "subKioskCamera" },
+    { value: "code_not_working", labelKey: "subKioskCode" },
+    { value: "dispense_failed", labelKey: "subKioskDispense" },
+    { value: "screen_frozen", labelKey: "subKioskFrozen" },
+    { value: "wrong_medicine", labelKey: "subKioskWrongMed" },
     { value: "other", labelKey: "subOther" },
   ],
 }

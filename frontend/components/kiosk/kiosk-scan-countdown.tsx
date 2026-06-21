@@ -2,8 +2,7 @@
 
 import type { KioskMessages } from "@/lib/kiosk-i18n"
 import { KioskCameraViewport } from "@/components/kiosk/kiosk-camera-viewport"
-import { KioskCodeEntry } from "@/components/kiosk/kiosk-code-entry"
-import { KIOSK_SCAN_DURATION_SEC } from "@/lib/kiosk-constants"
+import { KioskCountdownRing } from "@/components/kiosk/kiosk-countdown-ring"
 import { useSmoothCountdown } from "@/hooks/use-smooth-countdown"
 
 type Props = {
@@ -11,9 +10,6 @@ type Props = {
   seconds: number
   camOnline?: boolean
   camPreviewUrl?: string
-  onSubmitCode: (code: string) => void
-  codeLoading?: boolean
-  codeDisabled?: boolean
 }
 
 export function KioskScanCountdown({
@@ -21,9 +17,6 @@ export function KioskScanCountdown({
   seconds,
   camOnline,
   camPreviewUrl,
-  onSubmitCode,
-  codeLoading,
-  codeDisabled,
 }: Props) {
   const displaySeconds = useSmoothCountdown(seconds, true)
 
@@ -45,27 +38,7 @@ export function KioskScanCountdown({
       >
         {camOnline === false ? t.camOffline : camOnline ? t.camOnline : t.scanHint}
       </p>
-      <div
-        className="flex h-28 w-28 items-center justify-center rounded-full border-8 border-primary/20 bg-primary/5 text-[4rem] font-bold tabular-nums text-primary"
-        aria-live="polite"
-      >
-        {displaySeconds}
-      </div>
-      <div className="h-3 w-48 overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full bg-primary transition-all duration-1000 ease-linear"
-          style={{
-            width: `${Math.max(0, (displaySeconds / KIOSK_SCAN_DURATION_SEC) * 100)}%`,
-          }}
-        />
-      </div>
-      <KioskCodeEntry
-        t={t}
-        compact
-        onSubmit={onSubmitCode}
-        loading={codeLoading}
-        disabled={codeDisabled}
-      />
+      <KioskCountdownRing seconds={displaySeconds} />
     </div>
   )
 }

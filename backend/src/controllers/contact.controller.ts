@@ -25,6 +25,7 @@ function serializeIssueReport(row: {
   description: string
   reporterEmail: string
   imageUrl: string | null
+  source: string
   status: IssueStatus
   userId: string | null
   createdAt: Date
@@ -42,6 +43,7 @@ function serializeIssueReport(row: {
     description: row.description,
     reporterEmail: row.reporterEmail,
     imageUrl: row.imageUrl,
+    source: row.source,
     status: row.status,
     userId: row.userId,
     reporter: row.user
@@ -110,6 +112,7 @@ export async function createIssueReport(req: Request, res: Response) {
       description,
       reporterEmail,
       imageUrl,
+      source: "contact",
       userId,
     },
     include: {
@@ -124,9 +127,13 @@ export async function createIssueReport(req: Request, res: Response) {
 
 export async function listIssueReports(req: Request, res: Response) {
   const statusRaw = (req.query.status as string) || ""
-  const where: { status?: IssueStatus } = {}
+  const sourceRaw = String(req.query.source || "").trim()
+  const where: { status?: IssueStatus; source?: string } = {}
   if (statusRaw === "OPEN" || statusRaw === "RESOLVED") {
     where.status = statusRaw
+  }
+  if (sourceRaw === "kiosk" || sourceRaw === "contact") {
+    where.source = sourceRaw
   }
 
   const rows = await prisma.issueReport.findMany({

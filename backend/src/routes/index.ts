@@ -137,6 +137,11 @@ router.post(
   kioskDisplayController.postKioskDisplaySubmitCode
 )
 router.post(
+  "/api/kiosk/display/report-issue",
+  kioskDisplayLimiter,
+  kioskDisplayController.postKioskDisplayReportIssue
+)
+router.post(
   "/api/kiosk/camera-frame",
   json({ limit: "2mb" }),
   raw({ type: ["image/jpeg", "application/octet-stream"], limit: "512kb" }),
