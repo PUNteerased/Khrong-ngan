@@ -67,6 +67,7 @@ export const thMessages = {
     noAccount: "ยังไม่มีบัญชี?",
     googleFail: "เข้าสู่ระบบด้วย Google ไม่สำเร็จ",
     googleTokenMissing: "ไม่พบข้อมูลยืนยันตัวตนจาก Google",
+    googleLoading: "กำลังโหลด…",
     googleUnavailable: "ยังไม่พร้อมใช้งาน Google Login",
   },
   Register: {
@@ -847,6 +848,7 @@ export const enMessages = {
     noAccount: "Don't have an account?",
     googleFail: "Google sign-in failed",
     googleTokenMissing: "Missing Google identity token",
+    googleLoading: "Loading…",
     googleUnavailable: "Google sign-in is not configured",
   },
   Register: {

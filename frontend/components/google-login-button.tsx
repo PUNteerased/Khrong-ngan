@@ -42,6 +42,7 @@ export function GoogleLoginButton({ mode, onSuccess, className }: GoogleLoginBut
     () => process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? ""
   )
   const [configLoading, setConfigLoading] = useState(!clientId)
+  const [configChecked, setConfigChecked] = useState(Boolean(clientId))
   const containerRef = useRef<HTMLDivElement | null>(null)
   const onSuccessRef = useRef(onSuccess)
   const initializedClientIdRef = useRef<string | null>(null)
@@ -59,6 +60,7 @@ export function GoogleLoginButton({ mode, onSuccess, className }: GoogleLoginBut
   useEffect(() => {
     if (clientId) {
       setConfigLoading(false)
+      setConfigChecked(true)
       return
     }
     let cancelled = false
@@ -72,7 +74,10 @@ export function GoogleLoginButton({ mode, onSuccess, className }: GoogleLoginBut
       } catch {
         // ignore — show unavailable state below
       } finally {
-        if (!cancelled) setConfigLoading(false)
+        if (!cancelled) {
+          setConfigLoading(false)
+          setConfigChecked(true)
+        }
       }
     })()
     return () => {
@@ -145,15 +150,15 @@ export function GoogleLoginButton({ mode, onSuccess, className }: GoogleLoginBut
       />
       {configLoading ? (
         <Button type="button" variant="outline" className="w-full" disabled>
-          {t("loading")}
+          {t("googleLoading")}
         </Button>
       ) : clientId ? (
         <div ref={containerRef} className="w-full min-w-0 min-h-10" />
-      ) : (
+      ) : configChecked ? (
         <Button type="button" variant="outline" className="w-full" disabled>
           {t("googleUnavailable")}
         </Button>
-      )}
+      ) : null}
     </div>
   )
 }
