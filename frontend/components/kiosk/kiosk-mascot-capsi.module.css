@@ -1,0 +1,264 @@
+.container {
+  position: relative;
+  width: min(340px, 74vw);
+  height: min(404px, 88vw);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.svg {
+  position: relative;
+  z-index: 1;
+}
+
+/* Soft glowing halo behind the robot */
+.halo {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  width: 70%;
+  height: 55%;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle,
+    rgba(56, 189, 248, 0.45) 0%,
+    rgba(50, 140, 193, 0.22) 45%,
+    rgba(50, 140, 193, 0) 72%
+  );
+  filter: blur(6px);
+  animation: capsi-halo 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.shadow {
+  animation: capsi-shadow 3s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.robot {
+  animation: capsi-float 3s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.antenna {
+  animation: capsi-antenna 2s ease-in-out infinite;
+  transform-origin: 160px 52px;
+}
+
+.handL {
+  animation: capsi-wave-l 3s ease-in-out infinite;
+  transform-origin: 78px 188px;
+}
+
+.handR {
+  animation: capsi-wave-r 3s ease-in-out infinite;
+  transform-origin: 242px 188px;
+}
+
+.celebrate .robot {
+  animation: capsi-celebrate 0.45s ease-out forwards;
+}
+
+.celebrate .shadow {
+  animation: none;
+  opacity: 0.15;
+  transform: scale(0.9);
+}
+
+.celebrate .eyeL,
+.celebrate .eyeR,
+.celebrate .antenna {
+  animation: none;
+}
+
+.flying .robot {
+  animation: capsi-fly-float 2.2s ease-in-out infinite;
+}
+
+.flying .shadow {
+  animation: capsi-fly-shadow 2.2s ease-in-out infinite;
+}
+
+.flying .handL {
+  animation: capsi-fly-arm-l 2.2s ease-in-out infinite;
+}
+
+.flying .handR {
+  animation: capsi-fly-arm-r 2.2s ease-in-out infinite;
+}
+
+.flying .antenna {
+  animation: capsi-fly-antenna 1.4s ease-in-out infinite;
+}
+
+.flying .halo {
+  animation: capsi-fly-halo 2.2s ease-in-out infinite;
+}
+
+@keyframes capsi-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-16px);
+  }
+}
+
+@keyframes capsi-halo {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.08);
+    opacity: 1;
+  }
+}
+
+@keyframes capsi-antenna {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.25);
+    opacity: 0.7;
+  }
+}
+
+@keyframes capsi-wave-l {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-8deg);
+  }
+}
+
+@keyframes capsi-wave-r {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(8deg);
+  }
+}
+
+@keyframes capsi-shadow {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.22;
+  }
+  50% {
+    transform: scale(0.82);
+    opacity: 0.1;
+  }
+}
+
+@keyframes capsi-celebrate {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  40% {
+    transform: translateY(-30px) scale(1.15);
+  }
+  100% {
+    transform: translateY(-20px) scale(1.05);
+  }
+}
+
+@keyframes capsi-fly-float {
+  0%,
+  100% {
+    transform: rotate(var(--wander-tilt, 0deg)) translateY(0);
+  }
+  50% {
+    transform: rotate(var(--wander-tilt, 0deg)) translateY(-22px);
+  }
+}
+
+@keyframes capsi-fly-shadow {
+  0%,
+  100% {
+    transform: scale(0.75);
+    opacity: 0.12;
+  }
+  50% {
+    transform: scale(0.62);
+    opacity: 0.08;
+  }
+}
+
+@keyframes capsi-fly-arm-l {
+  0%,
+  100% {
+    transform: rotate(-28deg) translateY(-4px);
+  }
+  50% {
+    transform: rotate(-34deg) translateY(-10px);
+  }
+}
+
+@keyframes capsi-fly-arm-r {
+  0%,
+  100% {
+    transform: rotate(28deg) translateY(-4px);
+  }
+  50% {
+    transform: rotate(34deg) translateY(-10px);
+  }
+}
+
+@keyframes capsi-fly-antenna {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.75;
+  }
+}
+
+@keyframes capsi-fly-halo {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1.05);
+    opacity: 0.95;
+  }
+  50% {
+    transform: translate(-50%, -58%) scale(1.12);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shadow,
+  .robot,
+  .antenna,
+  .halo,
+  .handL,
+  .handR,
+  .flying .robot,
+  .flying .shadow,
+  .flying .handL,
+  .flying .handR,
+  .flying .antenna,
+  .flying .halo {
+    animation: none;
+  }
+
+  .celebrate .robot {
+    animation: none;
+    transform: scale(1.05);
+  }
+}

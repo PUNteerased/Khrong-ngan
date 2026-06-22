@@ -1,0 +1,16 @@
+{
+  "name": "laneya-monorepo",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w laneya-frontend",
+    "dev:frontend": "npm run dev -w laneya-frontend",
+    "dev:backend": "npm run dev -w laneya-backend",
+    "build": "npm run build -w laneya-frontend",
+    "start": "npm run start -w laneya-frontend",
+    "lint": "npm run lint -w laneya-frontend"
+  }
+}
