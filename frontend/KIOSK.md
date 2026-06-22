@@ -24,7 +24,7 @@ http://<PC-IP>:3000/kiosk?token=<KIOSK_DISPLAY_TOKEN>
 ```
 หรือ `NEXT_PUBLIC_KIOSK_MODE=lan` เพื่อเรียก S3 ตรงจาก Next.js
 
-**ผู้ดูแล:** Admin → แท็บ **คีออส** → **เปิดจอคีออส**
+**ผู้ดูแล:** Admin → แท็บ **คีออส** → เปิด URL จอคีออส (`/kiosk`)
 
 ## Architecture (cloud relay)
 

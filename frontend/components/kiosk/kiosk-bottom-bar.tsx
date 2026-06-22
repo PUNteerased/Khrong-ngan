@@ -79,8 +79,10 @@ export function KioskStatusOverlay({
       )}
       {phase === "success" && (
         <>
-          <CheckCircle2 className="h-20 w-20 text-success" />
-          <p className="text-2xl font-semibold text-success">{t.success}</p>
+          <CheckCircle2 className="h-24 w-24 text-success" />
+          <p className="text-[clamp(1.5rem,4vw,2.25rem)] font-bold text-success">
+            {t.success}
+          </p>
         </>
       )}
       {phase === "error" && (

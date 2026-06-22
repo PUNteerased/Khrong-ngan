@@ -1,12 +1,14 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { KioskShell } from "@/components/kiosk/kiosk-shell"
 import { KioskHeader } from "@/components/kiosk/kiosk-header"
 import { KioskEmergencyBanner } from "@/components/kiosk/kiosk-emergency-banner"
 import { KioskConnectivityBanner } from "@/components/kiosk/kiosk-connectivity-banner"
-import { KioskScanPanel } from "@/components/kiosk/kiosk-scan-panel"
+import { KioskScreensaver } from "@/components/kiosk/kiosk-screensaver"
+import { KioskHomeChoice } from "@/components/kiosk/kiosk-home-choice"
+import { KioskCodeScreen } from "@/components/kiosk/kiosk-code-screen"
 import { KioskScanCountdown } from "@/components/kiosk/kiosk-scan-countdown"
 import { KioskVerificationPanel } from "@/components/kiosk/kiosk-verification-panel"
 import {
@@ -14,6 +16,7 @@ import {
   KioskStatusOverlay,
 } from "@/components/kiosk/kiosk-bottom-bar"
 import { useKioskSession } from "@/hooks/use-kiosk-session"
+import { useKioskInactivity } from "@/hooks/use-kiosk-inactivity"
 import { useTicketExpiry } from "@/hooks/use-ticket-expiry"
 import {
   cancelKioskScan,
@@ -28,7 +31,12 @@ import {
   mapKioskSessionError,
 } from "@/lib/kiosk-connectivity"
 import { getKioskMessages } from "@/lib/kiosk-i18n"
-import { KIOSK_SCAN_DURATION_SEC } from "@/lib/kiosk-constants"
+import {
+  KIOSK_HOME_IDLE_MS,
+  KIOSK_SCAN_DURATION_SEC,
+} from "@/lib/kiosk-constants"
+
+type KioskUiScreen = "screensaver" | "home" | "codeEntry"
 
 function speak(text: string, locale: KioskLocale) {
   if (typeof window === "undefined" || !window.speechSynthesis) return
@@ -39,17 +47,14 @@ function speak(text: string, locale: KioskLocale) {
   window.speechSynthesis.speak(utter)
 }
 
-type Props = {
-  backHref?: string
-  backLabel?: string
-}
-
-export function KioskDisplay({ backHref, backLabel }: Props) {
+export function KioskDisplay() {
   const [locale, setLocale] = useState<KioskLocale>("th")
   const [ttsOn, setTtsOn] = useState(false)
   const [busy, setBusy] = useState(false)
   const [codeBusy, setCodeBusy] = useState(false)
   const [mixedContent, setMixedContent] = useState(false)
+  const [uiScreen, setUiScreen] = useState<KioskUiScreen>("screensaver")
+  const prevPhaseRef = useRef<string>("idle")
   const { session, connected, phase, refresh } = useKioskSession()
   const t = useMemo(() => getKioskMessages(locale), [locale])
   const { expired: ticketExpired } = useTicketExpiry(session.preview?.expiresAt)
@@ -61,6 +66,20 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
     }
     setMixedContent(isKioskMixedContentBlocked())
   }, [])
+
+  useEffect(() => {
+    const prev = prevPhaseRef.current
+    if ((prev === "success" || prev === "error") && phase === "idle") {
+      setUiScreen("screensaver")
+    }
+    prevPhaseRef.current = phase
+  }, [phase])
+
+  useKioskInactivity({
+    enabled: phase === "idle" && uiScreen === "home",
+    timeoutMs: KIOSK_HOME_IDLE_MS,
+    onTimeout: () => setUiScreen("screensaver"),
+  })
 
   const scanBlocked = mixedContent || !connected
   const codeBlocked = mixedContent || !connected
@@ -85,14 +104,14 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
 
   useEffect(() => {
     if (!ttsOn) return
-    if (uiPhase === "idle") speak(t.scanCaption, locale)
+    if (uiPhase === "idle" && uiScreen === "home") speak(t.homeTitle, locale)
     if (uiPhase === "scanning") speak(t.cameraOn, locale)
     if (uiPhase === "verification" && session.preview) {
       const w = session.preview.drug.warnings || ""
       speak(`${session.preview.drug.name}. ${w}`, locale)
     }
     if (uiPhase === "success") speak(t.success, locale)
-  }, [uiPhase, ttsOn, locale, t, session.preview])
+  }, [uiPhase, uiScreen, ttsOn, locale, t, session.preview])
 
   const handleOpenScan = useCallback(async () => {
     if (scanBlocked) return
@@ -111,6 +130,7 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
     setBusy(true)
     try {
       await cancelKioskScan()
+      setUiScreen("home")
     } finally {
       setBusy(false)
     }
@@ -158,6 +178,12 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
     }
   }, [ticketExpired, locale, t.error, t.codeExpiredConfirmBlocked])
 
+  if (phase === "idle" && uiScreen === "screensaver") {
+    return (
+      <KioskScreensaver t={t} onWake={() => setUiScreen("home")} />
+    )
+  }
+
   const main = (() => {
     if (uiPhase === "scanning") {
       return (
@@ -181,14 +207,26 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
         />
       )
     }
+    if (uiScreen === "codeEntry") {
+      return (
+        <KioskCodeScreen
+          t={t}
+          onSubmit={handleSubmitCode}
+          onBack={() => setUiScreen("home")}
+          loading={codeBusy}
+          disabled={codeBlocked}
+          disabledReason={scanDisabledReason}
+        />
+      )
+    }
     return (
-      <KioskScanPanel
+      <KioskHomeChoice
         t={t}
         onOpenScan={handleOpenScan}
-        onSubmitCode={handleSubmitCode}
-        loading={busy}
-        codeLoading={codeBusy}
-        disabled={scanBlocked}
+        onOpenCode={() => setUiScreen("codeEntry")}
+        scanLoading={busy}
+        scanDisabled={scanBlocked}
+        codeDisabled={codeBlocked}
         disabledReason={scanDisabledReason}
         phase={phase}
         camOnline={session.camOnline}
@@ -203,8 +241,6 @@ export function KioskDisplay({ backHref, backLabel }: Props) {
           locale={locale}
           t={t}
           ttsOn={ttsOn}
-          backHref={backHref}
-          backLabel={backLabel}
           onLocaleChange={setLocale}
           onTtsToggle={() => setTtsOn((v) => !v)}
         />

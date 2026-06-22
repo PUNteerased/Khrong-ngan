@@ -43,11 +43,6 @@ export function KioskCodeEntry({
           : "w-full max-w-xl space-y-4 rounded-2xl bg-card p-6 shadow-lg"
       }
     >
-      {!compact ? (
-        <p className="text-center text-sm font-medium text-muted-foreground">
-          {t.codeEntryOr}
-        </p>
-      ) : null}
       <label
         className={`block text-center font-bold text-muted-foreground ${
           compact ? "text-lg" : "text-xl"

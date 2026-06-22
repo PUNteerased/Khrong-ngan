@@ -11,8 +11,8 @@
  */
 
 // ============ CONFIG — แก้ก่อน upload ============
-#define WIFI_SSID "SAENEE UNTA 2.4G"
-#define WIFI_PASSWORD "0819534686"
+#define WIFI_SSID "hah"
+#define WIFI_PASSWORD "Araina555"
 
 #define KIOSK_LAT 17.0147929
 #define KIOSK_LNG 99.820863

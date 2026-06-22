@@ -14,8 +14,8 @@
 #define S3_ESPNOW_MAC {0xE0, 0x72, 0xA1, 0xF6, 0xF9, 0xA0}
 
 // ต้อง WiFi เดียวกับ S3 — sync channel ให้ ESP-NOW ถึงกัน (ไม่ใช้ internet)
-#define WIFI_SSID "SAENEE UNTA 2.4G"
-#define WIFI_PASSWORD "0819534686"
+#define WIFI_SSID "hah"
+#define WIFI_PASSWORD "Araina555"
 
 #define MSG_PING "PING"
 #define MSG_PONG "PONG"
