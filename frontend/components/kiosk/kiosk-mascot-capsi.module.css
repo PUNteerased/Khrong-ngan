@@ -7,9 +7,17 @@
   justify-content: center;
 }
 
-.svg {
+.svgWrap {
   position: relative;
   z-index: 1;
+  width: 100%;
+  height: 100%;
+}
+
+.svgWrap :global(.capsi-svg) {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* Soft glowing halo behind the robot */
@@ -32,64 +40,70 @@
   pointer-events: none;
 }
 
-.shadow {
+.container :global(.shadow) {
   animation: capsi-shadow 3s ease-in-out infinite;
   transform-origin: center;
 }
 
-.robot {
+.container :global(.robot) {
   animation: capsi-float 3s ease-in-out infinite;
   transform-origin: center;
 }
 
-.antenna {
+.container :global(.antenna) {
   animation: capsi-antenna 2s ease-in-out infinite;
   transform-origin: 160px 52px;
 }
 
-.handL {
+.container :global(.handL) {
   animation: capsi-wave-l 3s ease-in-out infinite;
   transform-origin: 78px 188px;
 }
 
-.handR {
+.container :global(.handR) {
   animation: capsi-wave-r 3s ease-in-out infinite;
   transform-origin: 242px 188px;
 }
 
-.celebrate .robot {
+.happyVariant :global(#capsi-eyes-idle) {
+  display: none;
+}
+
+.happyVariant :global(#capsi-eyes-happy) {
+  display: block;
+}
+
+.celebrate :global(.robot) {
   animation: capsi-celebrate 0.45s ease-out forwards;
 }
 
-.celebrate .shadow {
+.celebrate :global(.shadow) {
   animation: none;
   opacity: 0.15;
   transform: scale(0.9);
 }
 
-.celebrate .eyeL,
-.celebrate .eyeR,
-.celebrate .antenna {
+.celebrate :global(.antenna) {
   animation: none;
 }
 
-.flying .robot {
+.flying :global(.robot) {
   animation: capsi-fly-float 2.2s ease-in-out infinite;
 }
 
-.flying .shadow {
+.flying :global(.shadow) {
   animation: capsi-fly-shadow 2.2s ease-in-out infinite;
 }
 
-.flying .handL {
+.flying :global(.handL) {
   animation: capsi-fly-arm-l 2.2s ease-in-out infinite;
 }
 
-.flying .handR {
+.flying :global(.handR) {
   animation: capsi-fly-arm-r 2.2s ease-in-out infinite;
 }
 
-.flying .antenna {
+.flying :global(.antenna) {
   animation: capsi-fly-antenna 1.4s ease-in-out infinite;
 }
 
@@ -242,22 +256,22 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .shadow,
-  .robot,
-  .antenna,
+  .container :global(.shadow),
+  .container :global(.robot),
+  .container :global(.antenna),
   .halo,
-  .handL,
-  .handR,
-  .flying .robot,
-  .flying .shadow,
-  .flying .handL,
-  .flying .handR,
-  .flying .antenna,
+  .container :global(.handL),
+  .container :global(.handR),
+  .flying :global(.robot),
+  .flying :global(.shadow),
+  .flying :global(.handL),
+  .flying :global(.handR),
+  .flying :global(.antenna),
   .flying .halo {
     animation: none;
   }
 
-  .celebrate .robot {
+  .celebrate :global(.robot) {
     animation: none;
     transform: scale(1.05);
   }

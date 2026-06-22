@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "kiosk:export-capsi": "node scripts/export-capsi-png.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -75,6 +76,7 @@
     "lightningcss-linux-x64-musl": "1.32.0"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/postcss": "^4.2.0",
     "@types/node": "^22",
     "@types/react": "^19",

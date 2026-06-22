@@ -22,12 +22,20 @@ const UNLOCK_THRESHOLD = 1
 /** pointer movement before we treat it as a drag (not a tap) */
 const DRAG_THRESHOLD_PX = 8
 const MARGIN = 12
-const TOP_RESERVE = 100
-const BOTTOM_RESERVE = 130
+const EXCLUDE_PADDING = 20
 const MASCOT_FALLBACK = { w: 280, h: 330 }
+const SAFE_POINT_TRIES = 24
 
 type Point = { x: number; y: number }
 type Bounds = { minX: number; maxX: number; minY: number; maxY: number }
+type Rect = { left: number; top: number; right: number; bottom: number }
+
+type FlightLayout = {
+  bounds: Bounds
+  excludes: Rect[]
+  mascotW: number
+  mascotH: number
+}
 
 function getFlightBounds(
   layerW: number,
@@ -38,9 +46,60 @@ function getFlightBounds(
   return {
     minX: MARGIN,
     maxX: Math.max(MARGIN, layerW - mascotW - MARGIN),
-    minY: TOP_RESERVE,
-    maxY: Math.max(TOP_RESERVE, layerH - mascotH - BOTTOM_RESERVE),
+    minY: MARGIN,
+    maxY: Math.max(MARGIN, layerH - mascotH - MARGIN),
   }
+}
+
+function measureExcludeRects(
+  layer: HTMLElement,
+  elements: Array<HTMLElement | null>,
+  padding = EXCLUDE_PADDING,
+): Rect[] {
+  const layerRect = layer.getBoundingClientRect()
+  return elements
+    .filter((el): el is HTMLElement => el != null)
+    .map((el) => {
+      const r = el.getBoundingClientRect()
+      return {
+        left: r.left - layerRect.left - padding,
+        top: r.top - layerRect.top - padding,
+        right: r.right - layerRect.left + padding,
+        bottom: r.bottom - layerRect.top + padding,
+      }
+    })
+}
+
+function mascotRectAt(point: Point, w: number, h: number): Rect {
+  return {
+    left: point.x,
+    top: point.y,
+    right: point.x + w,
+    bottom: point.y + h,
+  }
+}
+
+function intersects(a: Rect, b: Rect): boolean {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
+}
+
+function isSafePoint(
+  point: Point,
+  mascotW: number,
+  mascotH: number,
+  bounds: Bounds,
+  excludes: Rect[],
+): boolean {
+  if (
+    point.x < bounds.minX ||
+    point.y < bounds.minY ||
+    point.x > bounds.maxX ||
+    point.y > bounds.maxY
+  ) {
+    return false
+  }
+  const rect = mascotRectAt(point, mascotW, mascotH)
+  return !excludes.some((zone) => intersects(rect, zone))
 }
 
 function randomPoint(bounds: Bounds): Point {
@@ -50,11 +109,78 @@ function randomPoint(bounds: Bounds): Point {
   }
 }
 
-function centerPoint(bounds: Bounds, mascotW: number, mascotH: number): Point {
-  return {
-    x: Math.round((bounds.minX + bounds.maxX - mascotW) / 2),
-    y: Math.round((bounds.minY + bounds.maxY - mascotH) / 2),
+function randomSafePoint(
+  bounds: Bounds,
+  excludes: Rect[],
+  mascotW: number,
+  mascotH: number,
+): Point {
+  for (let i = 0; i < SAFE_POINT_TRIES; i++) {
+    const candidate = randomPoint(bounds)
+    if (isSafePoint(candidate, mascotW, mascotH, bounds, excludes)) {
+      return candidate
+    }
   }
+  return findFallbackSafePoint(bounds, excludes, mascotW, mascotH)
+}
+
+function findFallbackSafePoint(
+  bounds: Bounds,
+  excludes: Rect[],
+  mascotW: number,
+  mascotH: number,
+): Point {
+  const step = 24
+  let best = { x: bounds.minX, y: bounds.minY }
+  let bestScore = -Infinity
+
+  for (let y = bounds.minY; y <= bounds.maxY; y += step) {
+    for (let x = bounds.minX; x <= bounds.maxX; x += step) {
+      const candidate = { x, y }
+      if (!isSafePoint(candidate, mascotW, mascotH, bounds, excludes)) continue
+      const score = y * 2 + x
+      if (score > bestScore) {
+        bestScore = score
+        best = candidate
+      }
+    }
+  }
+
+  return best
+}
+
+function safeCenterPoint(
+  bounds: Bounds,
+  excludes: Rect[],
+  mascotW: number,
+  mascotH: number,
+): Point {
+  const center = {
+    x: Math.round((bounds.minX + bounds.maxX) / 2),
+    y: Math.round((bounds.minY + bounds.maxY) / 2),
+  }
+  if (isSafePoint(center, mascotW, mascotH, bounds, excludes)) {
+    return center
+  }
+  return randomSafePoint(bounds, excludes, mascotW, mascotH)
+}
+
+function safeBottomRightPoint(
+  bounds: Bounds,
+  excludes: Rect[],
+  mascotW: number,
+  mascotH: number,
+): Point {
+  const step = 16
+  for (let y = bounds.maxY; y >= bounds.minY; y -= step) {
+    for (let x = bounds.maxX; x >= bounds.minX; x -= step) {
+      const candidate = { x, y }
+      if (isSafePoint(candidate, mascotW, mascotH, bounds, excludes)) {
+        return candidate
+      }
+    }
+  }
+  return findFallbackSafePoint(bounds, excludes, mascotW, mascotH)
 }
 
 type Props = {
@@ -77,14 +203,18 @@ export function KioskScreensaver({
   const [waking, setWaking] = useState(false)
   const layerRef = useRef<HTMLDivElement>(null)
   const flyerRef = useRef<HTMLDivElement>(null)
+  const topBarRef = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLElement>(null)
+  const sliderRef = useRef<HTMLDivElement>(null)
   const prevPosRef = useRef<Point>({ x: 0, y: 0 })
   const wakeTimersRef = useRef<number[]>([])
+  const layoutRef = useRef<FlightLayout | null>(null)
+  const initializedRef = useRef(false)
 
   const [pos, setPos] = useState<Point>({ x: 0, y: 0 })
   const [tiltDeg, setTiltDeg] = useState(0)
   const [posReady, setPosReady] = useState(false)
 
-  // ----- swipe-to-unlock slider -----
   const trackRef = useRef<HTMLDivElement>(null)
   const [knobX, setKnobX] = useState(0)
   const [dragging, setDragging] = useState(false)
@@ -94,13 +224,23 @@ export function KioskScreensaver({
   const pointerDownXRef = useRef(0)
   const progress = maxXRef.current > 0 ? knobX / maxXRef.current : 0
 
-  const measureMascot = useCallback(() => {
+  const measureFlightLayout = useCallback((): FlightLayout | null => {
     const flyer = flyerRef.current
     const layer = layerRef.current
     if (!flyer || !layer) return null
+
     const mascotW = flyer.offsetWidth || MASCOT_FALLBACK.w
     const mascotH = flyer.offsetHeight || MASCOT_FALLBACK.h
-    return getFlightBounds(layer.clientWidth, layer.clientHeight, mascotW, mascotH)
+    const bounds = getFlightBounds(layer.clientWidth, layer.clientHeight, mascotW, mascotH)
+    const excludes = measureExcludeRects(layer, [
+      topBarRef.current,
+      headerRef.current,
+      sliderRef.current,
+    ])
+
+    const layout = { bounds, excludes, mascotW, mascotH }
+    layoutRef.current = layout
+    return layout
   }, [])
 
   const updateTilt = useCallback((next: Point) => {
@@ -118,19 +258,26 @@ export function KioskScreensaver({
     [updateTilt],
   )
 
+  const moveToSafe = useCallback(
+    (pick: (layout: FlightLayout) => Point) => {
+      const layout = measureFlightLayout()
+      if (!layout) return
+      moveTo(pick(layout))
+    },
+    [measureFlightLayout, moveTo],
+  )
+
   const runWakeFlight = useCallback(() => {
-    const bounds = measureMascot()
-    if (!bounds) {
+    const layout = measureFlightLayout()
+    if (!layout) {
       window.setTimeout(() => onWake(), WAKE_FLIGHT_MS)
       return
     }
 
-    const wp1 = randomPoint(bounds)
-    const wp2 = randomPoint(bounds)
-    const bottomRight: Point = {
-      x: bounds.maxX,
-      y: bounds.maxY,
-    }
+    const { bounds, excludes, mascotW, mascotH } = layout
+    const wp1 = randomSafePoint(bounds, excludes, mascotW, mascotH)
+    const wp2 = randomSafePoint(bounds, excludes, mascotW, mascotH)
+    const bottomRight = safeBottomRightPoint(bounds, excludes, mascotW, mascotH)
 
     wakeTimersRef.current.push(
       window.setTimeout(() => moveTo(wp1), 80),
@@ -138,7 +285,7 @@ export function KioskScreensaver({
       window.setTimeout(() => moveTo(bottomRight), 1250),
       window.setTimeout(() => onWake(), WAKE_FLIGHT_MS),
     )
-  }, [measureMascot, moveTo, onWake])
+  }, [measureFlightLayout, moveTo, onWake])
 
   const triggerWake = useCallback(() => {
     if (waking) return
@@ -207,31 +354,46 @@ export function KioskScreensaver({
     if (!waking) setKnobX(0)
   }, [dragging, waking])
 
-  useEffect(() => {
+  const relayout = useCallback(() => {
     measure()
-    window.addEventListener("resize", measure)
-    return () => window.removeEventListener("resize", measure)
-  }, [measure])
+    const layout = measureFlightLayout()
+    if (!layout) return
 
-  // Center mascot on first layout
-  useEffect(() => {
-    const init = () => {
-      const bounds = measureMascot()
-      const flyer = flyerRef.current
-      if (!bounds || !flyer) return
-      const mascotW = flyer.offsetWidth || MASCOT_FALLBACK.w
-      const mascotH = flyer.offsetHeight || MASCOT_FALLBACK.h
-      const center = centerPoint(bounds, mascotW, mascotH)
-      prevPosRef.current = center
-      setPos(center)
-      setPosReady(true)
+    const { bounds, excludes, mascotW, mascotH } = layout
+
+    if (!initializedRef.current) {
+      const start = safeCenterPoint(bounds, excludes, mascotW, mascotH)
+      prevPosRef.current = start
+      setPos(start)
+      initializedRef.current = true
+    } else {
+      const current = prevPosRef.current
+      if (!isSafePoint(current, mascotW, mascotH, bounds, excludes)) {
+        const next = safeCenterPoint(bounds, excludes, mascotW, mascotH)
+        prevPosRef.current = next
+        setPos(next)
+      }
     }
-    init()
-    window.addEventListener("resize", init)
-    return () => window.removeEventListener("resize", init)
-  }, [measureMascot])
 
-  // Free roam across the full screen
+    setPosReady(true)
+  }, [measure, measureFlightLayout])
+
+  useEffect(() => {
+    relayout()
+    window.addEventListener("resize", relayout)
+    const flyer = flyerRef.current
+    const observer =
+      flyer && typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => relayout())
+        : null
+    if (flyer && observer) observer.observe(flyer)
+
+    return () => {
+      window.removeEventListener("resize", relayout)
+      observer?.disconnect()
+    }
+  }, [relayout])
+
   useEffect(() => {
     if (waking || !posReady) return
     const reduce =
@@ -243,14 +405,15 @@ export function KioskScreensaver({
     const schedule = () => {
       const delay = 1600 + Math.random() * 1800
       timer = window.setTimeout(() => {
-        const bounds = measureMascot()
-        if (bounds) moveTo(randomPoint(bounds))
+        moveToSafe(({ bounds, excludes, mascotW, mascotH }) =>
+          randomSafePoint(bounds, excludes, mascotW, mascotH),
+        )
         schedule()
       }, delay)
     }
     schedule()
     return () => window.clearTimeout(timer)
-  }, [measureMascot, moveTo, posReady, waking])
+  }, [moveToSafe, posReady, waking])
 
   useEffect(
     () => () => {
@@ -284,7 +447,10 @@ export function KioskScreensaver({
         </div>
       </div>
 
-      <div className={cn(styles.content, "flex w-full items-center justify-end gap-2")}>
+      <div
+        ref={topBarRef}
+        className={cn(styles.content, "flex w-full items-center justify-end gap-2")}
+      >
         <div className="flex overflow-hidden rounded-2xl border border-white/25 bg-white/10 text-base font-bold backdrop-blur-sm">
           <button
             type="button"
@@ -319,7 +485,10 @@ export function KioskScreensaver({
         </button>
       </div>
 
-      <header className={cn(styles.content, "flex flex-col items-center")}>
+      <header
+        ref={headerRef}
+        className={cn(styles.content, "flex flex-col items-center")}
+      >
         <h1 className="text-center text-[clamp(2.5rem,8vw,4rem)] font-extrabold leading-none tracking-tight text-balance">
           {t.title}
         </h1>
@@ -327,7 +496,10 @@ export function KioskScreensaver({
 
       <div className={cn(styles.content, styles.spacer)} aria-hidden />
 
-      <div className={cn(styles.content, "flex w-full max-w-md flex-col items-center gap-3")}>
+      <div
+        ref={sliderRef}
+        className={cn(styles.content, "flex w-full max-w-md flex-col items-center gap-3")}
+      >
         <div
           ref={trackRef}
           role="button"
