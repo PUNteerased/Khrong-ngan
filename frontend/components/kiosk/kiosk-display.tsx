@@ -7,6 +7,7 @@ import { KioskHeader } from "@/components/kiosk/kiosk-header"
 import { KioskEmergencyBanner } from "@/components/kiosk/kiosk-emergency-banner"
 import { KioskConnectivityBanner } from "@/components/kiosk/kiosk-connectivity-banner"
 import { KioskScreensaver } from "@/components/kiosk/kiosk-screensaver"
+import { KioskSwirlTransition } from "@/components/kiosk/kiosk-swirl-transition"
 import { KioskHomeChoice } from "@/components/kiosk/kiosk-home-choice"
 import { KioskCodeScreen } from "@/components/kiosk/kiosk-code-screen"
 import { KioskScanCountdown } from "@/components/kiosk/kiosk-scan-countdown"
@@ -54,6 +55,7 @@ export function KioskDisplay() {
   const [codeBusy, setCodeBusy] = useState(false)
   const [mixedContent, setMixedContent] = useState(false)
   const [uiScreen, setUiScreen] = useState<KioskUiScreen>("screensaver")
+  const [transitioning, setTransitioning] = useState(false)
   const prevPhaseRef = useRef<string>("idle")
   const { session, connected, phase, refresh } = useKioskSession()
   const t = useMemo(() => getKioskMessages(locale), [locale])
@@ -178,11 +180,7 @@ export function KioskDisplay() {
     }
   }, [ticketExpired, locale, t.error, t.codeExpiredConfirmBlocked])
 
-  if (phase === "idle" && uiScreen === "screensaver") {
-    return (
-      <KioskScreensaver t={t} onWake={() => setUiScreen("home")} />
-    )
-  }
+  const showScreensaver = phase === "idle" && uiScreen === "screensaver"
 
   const main = (() => {
     if (uiPhase === "scanning") {
@@ -235,37 +233,60 @@ export function KioskDisplay() {
   })()
 
   return (
-    <KioskShell
-      header={
-        <KioskHeader
-          locale={locale}
+    <>
+      {showScreensaver ? (
+        <KioskScreensaver
           t={t}
+          locale={locale}
           ttsOn={ttsOn}
           onLocaleChange={setLocale}
           onTtsToggle={() => setTtsOn((v) => !v)}
+          onWake={() => {
+            if (transitioning) return
+            setTransitioning(true)
+          }}
         />
-      }
-      banner={
-        <>
-          <KioskConnectivityBanner
-            t={t}
-            mixedContent={mixedContent}
-            connected={connected}
-          />
-          <KioskEmergencyBanner t={t} />
-        </>
-      }
-      main={main}
-      footer={
-        <KioskBottomBar
-          t={t}
-          phase={phase}
-          cancelDisabled={busy || phase === "dispensing"}
-          confirmDisabled={busy || phase !== "preview" || ticketExpired}
-          onCancel={handleCancel}
-          onConfirm={handleConfirm}
+      ) : (
+        <KioskShell
+          header={
+            <KioskHeader
+              locale={locale}
+              t={t}
+              ttsOn={ttsOn}
+              onLocaleChange={setLocale}
+              onTtsToggle={() => setTtsOn((v) => !v)}
+            />
+          }
+          banner={
+            <>
+              <KioskConnectivityBanner
+                t={t}
+                mixedContent={mixedContent}
+                connected={connected}
+              />
+              <KioskEmergencyBanner t={t} />
+            </>
+          }
+          main={main}
+          footer={
+            <KioskBottomBar
+              t={t}
+              phase={phase}
+              cancelDisabled={busy || phase === "dispensing"}
+              confirmDisabled={busy || phase !== "preview" || ticketExpired}
+              onCancel={handleCancel}
+              onConfirm={handleConfirm}
+            />
+          }
         />
-      }
-    />
+      )}
+
+      {transitioning ? (
+        <KioskSwirlTransition
+          onCovered={() => setUiScreen("home")}
+          onDone={() => setTransitioning(false)}
+        />
+      ) : null}
+    </>
   )
 }

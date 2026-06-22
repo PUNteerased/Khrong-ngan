@@ -39,10 +39,24 @@ type Props = {
   t: KioskMessages
   phase?: KioskSessionPhase
   camOnline?: boolean
+  /** Hide the built-in floating trigger button (use external control instead). */
+  hideTrigger?: boolean
+  /** Controlled open state. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
-export function KioskHelpDialog({ t, phase = "idle", camOnline }: Props) {
-  const [open, setOpen] = useState(false)
+export function KioskHelpDialog({
+  t,
+  phase = "idle",
+  camOnline,
+  hideTrigger,
+  open: openProp,
+  onOpenChange,
+}: Props) {
+  const [openState, setOpenState] = useState(false)
+  const open = openProp ?? openState
+  const setOpen = onOpenChange ?? setOpenState
   const [subCategory, setSubCategory] = useState("")
   const [subOther, setSubOther] = useState("")
   const [details, setDetails] = useState("")
@@ -90,16 +104,18 @@ export function KioskHelpDialog({ t, phase = "idle", camOnline }: Props) {
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="fixed bottom-4 right-4 z-10 gap-1.5 shadow-md safe-bottom"
-        onClick={() => setOpen(true)}
-      >
-        <HelpCircle className="h-4 w-4" />
-        {t.helpButton}
-      </Button>
+      {hideTrigger ? null : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="fixed bottom-4 right-4 z-10 gap-1.5 shadow-md safe-bottom"
+          onClick={() => setOpen(true)}
+        >
+          <HelpCircle className="h-4 w-4" />
+          {t.helpButton}
+        </Button>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto">

@@ -1,8 +1,10 @@
 "use client"
 
+import { useState } from "react"
 import { QrCode, Keyboard } from "lucide-react"
 import type { KioskMessages } from "@/lib/kiosk-i18n"
 import { KioskHelpDialog } from "@/components/kiosk/kiosk-help-dialog"
+import { KioskCornerMascot } from "@/components/kiosk/kiosk-corner-mascot"
 import type { KioskSessionPhase } from "@/lib/kiosk-api"
 
 type Props = {
@@ -28,6 +30,8 @@ export function KioskHomeChoice({
   phase,
   camOnline,
 }: Props) {
+  const [helpOpen, setHelpOpen] = useState(false)
+
   return (
     <div className="relative flex h-full flex-col items-center justify-center gap-8 px-4 py-6">
       <div className="space-y-2 text-center">
@@ -60,7 +64,15 @@ export function KioskHomeChoice({
         </button>
       </div>
 
-      <KioskHelpDialog t={t} phase={phase} camOnline={camOnline} />
+      <KioskCornerMascot label={t.mascotChat} onClick={() => setHelpOpen(true)} />
+      <KioskHelpDialog
+        t={t}
+        phase={phase}
+        camOnline={camOnline}
+        hideTrigger
+        open={helpOpen}
+        onOpenChange={setHelpOpen}
+      />
     </div>
   )
 }

@@ -50,92 +50,138 @@
   z-index: 1;
 }
 
-/* Logo badge above the title */
-.badge {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(160deg, #38bdf8, #328cc1);
-  box-shadow:
-    0 10px 30px rgba(56, 189, 248, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
-}
-
-/* The arena that holds the mascot + orbiting pills */
+/* The arena that holds the mascot + orbiting pills (bigger focal point) */
 .arena {
   position: relative;
-  width: min(440px, 86vw);
-  height: min(440px, 86vw);
+  width: min(520px, 92vw);
+  height: min(520px, 92vw);
   display: grid;
   place-items: center;
 }
 
-/* Call to action pill */
-.cta {
+/* Wrapper that lets the mascot gently stroll around the arena */
+.wander {
   position: relative;
-  border-radius: 9999px;
-  padding: 1rem 2.25rem;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(6px);
-  animation:
-    cta-breathe 2.6s ease-in-out infinite,
-    cta-bob 2.6s ease-in-out infinite;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  transition: transform 2.4s cubic-bezier(0.45, 0, 0.2, 1);
+  will-change: transform;
 }
 
-.dot {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
+/* ---------- Swipe-to-unlock slider ---------- */
+.track {
+  position: relative;
+  width: 100%;
+  height: 76px;
   border-radius: 9999px;
-  background: #38bdf8;
-  box-shadow: 0 0 12px 2px rgba(56, 189, 248, 0.8);
-  animation: cta-dot 1.3s ease-in-out infinite;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(6px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 30px rgba(6, 30, 50, 0.45);
+  display: flex;
+  align-items: center;
+  padding: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+}
+
+/* Progress fill that follows the knob */
+.trackFill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: calc(var(--progress, 0) * 100%);
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.35), rgba(56, 189, 248, 0.6));
+  pointer-events: none;
+}
+
+.trackLabel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: clamp(1.15rem, 4vw, 1.6rem);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #ffffff;
+  text-shadow: 0 1px 6px rgba(6, 30, 50, 0.5);
+  /* fade the hint out as the user swipes */
+  opacity: calc(1 - var(--progress, 0) * 1.2);
+  pointer-events: none;
+  padding-left: 70px;
+}
+
+.chevrons {
+  width: 24px;
+  height: 24px;
+  color: #bae6fd;
+  animation: hint-slide 1.5s ease-in-out infinite;
+}
+
+.knob {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
+  color: #0b3c5d;
+  background: linear-gradient(160deg, #ffffff, #dbeafc);
+  box-shadow:
+    0 6px 16px rgba(6, 30, 50, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  cursor: grab;
+  touch-action: none;
+  animation: knob-nudge 2.4s ease-in-out infinite;
+}
+
+.knob:active {
+  cursor: grabbing;
 }
 
 /* Wake transition */
 .waking .arena {
-  animation: wake-zoom 0.45s ease-in forwards;
+  animation: wake-zoom 0.36s ease-in forwards;
 }
 .waking .content {
-  animation: wake-fade 0.45s ease-in forwards;
+  animation: wake-fade 0.36s ease-in forwards;
 }
 
-@keyframes cta-breathe {
+@keyframes hint-slide {
   0%,
   100% {
-    box-shadow:
-      0 0 0 0 rgba(56, 189, 248, 0),
-      0 8px 30px rgba(56, 189, 248, 0.15);
+    transform: translateX(0);
+    opacity: 0.5;
   }
   50% {
-    box-shadow:
-      0 0 0 8px rgba(56, 189, 248, 0.12),
-      0 8px 40px rgba(56, 189, 248, 0.4);
-  }
-}
-
-@keyframes cta-bob {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-6px);
-  }
-}
-
-@keyframes cta-dot {
-  0%,
-  100% {
-    transform: scale(1);
+    transform: translateX(6px);
     opacity: 1;
   }
-  50% {
-    transform: scale(0.55);
-    opacity: 0.5;
+}
+
+@keyframes knob-nudge {
+  0%,
+  82%,
+  100% {
+    box-shadow:
+      0 6px 16px rgba(6, 30, 50, 0.45),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  }
+  88% {
+    box-shadow:
+      0 6px 16px rgba(6, 30, 50, 0.45),
+      0 0 0 6px rgba(56, 189, 248, 0.25),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
   }
 }
 
@@ -174,8 +220,10 @@
 @media (prefers-reduced-motion: reduce) {
   .root::before,
   .root::after,
-  .cta,
-  .dot {
+  .chevrons,
+  .knob,
+  .wander {
     animation: none;
+    transition: none;
   }
 }

@@ -1,0 +1,131 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow: hidden;
+  pointer-events: all;
+}
+
+/* Two rotating conic "cartoon" swirls that spin up, hold, then spin away */
+.swirl,
+.swirlAlt {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 280vmax;
+  height: 280vmax;
+  border-radius: 9999px;
+  transform: translate(-50%, -50%) scale(0) rotate(0deg);
+  will-change: transform, opacity;
+}
+
+.swirl {
+  background: conic-gradient(
+    from 0deg,
+    #ffffff 0deg,
+    rgba(255, 255, 255, 0) 60deg,
+    #ffffff 120deg,
+    rgba(255, 255, 255, 0) 180deg,
+    #ffffff 240deg,
+    rgba(255, 255, 255, 0) 300deg,
+    #ffffff 360deg
+  );
+  animation: swirl-in 1450ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.swirlAlt {
+  background: conic-gradient(
+    from 45deg,
+    rgba(186, 230, 253, 0.9) 0deg,
+    rgba(255, 255, 255, 0) 90deg,
+    rgba(186, 230, 253, 0.9) 180deg,
+    rgba(255, 255, 255, 0) 270deg,
+    rgba(186, 230, 253, 0.9) 360deg
+  );
+  animation: swirl-in-alt 1450ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Solid white veil: fades in to fully cover, holds, then fades out */
+.veil {
+  position: absolute;
+  inset: 0;
+  background: #ffffff;
+  opacity: 0;
+  animation: veil 1450ms ease-in-out forwards;
+}
+
+@keyframes swirl-in {
+  0% {
+    transform: translate(-50%, -50%) scale(0) rotate(0deg);
+    opacity: 0.2;
+  }
+  34% {
+    transform: translate(-50%, -50%) scale(1) rotate(220deg);
+    opacity: 1;
+  }
+  69% {
+    transform: translate(-50%, -50%) scale(1) rotate(300deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0) rotate(540deg);
+    opacity: 0;
+  }
+}
+
+@keyframes swirl-in-alt {
+  0% {
+    transform: translate(-50%, -50%) scale(0) rotate(0deg);
+    opacity: 0.2;
+  }
+  34% {
+    transform: translate(-50%, -50%) scale(1) rotate(-200deg);
+    opacity: 0.9;
+  }
+  69% {
+    transform: translate(-50%, -50%) scale(1) rotate(-280deg);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0) rotate(-520deg);
+    opacity: 0;
+  }
+}
+
+@keyframes veil {
+  0% {
+    opacity: 0;
+  }
+  34% {
+    opacity: 1;
+  }
+  /* hold fully white (COVER 500ms -> ~34%, HOLD 500ms -> ~69%) */
+  69% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .swirl,
+  .swirlAlt {
+    animation: none;
+    opacity: 0;
+  }
+  .veil {
+    animation: veil-simple 1450ms ease-in-out forwards;
+  }
+}
+
+@keyframes veil-simple {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  34%,
+  69% {
+    opacity: 1;
+  }
+}
