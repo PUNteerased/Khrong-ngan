@@ -1,7 +1,35 @@
 .container {
   position: relative;
-  width: min(320px, 70vw);
-  height: min(380px, 82vw);
+  width: min(340px, 74vw);
+  height: min(404px, 88vw);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.svg {
+  position: relative;
+  z-index: 1;
+}
+
+/* Soft glowing halo behind the robot */
+.halo {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  width: 70%;
+  height: 55%;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle,
+    rgba(56, 189, 248, 0.45) 0%,
+    rgba(50, 140, 193, 0.22) 45%,
+    rgba(50, 140, 193, 0) 72%
+  );
+  filter: blur(6px);
+  animation: capsi-halo 3s ease-in-out infinite;
+  pointer-events: none;
 }
 
 .shadow {
@@ -15,8 +43,23 @@
 }
 
 .eyes {
-  animation: capsi-blink 4s infinite;
+  animation: capsi-blink 4.5s infinite;
   transform-origin: center;
+}
+
+.antenna {
+  animation: capsi-antenna 2s ease-in-out infinite;
+  transform-origin: 160px 52px;
+}
+
+.handL {
+  animation: capsi-wave-l 3s ease-in-out infinite;
+  transform-origin: 78px 188px;
+}
+
+.handR {
+  animation: capsi-wave-r 3s ease-in-out infinite;
+  transform-origin: 242px 188px;
 }
 
 .celebrate .robot {
@@ -29,7 +72,8 @@
   transform: scale(0.9);
 }
 
-.celebrate .eyes {
+.celebrate .eyes,
+.celebrate .antenna {
   animation: none;
 }
 
@@ -39,7 +83,19 @@
     transform: translateY(0);
   }
   50% {
-    transform: translateY(-15px);
+    transform: translateY(-16px);
+  }
+}
+
+@keyframes capsi-halo {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.08);
+    opacity: 1;
   }
 }
 
@@ -54,14 +110,46 @@
   }
 }
 
+@keyframes capsi-antenna {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.25);
+    opacity: 0.7;
+  }
+}
+
+@keyframes capsi-wave-l {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-8deg);
+  }
+}
+
+@keyframes capsi-wave-r {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(8deg);
+  }
+}
+
 @keyframes capsi-shadow {
   0%,
   100% {
     transform: scale(1);
-    opacity: 0.2;
+    opacity: 0.22;
   }
   50% {
-    transform: scale(0.85);
+    transform: scale(0.82);
     opacity: 0.1;
   }
 }
@@ -81,7 +169,11 @@
 @media (prefers-reduced-motion: reduce) {
   .shadow,
   .robot,
-  .eyes {
+  .eyes,
+  .antenna,
+  .halo,
+  .handL,
+  .handR {
     animation: none;
   }
 

@@ -1,46 +1,86 @@
 .container {
-  position: relative;
-  width: min(320px, 70vw);
-  height: min(380px, 82vw);
+  position: absolute;
+  inset: 0;
   pointer-events: none;
+  z-index: 0;
 }
 
 .pill {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 32px;
-  height: 32px;
-  margin: -16px 0 0 -16px;
-  opacity: 0.85;
-  animation: capsi-orbit var(--orbit-duration, 20s) linear infinite;
-  animation-delay: var(--orbit-delay, 0s);
+  width: var(--size, 44px);
+  height: var(--size, 44px);
+  /* center the pill on its left/top anchor point */
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 6px 10px rgba(11, 60, 93, 0.35));
+  will-change: transform;
 }
 
-@keyframes capsi-orbit {
+.pill > svg {
+  display: block;
+  animation-duration: var(--duration, 6s);
+  animation-delay: var(--delay, 0s);
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+  transform-origin: center;
+}
+
+.drift > svg {
+  animation-name: pill-drift;
+}
+.sway > svg {
+  animation-name: pill-sway;
+}
+.pulse > svg {
+  animation-name: pill-pulse;
+}
+.spin > svg {
+  animation-name: pill-spin;
+  animation-timing-function: linear;
+}
+
+@keyframes pill-drift {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-4deg);
+  }
+  50% {
+    transform: translateY(-14px) rotate(4deg);
+  }
+}
+
+@keyframes pill-sway {
+  0%,
+  100% {
+    transform: translateX(0) rotate(-6deg);
+  }
+  50% {
+    transform: translateX(12px) rotate(6deg);
+  }
+}
+
+@keyframes pill-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.92;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 1;
+  }
+}
+
+@keyframes pill-spin {
   from {
-    transform: rotate(var(--orbit-angle, 0deg)) translateX(var(--orbit-radius, 140px))
-      rotate(calc(-1 * var(--orbit-angle, 0deg)));
+    transform: rotate(0deg);
   }
   to {
-    transform: rotate(calc(var(--orbit-angle, 0deg) + 360deg))
-      translateX(var(--orbit-radius, 140px))
-      rotate(calc(-1 * var(--orbit-angle, 0deg) - 360deg));
+    transform: rotate(360deg);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pill {
+  .pill > svg {
     animation: none;
-    transform: rotate(var(--orbit-angle, 0deg)) translateX(var(--orbit-radius, 140px))
-      rotate(calc(-1 * var(--orbit-angle, 0deg)));
-  }
-}
-
-@media (max-width: 480px) {
-  .pill {
-    width: 28px;
-    height: 28px;
-    margin: -14px 0 0 -14px;
   }
 }

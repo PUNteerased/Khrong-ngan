@@ -1,0 +1,181 @@
+.root {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 80% at 50% -10%, #0f5286 0%, #0a3c63 45%, #062a47 100%);
+}
+
+/* Decorative glowing orbs in the background */
+.root::before,
+.root::after {
+  content: "";
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.root::before {
+  width: 46vmin;
+  height: 46vmin;
+  top: -10vmin;
+  left: -12vmin;
+  background: rgba(56, 189, 248, 0.18);
+  animation: orb-a 12s ease-in-out infinite;
+}
+
+.root::after {
+  width: 52vmin;
+  height: 52vmin;
+  bottom: -16vmin;
+  right: -14vmin;
+  background: rgba(50, 140, 193, 0.22);
+  animation: orb-b 14s ease-in-out infinite;
+}
+
+/* Faint dotted grid texture overlay */
+.grid {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1.5px, transparent 1.5px);
+  background-size: 26px 26px;
+  mask-image: radial-gradient(70% 60% at 50% 45%, #000 30%, transparent 100%);
+  pointer-events: none;
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+}
+
+/* Logo badge above the title */
+.badge {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(160deg, #38bdf8, #328cc1);
+  box-shadow:
+    0 10px 30px rgba(56, 189, 248, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* The arena that holds the mascot + orbiting pills */
+.arena {
+  position: relative;
+  width: min(440px, 86vw);
+  height: min(440px, 86vw);
+  display: grid;
+  place-items: center;
+}
+
+/* Call to action pill */
+.cta {
+  position: relative;
+  border-radius: 9999px;
+  padding: 1rem 2.25rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(6px);
+  animation:
+    cta-breathe 2.6s ease-in-out infinite,
+    cta-bob 2.6s ease-in-out infinite;
+}
+
+.dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  background: #38bdf8;
+  box-shadow: 0 0 12px 2px rgba(56, 189, 248, 0.8);
+  animation: cta-dot 1.3s ease-in-out infinite;
+}
+
+/* Wake transition */
+.waking .arena {
+  animation: wake-zoom 0.45s ease-in forwards;
+}
+.waking .content {
+  animation: wake-fade 0.45s ease-in forwards;
+}
+
+@keyframes cta-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(56, 189, 248, 0),
+      0 8px 30px rgba(56, 189, 248, 0.15);
+  }
+  50% {
+    box-shadow:
+      0 0 0 8px rgba(56, 189, 248, 0.12),
+      0 8px 40px rgba(56, 189, 248, 0.4);
+  }
+}
+
+@keyframes cta-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes cta-dot {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.55);
+    opacity: 0.5;
+  }
+}
+
+@keyframes orb-a {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(6vmin, 4vmin) scale(1.12);
+  }
+}
+
+@keyframes orb-b {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-5vmin, -4vmin) scale(1.1);
+  }
+}
+
+@keyframes wake-zoom {
+  to {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes wake-fade {
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root::before,
+  .root::after,
+  .cta,
+  .dot {
+    animation: none;
+  }
+}
