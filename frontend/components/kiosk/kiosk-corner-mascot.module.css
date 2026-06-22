@@ -1,0 +1,112 @@
+.root {
+  /* shrink + drop into the corner when the home screen appears */
+  animation: land-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mascot {
+  position: relative;
+  display: block;
+  width: 92px;
+  height: 110px;
+  filter: drop-shadow(0 8px 16px rgba(6, 30, 50, 0.3));
+  animation: corner-bob 3s ease-in-out infinite;
+}
+
+/* Speech bubble hint next to Capsi */
+.bubble {
+  position: relative;
+  max-width: 9rem;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #0b3c5d;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.25;
+  padding: 0.5rem 0.7rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 6px 16px rgba(6, 30, 50, 0.25);
+  animation: bubble-pop 0.4s ease-out 0.5s both;
+}
+
+.bubble::after {
+  content: "";
+  position: absolute;
+  bottom: 10px;
+  right: -6px;
+  width: 12px;
+  height: 12px;
+  background: #ffffff;
+  transform: rotate(45deg);
+  border-radius: 2px;
+}
+
+/* Attention ping ring behind the mascot */
+.ping {
+  position: absolute;
+  left: 46px;
+  bottom: 18px;
+  width: 56px;
+  height: 56px;
+  border-radius: 9999px;
+  background: rgba(56, 189, 248, 0.45);
+  transform: translate(-50%, 50%);
+  animation: corner-ping 2.6s ease-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+@keyframes land-in {
+  0% {
+    transform: translate(40%, 30%) scale(1.9);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes corner-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes bubble-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes corner-ping {
+  0% {
+    transform: translate(-50%, 50%) scale(0.6);
+    opacity: 0.7;
+  }
+  70%,
+  100% {
+    transform: translate(-50%, 50%) scale(1.5);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root,
+  .mascot,
+  .bubble,
+  .ping {
+    animation: none;
+  }
+}
