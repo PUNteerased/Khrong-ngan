@@ -1,0 +1,46 @@
+.container {
+  position: relative;
+  width: min(320px, 70vw);
+  height: min(380px, 82vw);
+  pointer-events: none;
+}
+
+.pill {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 32px;
+  height: 32px;
+  margin: -16px 0 0 -16px;
+  opacity: 0.85;
+  animation: capsi-orbit var(--orbit-duration, 20s) linear infinite;
+  animation-delay: var(--orbit-delay, 0s);
+}
+
+@keyframes capsi-orbit {
+  from {
+    transform: rotate(var(--orbit-angle, 0deg)) translateX(var(--orbit-radius, 140px))
+      rotate(calc(-1 * var(--orbit-angle, 0deg)));
+  }
+  to {
+    transform: rotate(calc(var(--orbit-angle, 0deg) + 360deg))
+      translateX(var(--orbit-radius, 140px))
+      rotate(calc(-1 * var(--orbit-angle, 0deg) - 360deg));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pill {
+    animation: none;
+    transform: rotate(var(--orbit-angle, 0deg)) translateX(var(--orbit-radius, 140px))
+      rotate(calc(-1 * var(--orbit-angle, 0deg)));
+  }
+}
+
+@media (max-width: 480px) {
+  .pill {
+    width: 28px;
+    height: 28px;
+    margin: -14px 0 0 -14px;
+  }
+}
