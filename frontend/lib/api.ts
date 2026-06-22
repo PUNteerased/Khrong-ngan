@@ -212,6 +212,13 @@ export async function loginWithGoogle(idToken: string) {
   )
 }
 
+export async function fetchGoogleAuthConfig() {
+  return apiJson<{ enabled: boolean; clientId: string | null }>(
+    "/api/auth/google-config",
+    { auth: false }
+  )
+}
+
 export async function fetchMe() {
   return apiJson<UserProfile>("/api/users/me")
 }

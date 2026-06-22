@@ -73,6 +73,7 @@ router.get("/health", (_req, res) => {
 
 router.post("/api/auth/register", authLimiter, authController.register)
 router.post("/api/auth/login", authLimiter, authController.login)
+router.get("/api/auth/google-config", authController.getGoogleAuthConfig)
 router.post("/api/auth/google", authLimiter, authController.loginWithGoogle)
 
 router.get("/api/users/me", authMiddleware, userController.getMe)

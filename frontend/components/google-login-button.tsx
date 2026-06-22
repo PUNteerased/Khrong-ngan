@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import Script from "next/script"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
-import { loginWithGoogle, ApiError } from "@/lib/api"
+import { fetchGoogleAuthConfig, loginWithGoogle, ApiError } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -38,21 +38,47 @@ declare global {
 export function GoogleLoginButton({ mode, onSuccess, className }: GoogleLoginButtonProps) {
   const t = useTranslations("Login")
   const [scriptReady, setScriptReady] = useState(false)
+  const [clientId, setClientId] = useState(
+    () => process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? ""
+  )
+  const [configLoading, setConfigLoading] = useState(!clientId)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const onSuccessRef = useRef(onSuccess)
-  const initializedRef = useRef(false)
-  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? ""
+  const initializedClientIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     onSuccessRef.current = onSuccess
   }, [onSuccess])
 
   useEffect(() => {
-    // When navigating client-side, Google script may already be loaded.
     if (window.google?.accounts?.id) {
       setScriptReady(true)
     }
   }, [])
+
+  useEffect(() => {
+    if (clientId) {
+      setConfigLoading(false)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const cfg = await fetchGoogleAuthConfig()
+        if (cancelled) return
+        if (cfg.enabled && cfg.clientId) {
+          setClientId(cfg.clientId)
+        }
+      } catch {
+        // ignore — show unavailable state below
+      } finally {
+        if (!cancelled) setConfigLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [clientId])
 
   useEffect(() => {
     if (!scriptReady || !clientId || !window.google || !containerRef.current) {
@@ -60,7 +86,7 @@ export function GoogleLoginButton({ mode, onSuccess, className }: GoogleLoginBut
     }
 
     const el = containerRef.current
-    if (!initializedRef.current) {
+    if (initializedClientIdRef.current !== clientId) {
       window.google.accounts.id.initialize({
         client_id: clientId,
         callback: async (response: GoogleCredentialResponse) => {
@@ -73,17 +99,24 @@ export function GoogleLoginButton({ mode, onSuccess, className }: GoogleLoginBut
             onSuccessRef.current(accessToken)
           } catch (err) {
             const msg =
-              err instanceof ApiError ? err.message : err instanceof Error ? err.message : t("googleFail")
+              err instanceof ApiError
+                ? err.message
+                : err instanceof Error
+                  ? err.message
+                  : t("googleFail")
             toast.error(msg)
           }
         },
       })
-      initializedRef.current = true
+      initializedClientIdRef.current = clientId
     }
 
     const paint = () => {
       if (!el || !window.google) return
-      const widthPx = Math.min(400, Math.max(280, Math.floor(el.getBoundingClientRect().width) || 320))
+      const widthPx = Math.min(
+        400,
+        Math.max(280, Math.floor(el.getBoundingClientRect().width) || 320)
+      )
       el.innerHTML = ""
       window.google.accounts.id.renderButton(el, {
         type: "standard",
@@ -110,8 +143,12 @@ export function GoogleLoginButton({ mode, onSuccess, className }: GoogleLoginBut
         onLoad={() => setScriptReady(true)}
         onReady={() => setScriptReady(true)}
       />
-      {clientId ? (
-        <div ref={containerRef} className="w-full min-w-0" />
+      {configLoading ? (
+        <Button type="button" variant="outline" className="w-full" disabled>
+          {t("loading")}
+        </Button>
+      ) : clientId ? (
+        <div ref={containerRef} className="w-full min-w-0 min-h-10" />
       ) : (
         <Button type="button" variant="outline" className="w-full" disabled>
           {t("googleUnavailable")}

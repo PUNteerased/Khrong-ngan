@@ -172,6 +172,15 @@ export async function login(req: Request, res: Response) {
   }
 }
 
+/** Public OAuth client id for Google Sign-In button (same as GOOGLE_CLIENT_ID). */
+export function getGoogleAuthConfig(_req: Request, res: Response) {
+  if (!googleClientId) {
+    res.json({ enabled: false, clientId: null })
+    return
+  }
+  res.json({ enabled: true, clientId: googleClientId })
+}
+
 export async function loginWithGoogle(req: Request, res: Response) {
   try {
     if (!googleClient || !googleClientId) {
@@ -253,8 +262,12 @@ export async function loginWithGoogle(req: Request, res: Response) {
       user: publicUser(user),
     })
   } catch (e) {
-    console.error(e)
-    res.status(500).json({ error: "เข้าสู่ระบบด้วย Google ไม่สำเร็จ" })
+    console.error("[auth/google]", e)
+    const msg =
+      e instanceof Error && /token/i.test(e.message)
+        ? "Google ID token ไม่ถูกต้องหรือหมดอายุ"
+        : "เข้าสู่ระบบด้วย Google ไม่สำเร็จ"
+    res.status(500).json({ error: msg })
   }
 }
 
