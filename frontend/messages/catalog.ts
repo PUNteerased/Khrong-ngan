@@ -248,7 +248,7 @@ export const thMessages = {
     warning:
       "คำเตือน: หากมีอาการแพ้ยา โปรดหยุดใช้ทันที และรีบพบแพทย์หรือเภสัชกร",
     backHome: "กลับสู่หน้าหลัก",
-    download: "���าวน์โหลดตั๋ว",
+    download: "ดาวน์โหลดตั๋ว",
     downloadBusy: "กำลังสร้างไฟล์…",
     downloadFailed: "ดาวน์โหลดไม่สำเร็จ ลองใหม่อีกครั้ง",
     slot: "ตู้ {slot}",
@@ -267,7 +267,7 @@ export const thMessages = {
     remove: "ลบรูป",
     uploadOk: "อัปโหลดรูปสำเร็จ",
     uploadFail: "อัปโหลดรูปไม่สำเร็จ",
-    invalidType: "รองรับ��ฉพาะไฟล์รูปภาพเท่านั้น",
+    invalidType: "รองรับเฉพาะไฟล์รูปภาพเท่านั้น",
     tooLarge: "ไฟล์ใหญ่เกิน {max}MB",
     notConfigured:
       "ยังไม่ได้ตั้งค่า Supabase — ตรวจสอบ NEXT_PUBLIC_SUPABASE_URL",
@@ -445,7 +445,7 @@ export const thMessages = {
     loginTitle: "เข้าสู่ระบบผู้ดูแล",
     loginHint:
       "ใช้ชื่อผู้ใช้และรหัสผ่านของบัญชีที่ถูกตั้งค่าเป็นผู้ดูแลในระบบเท่านั้น",
-    adminUserPh: "ชื่อผู้ใช้ผ��้ดูแล",
+    adminUserPh: "ชื่อผู้ใช้ผู้ดูแล",
     password: "รหัสผ่าน",
     submitting: "กำลังเข้าสู่ระบบ…",
     submit: "เข้าสู่ระบบ",
@@ -454,7 +454,7 @@ export const thMessages = {
     refresh: "รีเฟรช",
     online: "ตู้ออนไลน์",
     offline: "ตู้ออฟไลน์",
-    tabOverview: "ภาพ��วม",
+    tabOverview: "ภาพรวม",
     tabInventory: "สต็อก",
     tabLogs: "ประวัติ",
     tabHardware: "ฮาร์ดแวร์",
@@ -680,7 +680,7 @@ export const thMessages = {
     genderPh: "เลือกเพศ",
     genderMale: "ชาย",
     genderFemale: "หญิง",
-    genderOther: "อื่น ��",
+    genderOther: "อื่นๆ",
     heightLabel: "ส่วนสูง (ซม.)",
   },
   HealthTipCard: {
