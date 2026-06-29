@@ -745,6 +745,8 @@ export const thMessages = {
     camOnline: "กล้องพร้อมสแกน",
     camOffline: "กล้องไม่เชื่อมต่อ — ตรวจ ESP-NOW",
     camConnecting: "กำลังเชื่อมกล้อง…",
+    camPreviewFailed:
+      "ไม่แสดงภาพจากกล้อง — ยังสแกน QR ใต้หน้าจอได้ตามปกติ",
     codeEntryOr: "หรือ",
     codeEntryLabel: "พิมพ์รหัสจากแชท",
     codeEntryPlaceholder: "A1-0001-ABCDEF",
@@ -1530,6 +1532,8 @@ export const enMessages = {
     camOnline: "Camera ready to scan",
     camOffline: "Camera offline — check ESP-NOW",
     camConnecting: "Connecting to camera…",
+    camPreviewFailed:
+      "Live preview unavailable — you can still scan QR at the slot below",
     codeEntryOr: "or",
     codeEntryLabel: "Enter code from chat",
     codeEntryPlaceholder: "A1-0001-ABCDEF",

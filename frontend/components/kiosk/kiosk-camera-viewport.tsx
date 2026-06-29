@@ -6,6 +6,7 @@ import { isKioskLanMode } from "@/lib/kiosk-connectivity"
 import type { KioskMessages } from "@/lib/kiosk-i18n"
 
 const POLL_MS = 450
+const PREVIEW_TIMEOUT_MS = 8000
 
 type Props = {
   t: KioskMessages
@@ -20,125 +21,78 @@ export function KioskCameraViewport({
   camPreviewUrl,
   camOnline,
 }: Props) {
-  const [lanTick, setLanTick] = useState(0)
-  const [cloudBlobUrl, setCloudBlobUrl] = useState<string | null>(null)
+  const [tick, setTick] = useState(0)
   const [hasFrame, setHasFrame] = useState(false)
-  const [frameVisible, setFrameVisible] = useState(false)
-  const [lanLoadFailed, setLanLoadFailed] = useState(false)
-  const blobRef = useRef<string | null>(null)
-  const pollInFlightRef = useRef(false)
+  const [previewTimedOut, setPreviewTimedOut] = useState(false)
+  const hasFrameRef = useRef(false)
 
-  const lanSrc =
-    active && isKioskLanMode() && camPreviewUrl
-      ? `${camPreviewUrl}${camPreviewUrl.includes("?") ? "&" : "?"}t=${lanTick}`
+  useEffect(() => {
+    hasFrameRef.current = hasFrame
+  }, [hasFrame])
+
+  const lanMode = isKioskLanMode()
+  const frameBase = lanMode && camPreviewUrl ? camPreviewUrl : getKioskCameraFrameUrl()
+  const displaySrc =
+    active && frameBase
+      ? `${frameBase}${frameBase.includes("?") ? "&" : "?"}t=${tick}`
       : null
 
   useEffect(() => {
-    if (!active || !isKioskLanMode() || !camPreviewUrl) return
-    const id = window.setInterval(() => setLanTick(Date.now()), POLL_MS)
-    return () => window.clearInterval(id)
-  }, [active, camPreviewUrl])
-
-  useEffect(() => {
-    if (!active || isKioskLanMode()) {
+    if (!active) {
       setHasFrame(false)
-      setFrameVisible(false)
+      setPreviewTimedOut(false)
+      setTick(0)
       return
     }
 
-    let cancelled = false
+    setHasFrame(false)
+    setPreviewTimedOut(false)
+    setTick(Date.now())
 
-    const commitBlobUrl = (next: string) => {
-      const prev = blobRef.current
-      blobRef.current = next
-      setFrameVisible(false)
-      setCloudBlobUrl(next)
-      setHasFrame(true)
-      window.requestAnimationFrame(() => {
-        if (!cancelled) setFrameVisible(true)
-      })
-      if (prev && prev !== next) URL.revokeObjectURL(prev)
-    }
+    const pollId = window.setInterval(() => setTick(Date.now()), POLL_MS)
+    const timeoutId = window.setTimeout(() => {
+      if (!hasFrameRef.current) setPreviewTimedOut(true)
+    }, PREVIEW_TIMEOUT_MS)
 
-    const pollCloudFrame = async () => {
-      if (pollInFlightRef.current) return
-      pollInFlightRef.current = true
-      try {
-        const res = await fetch(
-          `${getKioskCameraFrameUrl()}?t=${Date.now()}`,
-          { cache: "no-store" }
-        )
-        if (cancelled) return
-        if (res.status === 204 || res.status === 404) return
-        if (res.status === 429) return
-        if (!res.ok) return
-
-        const blob = await res.blob()
-        if (cancelled || blob.size < 500) return
-
-        const next = URL.createObjectURL(blob)
-        const img = new Image()
-        img.onload = () => {
-          if (cancelled) {
-            URL.revokeObjectURL(next)
-            return
-          }
-          commitBlobUrl(next)
-        }
-        img.onerror = () => URL.revokeObjectURL(next)
-        img.src = next
-      } catch {
-        /* retry on next poll */
-      } finally {
-        pollInFlightRef.current = false
-      }
-    }
-
-    void pollCloudFrame()
-    const id = window.setInterval(() => void pollCloudFrame(), POLL_MS)
     return () => {
-      cancelled = true
-      pollInFlightRef.current = false
-      window.clearInterval(id)
-      if (blobRef.current) {
-        URL.revokeObjectURL(blobRef.current)
-        blobRef.current = null
-      }
-      setCloudBlobUrl(null)
-      setHasFrame(false)
-      setFrameVisible(false)
+      window.clearInterval(pollId)
+      window.clearTimeout(timeoutId)
     }
-  }, [active])
+  }, [active, camPreviewUrl, lanMode])
 
-  const displaySrc = lanSrc ?? cloudBlobUrl
-  const showPlaceholder =
-    !displaySrc ||
-    (lanSrc ? lanLoadFailed : !hasFrame)
+  useEffect(() => {
+    if (hasFrame) setPreviewTimedOut(false)
+  }, [hasFrame])
+
+  const showPlaceholder = !hasFrame
 
   const placeholderText =
     camOnline === false
       ? t.camOffline
-      : showPlaceholder
-        ? t.camConnecting
-        : null
+      : previewTimedOut && !hasFrame
+        ? t.camPreviewFailed
+        : showPlaceholder
+          ? t.camConnecting
+          : null
 
   return (
     <div className="relative w-full max-w-xl overflow-hidden rounded-2xl bg-[#0a1628] shadow-lg aspect-[16/10]">
-      {displaySrc && !showPlaceholder ? (
+      {displaySrc ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={displaySrc}
           alt=""
           className={`block h-full w-full object-cover transition-opacity duration-150 [image-rendering:auto] ${
-            frameVisible || lanSrc ? "opacity-100" : "opacity-0"
+            hasFrame ? "opacity-100" : "opacity-0"
           }`}
-          onLoad={() => {
-            setHasFrame(true)
-            setLanLoadFailed(false)
-            if (lanSrc) setFrameVisible(true)
+          onLoad={(e) => {
+            const img = e.currentTarget
+            if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+              setHasFrame(true)
+            }
           }}
           onError={() => {
-            if (lanSrc) setLanLoadFailed(true)
+            /* 204 / no frame yet — next poll retries */
           }}
         />
       ) : null}

@@ -86,6 +86,9 @@ export function getKioskApiBase(): string {
 }
 
 export function getKioskCameraFrameUrl(): string {
+  if (typeof window !== "undefined" && !isLanKioskMode()) {
+    return `${window.location.origin}/api/kiosk/camera-frame`
+  }
   return `${getCloudApiBase()}/api/kiosk/display/camera-frame`
 }
 

@@ -1,4 +1,4 @@
-const FRAME_TTL_MS = 10000
+const FRAME_TTL_MS = 30000
 
 let lastFrame: Buffer | null = null
 let lastFrameAt = 0
