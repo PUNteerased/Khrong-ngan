@@ -11,6 +11,7 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <vector>
+#include "mbedtls/base64.h"
 
 #if __has_include("config.h")
 #include "config.h"
@@ -118,7 +119,9 @@ static bool postCloudJson(const char* url, const String& body) {
 
   const int code = http.POST(body);
   const bool ok = code >= 200 && code < 300;
-  if (!ok && code > 0) {
+  if (code < 0) {
+    Serial.printf("[cloud-sync] POST error %d (%s)\n", code, http.errorToString(code).c_str());
+  } else if (!ok) {
     Serial.printf("[cloud-sync] HTTP %d (%s)\n", code, url);
   }
   http.end();
@@ -147,23 +150,31 @@ static bool postCameraFrameRaw(const uint8_t* data, size_t len) {
   if (strlen(KIOSK_HEARTBEAT_SECRET) == 0) return false;
   if (strlen(BACKEND_CAMERA_FRAME_URL) == 0) return false;
 
-  WiFiClientSecure client;
-  client.setInsecure();
-
-  HTTPClient http;
-  http.begin(client, BACKEND_CAMERA_FRAME_URL);
-  http.setTimeout(20000);
-  http.addHeader("Content-Type", "image/jpeg");
-  http.addHeader("X-Kiosk-Secret", KIOSK_HEARTBEAT_SECRET);
-
-  const int code = http.POST(const_cast<uint8_t*>(data), len);
-  if (code < 0) {
-    camRelayWarnf("[cam-relay] POST error %d\n", code);
-  } else if (code < 200 || code >= 300) {
-    camRelayWarnf("[cam-relay] POST HTTP %d\n", code);
+  size_t b64Len = 0;
+  const int sizeErr = mbedtls_base64_encode(nullptr, 0, &b64Len, data, len);
+  if (sizeErr != MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL && sizeErr != 0) {
+    camRelayWarn("[cam-relay] base64 size failed");
+    return false;
   }
-  http.end();
-  return code >= 200 && code < 300;
+
+  std::vector<unsigned char> b64Buf(b64Len + 1, 0);
+  size_t written = 0;
+  if (mbedtls_base64_encode(b64Buf.data(), b64Buf.size(), &written, data, len) != 0) {
+    camRelayWarn("[cam-relay] base64 encode failed");
+    return false;
+  }
+
+  String body;
+  body.reserve(written + 24);
+  body = "{\"jpegBase64\":\"";
+  body.concat(reinterpret_cast<const char*>(b64Buf.data()), written);
+  body += "\"}";
+
+  const bool ok = postCloudJson(BACKEND_CAMERA_FRAME_URL, body);
+  if (!ok) {
+    camRelayWarn("[cam-relay] JSON POST failed (see cloud-sync line above)");
+  }
+  return ok;
 }
 
 static size_t readCamJpegBody(HTTPClient& camHttp, WiFiClient* stream, uint8_t* buf, size_t capacity) {
@@ -240,9 +251,9 @@ static void relayCameraFrameIfScanning() {
   }
 
   const int contentLen = camHttp.getSize();
-  size_t capacity = 65536;
+  size_t capacity = 16384;
   if (contentLen > 0 && contentLen <= 512000) {
-    capacity = static_cast<size_t>(contentLen);
+    capacity = static_cast<size_t>(contentLen) + 128;
   }
 
   std::vector<uint8_t> jpeg(capacity);

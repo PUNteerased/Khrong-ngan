@@ -89,10 +89,43 @@ export function KioskCameraViewport({
             const img = e.currentTarget
             if (img.naturalWidth > 0 && img.naturalHeight > 0) {
               setHasFrame(true)
+              // #region agent log
+              fetch("http://127.0.0.1:7260/ingest/26c5933f-6382-407d-ae45-cd1aa28cfea1", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-Debug-Session-Id": "36e0e6",
+                },
+                body: JSON.stringify({
+                  sessionId: "36e0e6",
+                  hypothesisId: "H3",
+                  location: "kiosk-camera-viewport.tsx:onLoad",
+                  message: "preview frame loaded",
+                  data: { w: img.naturalWidth, h: img.naturalHeight },
+                  timestamp: Date.now(),
+                }),
+              }).catch(() => {})
+              // #endregion
             }
           }}
           onError={() => {
-            /* 204 / no frame yet — next poll retries */
+            // #region agent log
+            fetch("http://127.0.0.1:7260/ingest/26c5933f-6382-407d-ae45-cd1aa28cfea1", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Debug-Session-Id": "36e0e6",
+              },
+              body: JSON.stringify({
+                sessionId: "36e0e6",
+                hypothesisId: "H3",
+                location: "kiosk-camera-viewport.tsx:onError",
+                message: "preview frame load failed",
+                data: { src: displaySrc },
+                timestamp: Date.now(),
+              }),
+            }).catch(() => {})
+            // #endregion
           }}
         />
       ) : null}
