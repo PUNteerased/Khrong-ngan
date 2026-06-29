@@ -31,6 +31,7 @@
 #define HEARTBEAT_INTERVAL_MS 5000
 #define HEARTBEAT_ACTIVE_INTERVAL_MS 2500
 #define CAMERA_FRAME_INTERVAL_MS 450
+#define HEARTBEAT_FRAME_UPLOAD_MS 500
 #define KIOSK_SCAN_DURATION_MS 60000
 
 #define I2C_SDA_PIN 9
@@ -88,6 +89,8 @@ Adafruit_PWMServoDriver pwm(PCA9685_I2C_ADDR);
 
 unsigned long lastHeartbeatMs = 0;
 unsigned long lastCameraFrameMs = 0;
+unsigned long lastFrameUploadMs = 0;
+std::vector<uint8_t> lastRelayJpeg;
 unsigned long lastWifiRetryMs = 0;
 bool pwmReady = false;
 bool dispenseBusy = false;
@@ -975,6 +978,21 @@ String buildHeartbeatBody() {
   JsonObject session = doc["session"].to<JsonObject>();
   kioskAppendCloudJson(session);
 
+  if (kioskPhase == KIOSK_SCANNING && lastRelayJpeg.size() >= 100) {
+    size_t b64Len = 0;
+    const int sizeErr = mbedtls_base64_encode(
+        nullptr, 0, &b64Len, lastRelayJpeg.data(), lastRelayJpeg.size());
+    if (sizeErr == MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL || sizeErr == 0) {
+      std::vector<unsigned char> b64Buf(b64Len + 1, 0);
+      size_t written = 0;
+      if (mbedtls_base64_encode(
+              b64Buf.data(), b64Buf.size(), &written,
+              lastRelayJpeg.data(), lastRelayJpeg.size()) == 0) {
+        doc["cameraFrameBase64"] = reinterpret_cast<const char*>(b64Buf.data());
+      }
+    }
+  }
+
   if (pendingAck.pending) {
     JsonObject ack = doc["commandAck"].to<JsonObject>();
     ack["id"] = pendingAck.id;
@@ -1040,38 +1058,7 @@ static void camRelayWarnf(const char* fmt, int a, int b = 0) {
   Serial.printf(fmt, a, b);
 }
 
-static bool postCameraFrameRaw(const uint8_t* data, size_t len) {
-  if (!data || len < 100) return false;
-  if (WiFi.status() != WL_CONNECTED) return false;
-  if (strlen(KIOSK_HEARTBEAT_SECRET) == 0) return false;
-  if (strlen(BACKEND_CAMERA_FRAME_URL) == 0) return false;
-
-  size_t b64Len = 0;
-  const int sizeErr = mbedtls_base64_encode(nullptr, 0, &b64Len, data, len);
-  if (sizeErr != MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL && sizeErr != 0) {
-    camRelayWarn("[cam-relay] base64 size failed");
-    return false;
-  }
-
-  std::vector<unsigned char> b64Buf(b64Len + 1, 0);
-  size_t written = 0;
-  if (mbedtls_base64_encode(b64Buf.data(), b64Buf.size(), &written, data, len) != 0) {
-    camRelayWarn("[cam-relay] base64 encode failed");
-    return false;
-  }
-
-  String body;
-  body.reserve(written + 24);
-  body = "{\"jpegBase64\":\"";
-  body.concat(reinterpret_cast<const char*>(b64Buf.data()), written);
-  body += "\"}";
-
-  const bool ok = postCloudJson(BACKEND_CAMERA_FRAME_URL, body);
-  if (!ok) {
-    camRelayWarn("[cam-relay] JSON POST failed (see cloud-sync line above)");
-  }
-  return ok;
-}
+void sendHeartbeat();
 
 void relayCameraFrameIfScanning() {
   if (kioskPhase != KIOSK_SCANNING) return;
@@ -1083,7 +1070,6 @@ void relayCameraFrameIfScanning() {
     return;
   }
   if (WiFi.status() != WL_CONNECTED) return;
-  if (strlen(BACKEND_CAMERA_FRAME_URL) == 0) return;
   if (strlen(KIOSK_HEARTBEAT_SECRET) == 0) return;
 
   lastCameraFrameMs = millis();
@@ -1168,10 +1154,17 @@ void relayCameraFrameIfScanning() {
     return;
   }
 
-  if (postCameraFrameRaw(buf, readTotal)) {
-    Serial.printf("[cam-relay] posted %u bytes\n", static_cast<unsigned>(readTotal));
-  }
+  lastRelayJpeg.assign(buf, buf + readTotal);
   free(buf);
+
+  const unsigned long now = millis();
+  if (now - lastFrameUploadMs >= HEARTBEAT_FRAME_UPLOAD_MS) {
+    sendHeartbeat();
+    lastFrameUploadMs = now;
+    lastHeartbeatMs = now;
+    Serial.printf("[cam-relay] relayed %u bytes via heartbeat\n",
+                  static_cast<unsigned>(readTotal));
+  }
 }
 
 void pushSessionSyncIfDirty() {
@@ -1182,8 +1175,6 @@ void pushSessionSyncIfDirty() {
     Serial.println("[cloud-sync] session pushed");
   }
 }
-
-void sendHeartbeat();
 
 void handleDisplayCommand(const char* id, const char* action, const char* code) {
   bool ok = false;

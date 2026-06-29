@@ -1,4 +1,5 @@
 import type { Request, Response } from "express"
+import { appendFileSync } from "fs"
 import {
   getKioskStatus,
   recordKioskHeartbeat,
@@ -8,6 +9,32 @@ import {
   takePendingCommand,
 } from "../services/kioskCommand.service.js"
 import { syncCabinetSession } from "../services/kioskDisplay.service.js"
+import { storeCameraFrame } from "../services/kioskCameraFrame.service.js"
+
+// #region agent log
+function agentLog(
+  hypothesisId: string,
+  location: string,
+  message: string,
+  data: Record<string, unknown>
+) {
+  try {
+    appendFileSync(
+      "debug-36e0e6.log",
+      `${JSON.stringify({
+        sessionId: "36e0e6",
+        hypothesisId,
+        location,
+        message,
+        data,
+        timestamp: Date.now(),
+      })}\n`
+    )
+  } catch {
+    /* ignore when log path unavailable */
+  }
+}
+// #endregion
 
 export async function getPublicKioskStatus(_req: Request, res: Response) {
   const status = await getKioskStatus()
@@ -45,6 +72,7 @@ export async function postKioskHeartbeat(req: Request, res: Response) {
       error?: unknown
       preview?: unknown
     }
+    cameraFrameBase64?: string
   }
 
   if (body.commandAck?.id) {
@@ -57,6 +85,25 @@ export async function postKioskHeartbeat(req: Request, res: Response) {
 
   if (body.session && typeof body.session === "object") {
     syncCabinetSession(body.session)
+  }
+
+  if (
+    typeof body.cameraFrameBase64 === "string" &&
+    body.cameraFrameBase64.length > 100
+  ) {
+    try {
+      const frameBuf = Buffer.from(body.cameraFrameBase64, "base64")
+      if (frameBuf.length > 100 && frameBuf.length < 512_000) {
+        storeCameraFrame(frameBuf)
+        // #region agent log
+        agentLog("H4", "kiosk.controller:heartbeat", "stored frame from heartbeat", {
+          bytes: frameBuf.length,
+        })
+        // #endregion
+      }
+    } catch {
+      /* ignore invalid base64 */
+    }
   }
 
   recordKioskHeartbeat({
