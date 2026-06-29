@@ -145,21 +145,24 @@ static bool ensureS3PeerFromSender(const uint8_t* senderMac) {
   return addS3Peer();
 }
 
-static void sendToS3(const char* msg) {
-  if (isPlaceholderMac(s3PeerMac)) return;
-  esp_now_send(s3PeerMac, reinterpret_cast<const uint8_t*>(msg), strlen(msg));
-  Serial.printf("[espnow] >> %s\n", msg);
+static bool sendToS3(const char* msg) {
+  if (isPlaceholderMac(s3PeerMac)) return false;
+  const esp_err_t err =
+      esp_now_send(s3PeerMac, reinterpret_cast<const uint8_t*>(msg), strlen(msg));
+  Serial.printf("[espnow] >> %s (%s)\n", msg, err == ESP_OK ? "ok" : "fail");
+  return err == ESP_OK;
 }
 
-static void sendCamIpToS3() {
+static void sendCamIpToS3(bool force) {
   if (WiFi.status() != WL_CONNECTED) return;
   const String ip = WiFi.localIP().toString();
-  if (ip == lastSentIp) return;
+  if (!force && ip == lastSentIp) return;
   char buf[24];
   snprintf(buf, sizeof(buf), "%s%s", MSG_IP_PREFIX, ip.c_str());
-  sendToS3(buf);
-  strncpy(lastSentIp, ip.c_str(), sizeof(lastSentIp) - 1);
-  lastSentIp[sizeof(lastSentIp) - 1] = '\0';
+  if (sendToS3(buf)) {
+    strncpy(lastSentIp, ip.c_str(), sizeof(lastSentIp) - 1);
+    lastSentIp[sizeof(lastSentIp) - 1] = '\0';
+  }
 }
 
 static unsigned long lastPreviewLogMs = 0;
@@ -397,7 +400,7 @@ static void startScan() {
   scanUntilMs = millis() + SCAN_DURATION_MS;
   lastPreviewCaptureMs = 0;
   digitalWrite(FLASH_LED_PIN, LOW);
-  sendCamIpToS3();
+  sendCamIpToS3(true);
   Serial.println("[scan] started (60s) — ปรับความสว่างมือถือสูงสุด");
 }
 
@@ -428,7 +431,7 @@ static void handlePayload(const uint8_t* data, int len) {
 
   if (strcmp(buf, MSG_PING) == 0) {
     sendToS3(MSG_PONG);
-    sendCamIpToS3();
+    sendCamIpToS3(true);
   } else if (strcmp(buf, MSG_CAPTURE) == 0) {
     sendToS3(MSG_OK);
   } else if (strcmp(buf, MSG_SCAN) == 0) {
@@ -533,7 +536,7 @@ void setup() {
   }
   if (WiFi.status() == WL_CONNECTED) {
     setupPreviewServer();
-    sendCamIpToS3();
+    sendCamIpToS3(true);
   }
   Serial.println("[boot] done — heartbeat ทุก 5s");
 }
@@ -557,7 +560,7 @@ void loop() {
       if (WiFi.status() == WL_CONNECTED) {
         Serial.printf("[cam] alive ch=%d ip=%s\n",
                       WiFi.channel(), WiFi.localIP().toString().c_str());
-        sendCamIpToS3();
+        sendCamIpToS3(false);
       } else {
         Serial.println("[cam] alive (wifi down)");
       }

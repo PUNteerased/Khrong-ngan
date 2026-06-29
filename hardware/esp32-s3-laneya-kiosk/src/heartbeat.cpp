@@ -134,6 +134,13 @@ static void camRelayWarnf(const char* fmt, int a) {
   Serial.printf(fmt, a);
 }
 
+static void camRelayWarn(const char* msg) {
+  const unsigned long now = millis();
+  if (now - lastCamRelayWarnMs < 4000) return;
+  lastCamRelayWarnMs = now;
+  Serial.println(msg);
+}
+
 static bool postCameraFrameRaw(const uint8_t* data, size_t len) {
   if (!data || len < 100) return false;
   if (!isWiFiConnected()) return false;
@@ -186,7 +193,10 @@ static void relayCameraFrameIfScanning() {
   if (millis() - lastCameraFrameMs < CAMERA_FRAME_INTERVAL_MS) return;
 
   const char* previewUrl = camLinkPreviewUrl();
-  if (!previewUrl || !previewUrl[0]) return;
+  if (!previewUrl || !previewUrl[0]) {
+    camRelayWarn("[cam-relay] no preview URL — รอ IP: จาก ESP32-CAM");
+    return;
+  }
   if (!isWiFiConnected()) return;
   if (strlen(BACKEND_CAMERA_FRAME_URL) == 0) return;
   if (strlen(KIOSK_HEARTBEAT_SECRET) == 0) return;
